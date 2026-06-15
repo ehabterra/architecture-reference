@@ -21,4 +21,5 @@ yarn-error.log*
 
 .idea
 
-booksnode_modules
+books
+node_modules
