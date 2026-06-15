@@ -1,0 +1,150 @@
+---
+title: "Modeling with BPMN"
+category: auto-modeling
+kind: topic
+order: 4
+difficulty: "Intermediate"
+status: ready
+intent: "BPMN is an ISO-standardized notation that is diagram and source code at once — learn its tokens, tasks, gateways, and events even if you use another language."
+book: "Practical Process Automation (Bernd Ruecker)"
+related:
+  - executable-workflow-models
+  - where-workflow-engines-fit
+  - the-saga-and-compensation
+when_use:
+  - "You need one artifact that is readable by business and executable by IT"
+  - "Modeling control flow with waiting points, decisions, parallelism, and timers"
+  - "Choosing a modeling language and want broad workflow-pattern coverage"
+when_avoid:
+  - "Expressing fast-changing decision logic (use DMN decision tables instead)"
+  - "Drawing a throwaway sketch where any boxes-and-arrows tool would do"
+  - "Pushing every line of business logic into the diagram (graphical programming)"
+quiz:
+  - q: "What does the BPMN 'token' concept implement?"
+    options:
+      - text: "Control flow — one token per instance advances along sequence flows and is consumed at an end event"
+        correct: true
+      - text: "Authentication credentials passed between tasks"
+        correct: false
+      - text: "A database lock held during execution"
+        correct: false
+      - text: "The audit log of a process"
+        correct: false
+    explain: "A token is spawned at the start event, advances with each completed step, takes exactly one path at an exclusive gateway, can be cloned at a parallel gateway, and is consumed at an end event."
+  - q: "What does an exclusive (XOR) gateway do?"
+    options:
+      - text: "Routes the token down exactly one outgoing path based on data"
+        correct: true
+      - text: "Splits the token into several parallel paths"
+        correct: false
+      - text: "Waits for an external message"
+        correct: false
+      - text: "Calls a decision engine"
+        correct: false
+    explain: "An exclusive gateway is a decision point (diamond with an X) that selects exactly one outgoing sequence flow, typically via an expression like a FEEL condition."
+  - q: "In BPMN, what does 'parallel' primarily mean?"
+    options:
+      - text: "You can do work on one path while waiting on another — not necessarily concurrent multithreading"
+        correct: true
+      - text: "The engine always spawns OS threads"
+        correct: false
+      - text: "Two processes share a database transaction"
+        correct: false
+      - text: "Tasks run on different machines"
+        correct: false
+    explain: "Because processes are largely about waiting, a parallel gateway mainly lets one path proceed while another waits; it does not mandate concurrent CPU execution."
+  - q: "What is true about a BPMN message event?"
+    options:
+      - text: "It is a trigger from outside the engine — a method call, REST call, or broker message — not inherently tied to a message broker"
+        correct: true
+      - text: "It must be delivered by Kafka"
+        correct: false
+      - text: "It can only start a process, never continue one"
+        correct: false
+      - text: "It is the same as a timer event"
+        correct: false
+    explain: "A BPMN message simply means an external trigger; you write glue code to wire it to whatever transport you use. It can start a new instance or continue an existing one."
+takeaway: "BPMN is diagram and source code in one ISO standard — master tokens, tasks, gateways, and events; it teaches the patterns even if you switch languages."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Think of a process model as a **road network** and a process instance as a **car driving a specific route**. The roads are the BPMN diagram; each car is a token finding its way from the start to an end. The metaphor only breaks at a parallel split — unlike a car, a token can clone itself to drive two roads at once.
+</Callout>
+
+## One artifact, two faces
+
+**BPMN (Business Process Model and Notation)** is an industry standard for process modeling *and* execution. A BPMN process is simultaneously a **visual diagram** and an **XML document** — "source code and documentation in one artifact." It was created in 2004, overhauled in 2011, published as **ISO/IEC 19510:2013**, and deliberately kept stable since, with no competing standard. Even if you draw a process only for discussion, use an executable language like BPMN: anyone entering process automation should learn it, because it teaches the recurring **patterns** even if you ultimately use another tool.
+
+## The token: how control flow works
+
+The BPMN spec defines a **token** as a theoretical aid for describing behaviour, and it is how engines implement **control flow**:
+
+- A token is **spawned at the start event**.
+- It **advances** along **sequence flows** (arrows) as each step completes.
+- At an **exclusive gateway** it takes **exactly one** path; at a **parallel gateway** it is **cloned** onto several paths.
+- It is **consumed at an end event**, ending the instance.
+
+Each instance is one token (or several, after a parallel split) flowing through the same model, and the engine **persists token state** — exactly where each instance is waiting. Many instances flow through one definition at once.
+
+<Mermaid code={String.raw`stateDiagram-v2
+  [*] --> Spawned: start event
+  Spawned --> Advancing: sequence flow
+  Advancing --> Advancing: step completes
+  Advancing --> OnePath: exclusive gateway
+  Advancing --> Cloned: parallel gateway
+  OnePath --> Advancing
+  Cloned --> Advancing
+  Advancing --> [*]: consumed at end event`} />
+
+## The core elements
+
+<Mermaid code={String.raw`flowchart LR
+  S(("Order placed")) --> T1["Retrieve payment<br/>(service task)"]
+  T1 --> G{"Prepayment?"}
+  G -->|"yes"| PAR1[/"parallel split"/]
+  G -->|"no"| T2["Fetch goods<br/>(service task)"]
+  PAR1 --> T2
+  PAR1 --> T3["Notify customer<br/>(user task)"]
+  T2 --> PAR2[/"parallel join"/]
+  T3 --> PAR2
+  PAR2 --> T4["Ship goods<br/>(service task)"]
+  T4 --> E(("Order delivered"))`} />
+
+- **Start / end events** — circles where flow begins and ends.
+- **Task** — an atomic unit of work; the token stops until it completes. Granularity is the modeler's choice. Important types:
+  - **Service task** (cog wheels) — runs software (a service or function call), usually connected to [glue code](/automation/executable-workflow-models/).
+  - **User task** (human icon) — the process waits for a person to complete a to-do item in a tasklist.
+  - **Business rule task** — invokes a **decision engine** (often a DMN decision table).
+  - **Script task** — the engine runs a script.
+- **Sequence flow** — an arrow defining order.
+- **Gateways** — routing in richer patterns:
+  - **Exclusive (XOR)** — choose exactly one path by data.
+  - **Parallel** — activate multiple paths at once.
+- **Events** — something that happens:
+  - **Timer event** — wait a period (a one-day right-of-withdrawal wait) or, as a **boundary event** on a task, time out (wait five days for payment, then cancel).
+  - **Message event** — a trigger from outside the engine that can start or continue an instance.
+  - **Event subprocess** — interrupt an instance on a message regardless of where it is waiting (a cancellation interrupting fulfilment).
+
+<Callout type="go" title="Two clarifications that trip people up">
+**"Parallel" is about waiting, not threads** — it mainly lets one path proceed while another waits. And a **BPMN message is just an external trigger**, not inherently a broker message — it could be a method call, a REST call, or an AMQP message; you wire it up in glue code.
+</Callout>
+
+## Decisions belong in DMN, not the diagram
+
+Control flow goes in BPMN; **decision logic** goes in **DMN (Decision Model and Notation)** — a close-cousin standard expressing rules as a **decision table** evaluated with **FEEL (Friendly Enough Expression Language)**. Each row is a rule; input cells are AND-ed expressions; a **hit policy** ("first", "unique", "collect/sum") resolves multiple matches. Decisions are **not long-running** — made in one atomic step — and change far faster than control flow, so keeping them in DMN lets the business edit them without touching the process.
+
+<Callout type="gotcha" title="Don't turn BPMN into a programming canvas">
+Two extremes both fail: a single task "where all the magic happens," and **graphical programming** where every line of logic is a box. Too much detail destroys the diagram's value as a shared language. Promote logic into the model only when you must **wait**, you **discuss it regularly** with stakeholders, or it **crosses a transaction boundary**.
+</Callout>
+
+<Callout type="tip" title="Label for readability">
+Name a start event in passive voice ("Order placed"), tasks as verb + object ("Retrieve payment"), gateways as a question with answers on the outgoing flows, and end events as business results ("Order delivered"). Model left-to-right with the happy path on a centered straight line.
+</Callout>
+
+## See also
+
+- [Executable workflow models](/automation/executable-workflow-models/) — connecting BPMN to glue code and versioning.
+- [The saga and compensation](/automation/the-saga-and-compensation/) — undoing work across services with compensation events.
+- [Where workflow engines fit](/automation/where-workflow-engines-fit/) — the engine that runs the model.

@@ -1,0 +1,131 @@
+---
+title: "Visibility and Organizational Adoption"
+category: auto-operating
+kind: topic
+order: 9
+difficulty: "Intermediate"
+status: ready
+intent: "Process context is what makes monitoring valuable — and visual, executable models are the shared language that bridges the business–IT gap across BizDevOps."
+book: "Practical Process Automation (Bernd Ruecker)"
+related:
+  - handling-failures-and-retries
+  - executable-workflow-models
+  - where-workflow-engines-fit
+when_use:
+  - "You need cycle-time and bottleneck insight, not just up/down monitoring"
+  - "Operations must resolve incidents in context and retry stuck instances at scale"
+  - "Aligning business, developers, and operations around one living, executable model"
+when_avoid:
+  - "Exposing the raw executable model for customer status inquiries"
+  - "Relying on distributed tracing or a raw data warehouse for business-process visibility"
+  - "Splitting into separate 'business' and 'technical' models (the two-model trap)"
+quiz:
+  - q: "What makes process visibility valuable, and what do generic tools lose?"
+    options:
+      - text: "Process context — generic data warehouses and BI tools lose it, making even simple process reporting hard"
+        correct: true
+      - text: "Encryption — generic tools lack it"
+        correct: false
+      - text: "Speed — generic tools are slower"
+        correct: false
+      - text: "Color — generic tools are monochrome"
+        correct: false
+    explain: "Process context (which instance, which path, what state) is the differentiator. Without it, deep analysis is impossible and you must precalculate metrics via brittle ETL jobs."
+  - q: "Why is distributed tracing a poor fit for business-process visibility?"
+    options:
+      - text: "Traces are too fine-grained for non-engineers, and sampling drops most requests so you never get a complete view"
+        correct: true
+      - text: "Tracing is illegal in production"
+        correct: false
+      - text: "Traces cannot include timestamps"
+        correct: false
+      - text: "Tracing only works in monoliths"
+        correct: false
+    explain: "Distributed tracing excels at engineer-facing failure analysis, but its fine granularity and sampling (often >90% dropped) make it unsuitable as a complete business-process view."
+  - q: "What is the 'two-model trap'?"
+    options:
+      - text: "Keeping a separate business 'requirements' model and technical 'executable' model that drift apart"
+        correct: true
+      - text: "Using two workflow engines"
+        correct: false
+      - text: "Running two versions of a definition in parallel"
+        correct: false
+      - text: "Writing two unit tests per task"
+        correct: false
+    explain: "The operational level needs one logically-single model; splitting it forces translation and lets the models diverge. A one-page strategic model is fine — it's just a 'trailer.'"
+  - q: "Why are executable process models called 'living documentation'?"
+    options:
+      - text: "They cannot become outdated when the process changes, because the model is what actually runs"
+        correct: true
+      - text: "They are stored in a wiki"
+        correct: false
+      - text: "They are written by technical writers"
+        correct: false
+      - text: "They are printed and laminated"
+        correct: false
+    explain: "Because the executable model is the running artifact, it stays in sync by construction — unlike Visio diagrams that go stale within months."
+takeaway: "Process context is the differentiator: keep one living executable model so business, dev, and ops share a current view and resolve incidents in context."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A car dashboard doesn't hand you raw sensor voltages — it shows speed, fuel, and a warning light *in context* so you can act. Generic logs and traces are the raw voltages; **process visibility** is the dashboard. Strip away the process context and even "where is my order?" becomes surprisingly hard to answer.
+</Callout>
+
+## Visibility has two payoffs — and context is the key
+
+Process visibility improves performance on two dimensions:
+
+- **Process improvement** — spotting bottlenecks and discussing alternatives to make the process cheaper, shorter, or bigger.
+- **Process operation** — "keeping the lights on," from business SLAs to technical incidents.
+
+Cognitive-psychology research on **situation awareness** (air-traffic control, nuclear control rooms) shows an operator must know the current state to predict and control what happens next. The recurring lesson: **process context** — which instance, which path, what state — is what makes visibility valuable. Generic **data warehouses, BI tools, and distributed tracing** lose that context, making even simple process reporting hard and deep analysis impossible.
+
+## Getting the data
+
+<Mermaid code={String.raw`graph TD
+  E["Workflow engine<br/>(audit data, for free)"] --> V1["Vendor monitoring tools"]
+  E --> V2["Engine API<br/>(build a UI / load a DB)"]
+  E --> V3["Event stream of history"]
+  E -.->|"last resort"| V4["Read engine DB directly"]
+  M["Milestones (intermediate events)<br/>+ phases (embedded subprocesses)"] --> K["KPIs: cycle time,<br/>counts, path analysis"]
+  E --> M`} />
+
+With an engine you get **audit data for free** — instance start/end timestamps, per-task entry and retry counts, and incident details. Access it, easiest-first: the **vendor's monitoring tools**, the **engine API** (build your own UI or load a DB), or a published **event stream**; reading the engine **database directly** is a **last resort** (the schema is an implementation detail with no compatibility guarantee). To measure business KPIs, add **milestones** (BPMN intermediate events — pure audit markers, passed/not passed) and **phases** (embedded subprocesses, which add an "active" status). Typical metrics: **cycle time** (a key KPI), phase and task durations, and counts of started, ended, or path-specific instances — ideally near-real-time, accurate, large-scale, self-service, with threshold alerting.
+
+<Callout type="gotcha" title="Tracing and raw BI are the wrong tools here">
+**Distributed tracing** (Jaeger, Zipkin) is great for engineers chasing failures, but it's too fine-grained for business users and uses **sampling** — often >90% of requests are never recorded, so it's never a complete view. Raw **DWH/BI** loses process context and forces brittle ETL jobs that precalculate metrics, killing agility. Prefer process-context-aware tools; for cross-system flows consider **process mining** (one-off legacy discovery) or **process event monitoring** (ongoing).
+</Callout>
+
+<Callout type="tip" title="Status inquiries: never expose the raw model">
+For "where is my order?" don't show the executable BPMN — it has too many internal details. Build a **simplified non-executable model** purely for visualization, or a **checklist** from milestones/phases. The real challenge is **finding the right instance** (customers don't know IDs), so attach searchable business data to each instance.
+</Callout>
+
+## Adoption: one living model for BizDevOps
+
+Visibility's organizational counterpart is **collaboration** — the single most crucial success factor in IT projects. Visual, executable models are the shared language that bridges the business–IT gap, and they help across **BizDevOps**:
+
+<Mermaid code={String.raw`graph TD
+  M["One living executable model"] --> B["Business<br/>communicate and surface design problems early"]
+  M --> D["Development<br/>living documentation that cannot go stale"]
+  M --> O["Operations<br/>resolve incidents in context, retry stuck instances"]
+  B -.->|"avoid drift"| M
+  D -.->|"avoid drift"| M
+  O -.->|"avoid drift"| M`} />
+
+- **Development** — executable models are **living documentation** that *cannot* go stale, because the model is what runs (unlike Visio diagrams that rot in months). Test-result visualizations show the exact path executed.
+- **Business** — better communication with analysts, sponsors, and executives; expect an **effort spike in the first analysis phase** as broadly-understandable models surface design problems early (Agile, but "Agile does not mean analysis-free").
+- **Operations** — see incidents **in context** (model, history, instance data, error info) and fix them via a GUI — including **retrying thousands of stuck instances at once** after an outage.
+
+<Callout type="go" title="Avoid the two-model trap">
+The critical failure mode is keeping a separate **business model** (requirements) and **technical model** (executable) that drift apart. At the operational level you need **one logically-single model** — it may live as different files (analyst's tool, developer's Git, the deployed version) but with the same content and no translation. In practice, keep **one leading model** (usually the developers' Git repo); discipline matters more than tool features.
+</Callout>
+
+The model is a **house**, not a pyramid: **human flows** (controlled by people) and **technical flows** (run by the engine) joined on one canvas, interacting where a human clicks a tasklist button or a technical flow creates a human task. Analysts draft the **what and why**; developers own and adjust the **executable artifact**, communicating each change with a reason. Don't gold-plate — "an imperfect model in production beats a perfect one that never runs."
+
+## See also
+
+- [Handling failures and retries](/automation/handling-failures-and-retries/) — the incidents operators resolve in context.
+- [Executable workflow models](/automation/executable-workflow-models/) — why the running model is also the documentation.
+- [Where workflow engines fit](/automation/where-workflow-engines-fit/) — the audit data and tooling that power visibility.

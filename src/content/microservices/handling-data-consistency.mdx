@@ -1,0 +1,130 @@
+---
+title: "Handling Data Consistency"
+category: ms-communication
+kind: topic
+order: 11
+difficulty: "Advanced"
+status: ready
+intent: "Life after ACID across services — the CAP theorem, eventual consistency, the canonical source of truth, idempotency, and designing boundaries around transactions."
+book: "Building Microservices, 2nd ed. (Sam Newman); Enabling Microservice Success (Sarah Wells)"
+related:
+  - sagas
+  - decomposing-the-database
+  - resilience
+when_use:
+  - "Your data is spread across services and you must reason about consistency."
+  - "You are choosing between availability and consistency under a partition."
+  - "You need operations that are safe to retry."
+when_avoid:
+  - "All the data for an operation lives in one service with a local ACID transaction."
+  - "You need the workflow mechanics — see sagas."
+quiz:
+  - q: "Under the CAP theorem, what must you trade off during a network partition?"
+    options:
+      - text: "Consistency vs availability — you keep two of consistency, availability, partition tolerance"
+        correct: true
+      - text: "Latency vs throughput"
+        correct: false
+      - text: "Cost vs performance"
+        correct: false
+      - text: "Security vs usability"
+        correct: false
+    explain: "During a partition you choose AP (sacrifice consistency, accept eventual consistency) or CP (sacrifice availability); CA is impossible in a distributed system."
+  - q: "Why does idempotency matter for distributed operations?"
+    options:
+      - text: "It makes the underlying business operation safe to replay, so retries don't cause duplicate effects"
+        correct: true
+      - text: "It makes operations run faster"
+        correct: false
+      - text: "It is provided automatically by HTTP"
+        correct: false
+      - text: "It eliminates the need for monitoring"
+        correct: false
+    explain: "Newman notes HTTP gives you nothing for free here — you must design the business operation (e.g., with idempotency keys) to be safely replayable."
+  - q: "What is good practice when data is duplicated across services?"
+    options:
+      - text: "Know the canonical source of truth for each piece of data"
+        correct: true
+      - text: "Let any service be authoritative for any field"
+        correct: false
+      - text: "Forbid all duplication"
+        correct: false
+      - text: "Always use two-phase commit to keep copies identical"
+        correct: false
+    explain: "Wells advises accepting some duplication but always knowing the canonical source, and designing boundaries around transactions."
+  - q: "What does 'design boundaries around transactions' mean?"
+    options:
+      - text: "Keep data that must change together inside one service so you keep local ACID"
+        correct: true
+      - text: "Put every transaction in its own service"
+        correct: false
+      - text: "Use distributed transactions for all writes"
+        correct: false
+      - text: "Avoid transactions entirely"
+        correct: false
+    explain: "Transaction boundaries are a good guide to service boundaries; data you always change together probably shouldn't be split."
+takeaway: "After splitting, you trade consistency for availability under partitions — keep data that changes together in one service, name the canonical source, make operations idempotent, and accept eventual consistency."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Two bank branches that lose their phone line can't both stay open *and* agree on your balance in real time. Either they close (refuse withdrawals until reconnected — consistency over availability), or they keep serving and reconcile later (availability over consistency, risking a momentary overdraft). When the network splits, you must pick. Distributed data forces that same choice.
+</Callout>
+
+## The end of free atomicity
+
+In a monolith, one ACID transaction made an operation all-or-nothing. Once data is split across services, **ACID scope shrinks to each service's own database**. You can still use local transactions, but the operation *as a whole* no longer commits or rolls back together. [Sagas](/microservices/sagas/) handle the *workflow*; this page is about the *consistency model* you live in.
+
+## The CAP theorem
+
+During a **network partition**, you keep at most two of **C**onsistency, **A**vailability, **P**artition tolerance:
+
+<Mermaid code={String.raw`graph TD
+  P{"Network partition<br/>(unavoidable in distributed systems)"}
+  P --> AP["AP: stay available<br/>sacrifice consistency<br/>→ eventual consistency"]
+  P --> CP["CP: stay consistent<br/>sacrifice availability<br/>→ refuse some requests"]
+  CA["CA is impossible<br/>in a distributed system"]`} />
+
+- **AP** — sacrifice consistency, accept **eventual consistency** (e.g., Cassandra).
+- **CP** — sacrifice availability; reject some requests to stay consistent. "Friends don't let friends write their own distributed consistent data store."
+- **CA** — impossible once you're distributed.
+
+It's **not all-or-nothing**: mix per capability (Cassandra tunes consistency per call). Choose the model each piece of data actually needs.
+
+## Living with eventual consistency
+
+- **Know the canonical source of truth.** Wells advises accepting some **data duplication** but always knowing which service is authoritative for each field — and restricting writes so others can't claim ownership.
+- **Design boundaries around transactions.** Data that must change together should live in one service so you keep local ACID. Transaction boundaries are one of the best guides to *service* boundaries; "services you always change together probably shouldn't be separate."
+- **Reconcile.** Sync between services is eventually consistent, so always run a **reconciliation** process to catch drift.
+
+## Idempotency — make retries safe
+
+In a distributed system, messages get redelivered and calls get retried. If replaying an operation causes duplicate effects (charging a card twice), you have a problem.
+
+<Callout type="gotcha" title="⚠️ HTTP gives you idempotency for free? It doesn't.">
+Newman is explicit: the underlying *business operation* must be made safely replayable — HTTP "gives you nothing for free" here. Use **idempotency keys**, design operations so re-applying them is a no-op, and remember that "at-least-once" delivery (the norm for brokers) means you *will* see duplicates.
+</Callout>
+
+## Fail open or fail closed?
+
+When a dependency you'd normally check is unavailable, decide per interface whether to **fail open** (proceed) or **fail closed** (refuse). The *FT* **fails open** on subscription checks (better to let a few non-subscribers read than block everyone); **payments should fail closed** (the UberEats incident gave away two days of free orders by failing open). This is a **business decision**, made per dependency.
+
+<Mermaid code={String.raw`graph TD
+  Dep{"Dependency<br/>unavailable"}
+  Dep -->|"low risk: article access"| Open["Fail OPEN<br/>(proceed — serve content)"]
+  Dep -->|"high risk: payment / auth"| Closed["Fail CLOSED<br/>(refuse — protect the business)"]`} />
+
+<Callout type="tip" title="💡 Degrading functionality is a business decision">
+How much consistency, availability, and graceful degradation you need is defined by users via cross-functional requirements and enshrined as SLOs — not chosen by engineers in isolation. Decide per interface and per dependency what "acceptable service" looks like.
+</Callout>
+
+<Callout type="go" title="🔑 Key insight">
+You can't have strong consistency, full availability, and partition tolerance at once — and partitions are inevitable. So keep tightly-coupled data together, name the canonical source for everything you duplicate, make operations idempotent, and consciously choose AP or CP per capability.
+</Callout>
+
+## See also
+
+- [Sagas](/microservices/sagas/) — coordinating the workflow that produces eventual consistency.
+- [Decomposing the database](/microservices/decomposing-the-database/) — how the data got split.
+- [Resilience](/microservices/resilience/) — timeouts, retries, and the patterns idempotency protects.

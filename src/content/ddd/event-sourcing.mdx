@@ -1,0 +1,129 @@
+---
+title: "Event Sourcing"
+category: ddd-tactical
+kind: topic
+order: 8
+difficulty: "Advanced"
+status: ready
+intent: "Persist an aggregate as an append-only stream of domain events — the source of truth — from which any number of state projections are built."
+book: "Learning Domain-Driven Design (Vlad Khononov)"
+related:
+  - entities-and-aggregates
+  - domain-events-and-services
+  - cqrs
+when_use:
+  - "For money, audit, and deep-analysis subdomains where full history and a legally useful audit log matter."
+  - "When you want to add new task-optimized read models over the same history later."
+  - "When time travel and retroactive debugging would provide real value."
+when_avoid:
+  - "When the domain has no need for history — a state-based domain model is simpler."
+  - "Don't fake it with logfiles, hand-written log tables, or DB-trigger history tables."
+  - "Don't add snapshots prematurely — most aggregates have under 100 events."
+quiz:
+  - q: "In event sourcing, what is the source of truth?"
+    options:
+      - text: "The append-only stream of domain events"
+        correct: true
+      - text: "The current-state row in a table"
+        correct: false
+      - text: "The latest snapshot"
+        correct: false
+      - text: "The read model"
+        correct: false
+    explain: "Every state change is represented and persisted as a domain event in an append-only event store; those events are the source of truth, and current state is reconstituted by replaying them."
+  - q: "What is a projection?"
+    options:
+      - text: "Transformation logic that applies an aggregate's events in sequence to build a state representation"
+        correct: true
+      - text: "A forecast of future events"
+        correct: false
+      - text: "A database backup"
+        correct: false
+      - text: "A snapshot of the event store"
+        correct: false
+    explain: "A projection applies events sequentially (overloaded Apply methods) to build a state representation; you can add new projections later over the existing events."
+  - q: "How does the event store enforce concurrency on append?"
+    options:
+      - text: "Append takes an expectedVersion for optimistic concurrency"
+        correct: true
+      - text: "It locks the whole store"
+        correct: false
+      - text: "It allows overwriting events"
+        correct: false
+      - text: "It uses a nightly reconciliation"
+        correct: false
+    explain: "Append takes an expectedVersion; on mismatch you can inspect exactly which events were concurrently appended and decide whether they truly conflict — advanced optimistic concurrency."
+  - q: "Which is a real advantage of event sourcing?"
+    options:
+      - text: "Time travel — reconstitute any past state for analysis, audit, and retroactive debugging"
+        correct: true
+      - text: "It eliminates the need for any read model"
+        correct: false
+      - text: "It removes all concurrency concerns"
+        correct: false
+      - text: "It is simpler than a state-based model for every domain"
+        correct: false
+    explain: "Benefits include time travel, deep insight (new projections anytime), a strongly-consistent audit log, and advanced concurrency — at the cost of a learning curve and harder schema evolution."
+takeaway: "Store every change as an immutable past-tense event; reconstitute state by replaying, and project events into many task-optimized read models."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A bank account isn't a single "balance" cell that gets overwritten — it's a ledger of every deposit and withdrawal, and the balance is *computed* from the list. Event sourcing applies that idea to any aggregate: keep the full story, derive the current state.
+</Callout>
+
+## The dimension of time
+
+An **event-sourced domain model** is the same domain model from [entities and aggregates](/ddd/entities-and-aggregates/) — same value objects, same aggregates, same domain services — with one difference: **how aggregate state is persisted**. Instead of storing the current state (a **state-based model**, which loses history), the system stores **domain events** describing every change and treats them as the **source of truth**. *Every* state change must be a domain event.
+
+<Mermaid code={String.raw`graph TD
+  subgraph SB["State-based — overwrite (history lost)"]
+    R1["balance = 100"] -->|"deposit 50"| R2["balance = 150 (old value gone)"]
+  end
+  subgraph ES["Event-sourced — append (full history)"]
+    E1["Opened"] --> E2["Deposited 100"] --> E3["Withdrew 30"] --> E4["Deposited 50"]
+    E4 --> Bal["balance = 120 (computed)"]
+  end`} />
+
+<Mermaid code={String.raw`graph LR
+  Cmd["Command"] --> Load["1. Load events"]
+  Load --> Recon["2. Reconstitute state<br/>(replay / project)"]
+  Recon --> Exec["3. Execute command<br/>(produce NEW events)"]
+  Exec --> Commit["4. Append events<br/>(expectedVersion)"]
+  Commit --> Store[("Append-only event store")]
+  Store --> Proj1["Projection: state"]
+  Store --> Proj2["Projection: search"]
+  Store --> Proj3["Projection: analytics"]`} />
+
+## How it works
+
+The operation script is: **load** the aggregate's events; **reconstitute** state by projecting them; **execute** the command, producing *new* events; **commit** the new events. Commands don't set flags directly — `RequestEscalation` creates a `TicketEscalated` event, and appending it dynamically dispatches `state.Apply(event)`.
+
+- **Event store** — The append-only database. It must not allow modifying or deleting events (except migrations). Minimum operations: fetch all events for an entity, and append events. `Append` takes an `expectedVersion` for **optimistic concurrency**.
+- **Projection** — Transformation logic that sequentially applies events to build a state representation. You are not limited to one: over the *same* lead events you can build a `LeadStateProjection` (the current row), a `LeadSearchModelProjection` (accumulating historical values so agents search by old details), and an `AnalysisModelProjection` (counts for BI). New projections can be added anytime.
+- **Version field** — A counter incremented per applied event; apply the first N events to get the state at version N — **time travel**.
+
+<Callout type="go" title="What you gain">
+**Time travel** (reconstitute any past state for analysis, optimization, retroactive debugging); **deep insight** (add new projections over existing history anytime); a strongly-consistent **audit log** (legally useful, ideal for money); and **advanced optimistic concurrency** (inspect exactly which events conflicted).
+</Callout>
+
+<Callout type="gotcha" title="Don't fake event sourcing">
+Logfiles are eventually inconsistent; hand-written log tables get forgotten by future engineers; DB-trigger history tables capture only dry facts and lose the business *why*. None of these gives the strong-consistency guarantee of a real event store. Also don't reach for event sourcing reflexively — let the domain's needs (money, audit, deep analysis) drive it.
+</Callout>
+
+## Performance and operations
+
+- **Snapshot** — Cache a continuously-updated projection; load the snapshot plus only newer events. It's an optimization that must be *justified* — typically unnecessary below ~10,000 events per aggregate (most average under 100). Premature snapshots are accidental complexity, and needing them may signal too-large boundaries.
+- **Sharding** the event store by **aggregate ID** (all of one instance's events together) makes the model easy to scale.
+- **Forgettable payload pattern** — For GDPR-style deletion in an append-only store: store sensitive data *encrypted*, keep the key in external storage (key = aggregate ID); deleting the key makes the data permanently unreadable.
+
+<Callout type="tip" title="Event sourcing pairs with CQRS">
+Because the event store is optimized for appending and replaying — not querying — event-sourced models rely on [CQRS](/ddd/cqrs/) to project events into queryable read models. The two patterns go together.
+</Callout>
+
+## See also
+
+- [Entities and aggregates](/ddd/entities-and-aggregates/) — the model whose state is sourced from events.
+- [Domain events and services](/ddd/domain-events-and-services/) — the events being stored.
+- [CQRS](/ddd/cqrs/) — projecting events into queryable read models.

@@ -1,0 +1,135 @@
+---
+title: "Where Workflow Engines Fit"
+category: auto-foundations
+kind: topic
+order: 3
+difficulty: "Beginner"
+status: ready
+intent: "A workflow engine is a persistent, scheduling state machine — run it as a service, keep it decentralized, and judge its adoption by return on investment."
+book: "Practical Process Automation (Bernd Ruecker)"
+related:
+  - why-long-running-processes-are-hard
+  - orchestration-vs-choreography
+  - executable-workflow-models
+when_use:
+  - "A use case benefits from long-running capability and/or from process visibility"
+  - "The return (saved plumbing, visibility, reliability) exceeds the cost of adding a component"
+  - "You want decentralized orchestration owned by the team that owns the process"
+when_avoid:
+  - "Pure graphical programming — code in a model with no waiting and no cross-role value"
+  - "Building your own in-house workflow platform (unless you are a process automation company)"
+  - "A single central BPM team governing every team's process models"
+quiz:
+  - q: "What are the three core capabilities of a workflow engine?"
+    options:
+      - text: "Durable state (persistence), scheduling, and versioning"
+        correct: true
+      - text: "Caching, load balancing, and sharding"
+        correct: false
+      - text: "Authentication, authorization, and auditing"
+        correct: false
+      - text: "Compilation, deployment, and rollback"
+        correct: false
+    explain: "Persistence tracks every instance's state and history; scheduling drives timers and retries; versioning lets long-running instances keep running while definitions evolve."
+  - q: "Why is 'run the engine as a service' the recommended default?"
+    options:
+      - text: "It isolates application code from the engine, eases support, and lets you use it from any language"
+        correct: true
+      - text: "It is the only architecture that exists"
+        correct: false
+      - text: "It removes the need for a database"
+        correct: false
+      - text: "It makes the engine free"
+        correct: false
+    explain: "Embedding couples your app to the engine and makes failures hard to diagnose. A separate, self-contained engine reached remotely isolates concerns and enables polyglot use."
+  - q: "How should you decide whether to introduce a workflow engine?"
+    options:
+      - text: "As a return-on-investment call: adopt it while the value exceeds the cost of adding the component"
+        correct: true
+      - text: "Always, in every project, no exceptions"
+        correct: false
+      - text: "Never, because it adds a component"
+        correct: false
+      - text: "Only if the CEO mandates a central BPM platform"
+        correct: false
+    explain: "An engine's two values are long-running capability and visibility. As tools get lightweight and managed, the investment drops, widening the range of worthwhile use cases."
+  - q: "What is the danger the book warns about most strongly when scaling adoption?"
+    options:
+      - text: "Building your own in-house process automation platform on top of vendor engines"
+        correct: true
+      - text: "Writing unit tests for process models"
+        correct: false
+      - text: "Using a managed cloud engine"
+        correct: false
+      - text: "Keeping models in Git"
+        correct: false
+    explain: "'Unless you are a process automation company, don't build a process automation platform.' They lag the vendor, accrue bugs, hit dead ends, and have no community support."
+takeaway: "Run the engine as a service, keep ownership decentralized, and adopt it as an ROI decision — never build your own platform."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+You don't write your own database to store a few rows — you adopt one because persistence, transactions, and querying are solved problems done better by specialists. A **workflow engine** is the same kind of building block, but for the things distributed systems get wrong by hand: durable state, waiting, scheduling, retries, and visibility.
+</Callout>
+
+## What a workflow engine actually is
+
+Ruecker's one-line definition: **a state machine that is good at waiting and scheduling.** You define and deploy a blueprint — the **process definition** — then start **process instances**, and the engine tracks the state of each. Three capabilities are core:
+
+- **Durable state (persistence).** The engine records every running instance — its current position and historical audit data — and manages transactions, including concurrent access to the same instance.
+- **Scheduling.** The engine tracks time, becomes active when something needs doing, retries on temporary errors, and escalates instances that get stuck too long.
+- **Versioning.** Because long-running means there is *never* a moment with no instance running, any change to a definition must account for in-flight instances. Engines run **multiple versions in parallel**, and good tools can **migrate** instances to a new version.
+
+Around that core, platforms add optional, **unbundleable** features you adopt over time: graphical **visibility**, rich **audit data**, and **tooling** for modeling, operations, tasklists, and business monitoring.
+
+## A process solution is more than the model
+
+The model alone is "only one piece of the puzzle." A **process solution** is the model **plus glue code** (connectivity, data transformation, decisions) and any other artifacts — packaged like any normal project (a Java/Maven, .NET, or NodeJS app, or a bundle of serverless functions) and shipped through your normal version control and CI/CD. See [executable workflow models](/automation/executable-workflow-models/) for how model and code connect.
+
+<Callout type="go" title="Glue code over low-code">
+Handle connectivity, data, and decisions in **programming code**, where developers work best — not in proprietary low-code connectors. The agility of process automation comes from a shared, executable graphical model that everyone can discuss, *not* from removing developers.
+</Callout>
+
+## How to run it: as a service, decentralized
+
+<Mermaid code={String.raw`graph TD
+  subgraph TeamA["Order team (owns its engine)"]
+    A1["order-fulfillment app"] --> EA["Engine A"]
+    A2["order-cancellation app"] --> EA
+  end
+  subgraph TeamB["Payment team (owns its engine)"]
+    B1["payment app"] --> EB["Engine B"]
+  end
+  A1 -->|"clean API call"| B1
+  EA -.->|"durable state + scheduling"| DBA[("State store A")]
+  EB -.->|"durable state + scheduling"| DBB[("State store B")]`} />
+
+Two architecture options exist: **embedded as a library** inside your app, or **as a service** reached remotely. Run it **as a service by default** — it isolates your code from the engine, makes support tractable, and lets you call it from any language. (The embedded option still fits a [modular monolith](/automation/integrating-with-services-and-apis/), orchestrating internal components via local calls.)
+
+Just as important is **decentralization**. One engine *can* host many definitions for many apps, like a shared database — but prefer **separate engines per team/application** for isolation and to **enforce boundaries** (a misbehaving service can't affect another). The danger to avoid is not centralized *hosting* but centralized *governance*: a single BPM team owning everyone's models. **Ownership is distinct from deployment location** — teams can deploy onto a shared engine yet still own and govern their own models.
+
+<Callout type="gotcha" title="Don't build a platform">
+The strongest warning in the book: "Unless you are a process automation company, don't build a process automation platform." In-house platforms on top of vendor engines struggle to stay updated, expose all features, and fix bugs — capability lag turns into dead ends, with no Google answers when you get stuck.
+</Callout>
+
+## When does it make sense? Return on investment
+
+An engine's two values are **long-running capability** and **process visibility**. End-to-end business processes benefit from both; technical-only use cases benefit less from visibility. So the decision is **ROI**: adopt the engine while the *return* exceeds the *investment* of introducing it.
+
+<Mermaid code={String.raw`graph TD
+  U["A use case"] --> Q{"Return exceeds investment?"}
+  Q -->|"long-running plus visibility"| A["Adopt the engine"]
+  Q -->|"technical-only, little waiting"| W["Weigh it, visibility adds less"]
+  Q -->|"no waiting, no shared model"| S["Skip, this is graphical programming"]
+  A --> R["Saved plumbing, reliability, visibility"]`} /> As tools become lightweight and managed, the investment keeps dropping — widening the set of problems worth solving this way. Size performance by **actions** (instances started, tasks executed, events routed), not by waiting instances, which are just cheap database rows.
+
+<Callout type="tip" title="The one case that doesn't fit">
+Using BPMN for **graphical programming** — stuffing all logic into a model with no waiting and no cross-role collaboration — is the use case that does *not* make sense. If nothing waits and no stakeholder reads the model, you don't need an engine.
+</Callout>
+
+## See also
+
+- [Why long-running processes are hard](/automation/why-long-running-processes-are-hard/) — the problems the engine exists to solve.
+- [Executable workflow models](/automation/executable-workflow-models/) — connecting model and glue code.
+- [Orchestration vs choreography](/automation/orchestration-vs-choreography/) — local, decentralized orchestration.

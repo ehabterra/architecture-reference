@@ -1,0 +1,108 @@
+---
+title: "Architecture vs Design"
+category: fnd-thinking
+kind: topic
+order: 2
+difficulty: "Beginner"
+status: ready
+intent: "Where the line between architecture and design actually sits — and why locating a decision on that spectrum tells you who should make it."
+book: "Head First Software Architecture; Fundamentals of Software Architecture"
+related:
+  - what-is-software-architecture
+  - the-architects-role
+  - thinking-in-trade-offs
+when_use:
+  - "When you need to decide whether a choice deserves architect involvement or belongs to the dev team"
+  - "When triaging a backlog of decisions by how reversible and significant each one is"
+  - "When clarifying ownership between architects and developers to avoid the over-the-wall hand-off"
+  - "When deciding how to structure teams so the org's communication shape produces the architecture you want"
+  - "When timing a decision — deferring tactical choices to the last responsible moment"
+when_avoid:
+  - "When treating the split as a rigid binary instead of a spectrum"
+  - "When using it as an excuse to silo architects away from the codebase"
+  - "When a choice is trivially reversible — just try it rather than holding a placement debate"
+quiz:
+  - q: "Which trio of factors best places a decision on the architecture-design spectrum?"
+    options:
+      - text: "Strategic vs tactical, level of effort to change, and significance of the trade-offs"
+        correct: true
+      - text: "Cost, headcount, and deadline"
+        correct: false
+      - text: "Language, framework, and database"
+        correct: false
+      - text: "Diagrams, code, and tests"
+        correct: false
+    explain: "Head First Software Architecture uses three diagnostics — strategic vs tactical, level of effort to build/change, and the significance of the trade-offs — to locate a decision."
+  - q: "Why does the traditional 'architect hands artifacts to developers' model usually fail?"
+    options:
+      - text: "Decisions don't reach developers and developer learnings never flow back to the architect"
+        correct: true
+      - text: "Architects produce too many diagrams"
+        correct: false
+      - text: "Developers cannot read UML"
+        correct: false
+      - text: "It is too expensive to draw the diagrams"
+        correct: false
+    explain: "Fundamentals argues communication must be bidirectional; architecture and design form a continuous circle of life, not a one-way hand-off across a barrier."
+  - q: "A change that ripples through presentation, business, and persistence and takes weeks to plan is most likely…"
+    options:
+      - text: "Architectural — high effort to change and significant trade-offs"
+        correct: true
+      - text: "Design — it only touches code"
+        correct: false
+      - text: "Neither, because it has no diagram"
+        correct: false
+      - text: "Always a defect"
+        correct: false
+    explain: "High level of effort plus significant trade-offs pushes the decision toward the architecture end of the spectrum."
+takeaway: "Architecture vs design is a spectrum, not a wall — the harder a decision is to reverse and the bigger its trade-offs, the more architectural it is."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🏠 Analogy">
+Building a house, the floor plan, load-bearing walls, and number of storeys are *architecture* — expensive and risky to change once built. The paint colour, where the couch sits, and which curtains you hang are *design* — cheap to change any time. Software has the same gradient.
+</Callout>
+
+## A spectrum, not a binary
+
+Almost no real decision is purely architecture *or* purely design. *Head First Software Architecture* places every choice on a continuum and gives three diagnostics for locating it:
+
+- **Strategic vs tactical** — strategic decisions are long-term, influence future decisions, involve many stakeholders, and need days or weeks of planning. Tactical decisions are short-term, independent, and made alone or with a colleague in minutes. Strategic leans architecture; tactical leans design.
+- **Level of effort to build or change** — anchored in Fowler's "architecture is the stuff that's hard to change." Migrating a layered monolith to microservices is high effort (architecture); rearranging fields on a screen is low effort (design).
+- **Significance of the trade-offs** — cloud vs on-prem, REST vs messaging, atomic vs distributed transactions all carry significant trade-offs (architecture). Naming a variable or picking an XML parser does not (design).
+
+<Mermaid code={String.raw`graph LR
+  D["Design end<br/>tactical · low effort · minor trade-offs"] --- M["Mixed<br/>collaborative"] --- A["Architecture end<br/>strategic · high effort · significant trade-offs"]
+  D --> Dec["Developer decides"]
+  M --> Col["Decide together"]
+  A --> Arc["Architect decides"]`} />
+
+## Where a decision sits tells you who decides
+
+The location on the spectrum maps directly to **ownership**. Pure design belongs to the dev team. Pure architecture belongs to the architect. The crowded middle — splitting or merging a service, choosing async messaging between two components — is decided **collaboratively**. This is why the question "is this architecture or design?" is really the question "who should be in the room?"
+
+## Architecture and design are one continuous circle
+
+*Fundamentals of Software Architecture* warns against the traditional model where an architect defines characteristics and components, then hands artifacts to developers across a barrier. That unidirectional flow is *exactly why architecture rarely works*: decisions never reach the people building the system, and what developers learn never flows back. The fix is **bidirectional communication** — architects and developers on the same virtual team, keeping architecture and design in sync as a continuous "circle of life."
+
+<Mermaid code={String.raw`graph LR
+  A["Architect<br/>defines characteristics<br/>& components"] -->|"decisions & constraints"| D["Developers<br/>build & refine<br/>the design"]
+  D -->|"feedback & learnings"| A
+  D -->|"reality bends<br/>the architecture"| A`} />
+
+The arrows flow *both ways*: constraints travel down, and the friction developers hit while building travels back up to reshape the architecture. A decision that looked clean on a diagram but proves unworkable in code is a signal, not a failure — and it only reaches the architect if the loop is closed.
+
+<Callout type="gotcha" title="⚠️ The over-the-wall trap">
+Using the architecture-design split to justify an architect who only draws diagrams and never touches code produces the **Ivory Tower** anti-pattern. The split clarifies *ownership*, not *isolation* — see [the architect's role](/foundations/the-architects-role/).
+</Callout>
+
+<Callout type="go" title="💡 Key insight">
+The single most useful test is **reversibility**. If you can undo a decision cheaply tomorrow, treat it as design. If undoing it is expensive and disruptive, treat it as architecture and give it the analysis it deserves.
+</Callout>
+
+## See also
+
+- [What is software architecture?](/foundations/what-is-software-architecture/) — the four dimensions and the laws.
+- [The architect's role](/foundations/the-architects-role/) — expectations and the collaboration model.
+- [Thinking in trade-offs](/foundations/thinking-in-trade-offs/) — how to analyse the significant ones.

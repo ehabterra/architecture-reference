@@ -1,0 +1,168 @@
+---
+title: "Why Long-Running Processes Are Hard"
+category: auto-foundations
+kind: guide
+order: 1
+difficulty: "Start here"
+status: ready
+intent: "The moment your logic crosses a boundary it becomes long-running — and you inherit state, time, and failure problems that a workflow engine exists to solve."
+book: "Practical Process Automation (Bernd Ruecker)"
+related:
+  - where-workflow-engines-fit
+  - orchestration-vs-choreography
+  - handling-failures-and-retries
+when_use:
+  - "Logic must wait for a remote service, a human, or a timer before it can continue"
+  - "A flow spans minutes, hours, or weeks and must survive restarts and crashes"
+  - "You find yourself hand-rolling status columns, polling schedulers, and retry loops"
+  - "An automated process needs only occasional manual intervention for exceptions (straight-through processing)"
+  - "A flow crosses transaction, organizational, company, or human boundaries"
+when_avoid:
+  - "The whole operation completes in one synchronous, in-memory transaction with no waiting"
+  - "A pure decision that resolves in a single atomic step (use a decision engine instead)"
+  - "You only need fire-and-forget messaging with no end-to-end accountability"
+  - "The control flow is so trivial that a single function call captures it fully"
+  - "You are tempted to store business entities in the engine rather than referencing them by ID"
+quiz:
+  - q: "What are the two core capabilities that make a workflow engine good at long-running work?"
+    options:
+      - text: "Persisting state (so it can wait) and scheduling (so it can retry)"
+        correct: true
+      - text: "Compiling code and load-balancing requests"
+        correct: false
+      - text: "Encrypting data and authenticating users"
+        correct: false
+      - text: "Generating UIs and storing business entities"
+        correct: false
+    explain: "Ruecker frames the engine as a state machine that is good at waiting and scheduling. Durable state lets instances wait; scheduling lets the engine become active to retry or escalate."
+  - q: "In a workflow engine, what does it mean that an instance is 'waiting' for a week?"
+    options:
+      - text: "Its state sits in the database and no thread is blocked; it resumes on the next triggering event"
+        correct: true
+      - text: "A dedicated thread blocks for seven days"
+        correct: false
+      - text: "The engine polls the instance once per second"
+        correct: false
+      - text: "The process is paused at the OS level"
+        correct: false
+    explain: "Waiting is logical, not a blocked thread. The engine stores current state, returns the thread, and reloads state only when a user action or a scheduler timer fires."
+  - q: "Why does crossing a boundary force long-running behaviour?"
+    options:
+      - text: "Remote, transaction, organizational, company, and human boundaries all introduce waiting, latency, and unavailability"
+        correct: true
+      - text: "Boundaries always require encryption"
+        correct: false
+      - text: "Crossing a boundary doubles CPU cost"
+        correct: false
+      - text: "It is only a problem in monoliths"
+        correct: false
+    explain: "Any remote call crosses local/transaction/org/company/human boundaries, each adding availability and latency problems — so the calling side must be able to wait and recover."
+  - q: "What is the 'Wild West integration' anti-pattern?"
+    options:
+      - text: "Ad hoc integration where developers re-implement state, retries, and scheduling by hand, burying business logic in plumbing"
+        correct: true
+      - text: "Using a managed cloud workflow engine"
+        correct: false
+      - text: "Modeling a process in BPMN before coding it"
+        correct: false
+      - text: "Writing unit tests for a process model"
+        correct: false
+    explain: "The 'Ash' story shows ungoverned point-to-point integration drifting into homemade status tables, polling schedulers, and monitoring scripts — exactly what an engine provides for free."
+  - q: "What is 'straight-through processing' (STP)?"
+    options:
+      - text: "A fully automated process that needs manual intervention only for exceptions"
+        correct: true
+      - text: "A process that runs every step on a single thread without pausing"
+        correct: false
+      - text: "Routing every order directly to a human for approval"
+        correct: false
+      - text: "A batch job that processes records overnight"
+        correct: false
+    explain: "STP combines automating the control flow with automating the tasks themselves, so people are involved only when something unusual happens."
+  - q: "Where should a workflow engine store your customer record and invoice?"
+    options:
+      - text: "In your own service — the engine should hold only references (IDs) and routing data"
+        correct: true
+      - text: "Entirely inside the engine, as the system of record"
+        correct: false
+      - text: "Duplicated in both the engine and your service for safety"
+        correct: false
+      - text: "In a dead letter queue"
+        correct: false
+    explain: "The engine tracks control flow, not business entities. Keeping domain data in your service avoids coupling your domain to a tool you should be able to swap."
+takeaway: "Your first remote call makes you long-running: plan for waiting, retries, and crash recovery instead of hand-rolling status tables and polling loops."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Booking a holiday is not a single instant. You reserve a flight, wait for a confirmation email, book a hotel that needs manager approval, then wait days for a visa. You hold the whole thing in your head, chase the slow steps, and start over if a booking falls through. A **long-running process** is software doing exactly that — and the "head" that remembers where every booking is must be durable.
+</Callout>
+
+## What "long-running" really means
+
+A **process** is a series of tasks performed to reach a desired result. The instant any task has to **wait** — for a remote component to respond, for a human to act, or for a timer to elapse — the process becomes **long-running**: it spans seconds, hours, weeks, or months. Ruecker's central claim is that handling long-running behaviour is the hardest, most under-appreciated problem in distributed systems, and that waiting is forced on you the moment logic **crosses a boundary**:
+
+- a **remote call** crosses local / OS / machine boundaries (latency, unavailability);
+- invoking another component crosses a **transaction boundary** (no shared ACID);
+- another team crosses an **organizational boundary**;
+- an external service crosses a **company boundary**;
+- involving people crosses the boundary between automatable and non-automatable work.
+
+Modern systems have *more* boundaries, not fewer, as they move from monoliths to fine-grained services and functions. So "long-running" is not an exotic case — it is the default once you make your first remote call.
+
+## The three problems you inherit: state, time, failure
+
+<Mermaid code={String.raw`flowchart LR
+  A["Start: order placed"] --> B["Charge card<br/>(remote, may fail)"]
+  B -->|"wait for response"| C{"Paid?"}
+  C -->|"yes"| D["Reserve goods"]
+  C -->|"timeout"| E["Wait 1 day, retry"]
+  E --> B
+  D --> F["Wait for human approval"]
+  F --> G["Ship goods"]
+  G --> H["End: order delivered"]`} />
+
+Every arrow that says *wait* or *may fail* drags in one of three concerns:
+
+- **State.** Something must durably remember exactly where each instance is — which card charge succeeded, which is still pending — and survive crashes, restarts, and deploys. There is never a moment with zero instances running, because "running" includes "waiting."
+- **Time.** Steps need timers: retry after one day, escalate if a human has not acted in five days, cancel if a response never arrives. Scheduling must be reliable even when nothing else is happening.
+- **Failure.** Remote calls are unreliable. You need retries, timeouts, and a way to restore consistency when you genuinely cannot tell whether the card was charged.
+
+Waiting is logical, not a blocked thread — the engine persists state, frees the thread, and reloads only when a trigger fires:
+
+<Mermaid code={String.raw`stateDiagram-v2
+  [*] --> Active: instance started
+  Active --> Waiting: reach a wait point
+  Waiting --> Active: trigger fires (response, timer, or human action)
+  note right of Waiting
+    State sits in the database
+    no thread blocked
+  end note
+  Active --> [*]: process completes`} />
+
+## The "Wild West" trap
+
+<Callout type="gotcha" title="The Ash death-spiral">
+A developer ("Ash") builds a credit-card payment backend. The external service is flaky, so Ash adds **retries**; the retries must survive hours, so Ash adds a `payment` table with a `status` column and a **polling scheduler**; the API becomes async (HTTP 202 + polling); a poisoned message crashes it; ad-hoc **monitoring scripts** appear; then SLA reporting is demanded. The result is an unmaintainable mess only Ash understands — with the business logic buried inside hand-written state-handling code.
+</Callout>
+
+This is **Wild West integration**: ungoverned, point-to-point integration where every team re-implements persistence, retries, scheduling, and reporting by hand — usually worse than a real tool would. The punchline is that *all* of those capabilities are built into a [workflow engine](/automation/where-workflow-engines-fit/). The two that matter most are **persisting state** (which enables waiting) and **scheduling** (which enables retries).
+
+<Callout type="go" title="Key insight">
+Waiting is logical, not a blocked thread. The engine writes the instance's current state to its database, returns the thread, and does nothing until a triggering event — a user pressing a button or a scheduler firing — reloads the state and resumes. That is how one engine can hold millions of "waiting" instances cheaply.
+</Callout>
+
+## Don't store the wrong things
+
+A workflow engine tracks **control flow** — where each instance is and what happens next. It is *not* a database for your business entities. Keep the customer record, the order, and the invoice in your own service; let the engine hold only **references (IDs)** plus the small amount of data it needs to route. Mixing business data into the engine couples your domain to a tool you should be able to swap.
+
+<Callout type="tip" title="Rule of thumb">
+Before hand-rolling a status column and a polling loop, give a workflow engine a second thought — even when the project "seems simple." Simple processes are exactly where Wild West integration begins.
+</Callout>
+
+## See also
+
+- [Where workflow engines fit](/automation/where-workflow-engines-fit/) — the engine as a persistent, scheduling state machine.
+- [Orchestration vs choreography](/automation/orchestration-vs-choreography/) — who owns the end-to-end flow.
+- [Handling failures and retries](/automation/handling-failures-and-retries/) — idempotency, timeouts, and eventual consistency.

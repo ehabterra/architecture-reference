@@ -1,0 +1,149 @@
+---
+title: "Caching and Conditional Requests"
+category: api-rest
+kind: topic
+order: 7
+difficulty: "Intermediate"
+status: ready
+intent: "Use HTTP caching directives and ETags to make remote data feel fast and writes safe — providers set Cache-Control tuned to volatility, consumers qualify with freshness rules."
+book: "RESTful Web API Patterns and Practices Cookbook"
+related:
+  - idempotency-and-safety
+  - pagination-and-filtering
+  - rest-and-the-richardson-maturity-model
+when_use:
+  - "A response is read far more often than it changes and perceived latency matters."
+  - "You need optimistic concurrency control on updates via ETags."
+  - "You want consumers to tolerate staleness gracefully when a source is unavailable."
+when_avoid:
+  - "A deploy where a stale cached result could mask broken software (use no-cache, no-store)."
+  - "Highly volatile data where caching would serve wrong answers more than right ones."
+quiz:
+  - q: "Who sets Cache-Control directives and tunes them to data volatility?"
+    options:
+      - text: "The provider — public/private, max-age, must-revalidate, immutable, tuned to change rate"
+        correct: true
+      - text: "Only the browser"
+        correct: false
+      - text: "The DNS server"
+        correct: false
+      - text: "The load balancer exclusively"
+        correct: false
+    explain: "Providers mark scope and lifetime; static data gets hours/days, a cart gets seconds, with ETag + must-revalidate for changing data."
+  - q: "What is an ETag used for?"
+    options:
+      - text: "A representation version token for conditional requests (If-Match / If-None-Match)"
+        correct: true
+      - text: "An authentication bearer token"
+        correct: false
+      - text: "A pagination cursor"
+        correct: false
+      - text: "A rate-limit counter"
+        correct: false
+    explain: "An ETag identifies a specific representation; If-Match enables optimistic concurrency, If-None-Match enables conditional GET and PUT-create."
+  - q: "During a deploy, how do you stop a proxy's cached result masking broken software?"
+    options:
+      - text: "Cache-Control: no-cache, no-store"
+        correct: true
+      - text: "max-age: 86400"
+        correct: false
+      - text: "immutable"
+        correct: false
+      - text: "public, max-age: 600"
+        correct: false
+    explain: "A canary can look fine because a proxy serves a cached good response, then the full rollout breaks; no-cache, no-store prevents that masking."
+  - q: "What does the Vary header control?"
+    options:
+      - text: "Which request elements (e.g. Authorization) must match for a cached entry to be reused"
+        correct: true
+      - text: "How long a token is valid"
+        correct: false
+      - text: "The maximum page size"
+        correct: false
+      - text: "The TLS version"
+        correct: false
+    explain: "Vary: Authorization, for example, ensures a cached response is only reused for requests with the same authorization context."
+takeaway: "Providers set Cache-Control + ETag tuned to volatility; consumers use min-fresh/no-cache/max-stale; ETags also power If-Match optimistic concurrency."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🥛 Analogy">
+HTTP caching is a fridge with use-by dates. The producer stamps each carton (max-age) and says whether it is yours alone (private) or shared (public). You can demand a fresh carton with plenty of life left (min-fresh), insist on a brand-new one before cooking something important (no-cache), or accept slightly old milk rather than go thirsty when the shop is shut (max-stale, stale-if-error). An ETag is the batch number telling you whether what is on the shelf is the exact carton you last checked.
+</Callout>
+
+## Caching is built into REST
+
+**Cacheability** is one of Fielding's core [REST constraints](/apis/rest-and-the-richardson-maturity-model/): the producer can mark responses with caching hints so consumers and intermediaries avoid needless round trips. Remote data sources are the usual cause of perceived slowness; HTTP caching is the cheapest fix. Caching is, in effect, "low-fidelity replication" — a local copy that is good enough for reads.
+
+## Providers set directives tuned to volatility
+
+The **provider** marks each response with scope and lifetime, sized to how fast the data changes:
+
+- **Scope** — `public` (shared caches may store it) or `private` (per-user).
+- **Lifetime** — `max-age` in seconds. Static reference data → hours or days; a shopping cart → seconds.
+- **Handling** — `no-store` (never cache), `no-cache` (revalidate before use), `must-revalidate` (do not serve stale), and `immutable` (RFC 8246) for long-lived assets.
+- **Validation** — an `ETag` plus `must-revalidate` for data that changes.
+
+```
+Cache-Control: public, max-age=600
+ETag: "a1b2c3"
+Cache-Control: public, max-age=300, must-revalidate, stale-if-error
+```
+
+## Consumers qualify freshness
+
+The **consumer** can tighten or relax those rules:
+
+- `max-age` / `min-fresh` — demand a response with enough remaining life.
+- `no-cache` — force a fresh fetch (e.g. immediately before an edit).
+- `max-stale` / `stale-if-error` — accept stale data for read-only use, or when the source errors.
+
+A read-only aggregator might fetch the editable `customer` record with `no-cache` but the `orders` list with `max-stale` — fresh where it matters, fast where it does not.
+
+<Mermaid code={String.raw`sequenceDiagram
+  participant C as Consumer
+  participant Cache as Shared Cache
+  participant S as Service
+  C->>Cache: GET /user/42
+  alt fresh copy within max-age
+    Cache-->>C: 200 OK (cached) + ETag
+  else stale or absent
+    Cache->>S: GET /user/42 (If-None-Match: "a1b2c3")
+    alt unchanged
+      S-->>Cache: 304 Not Modified
+      Cache-->>C: 200 OK (revalidated)
+    else changed
+      S-->>Cache: 200 OK + new ETag
+      Cache-->>C: 200 OK + new body
+    end
+  end`} />
+
+## ETags also power conditional writes
+
+The same `ETag` that drives a conditional GET (`If-None-Match` → `304 Not Modified`) drives safe updates. On a write, `If-Match: "<etag>"` performs optimistic concurrency: if the stored representation has changed, the server returns **412 Precondition Failed**, and the client should GET, merge, and retry. ETags are per-*representation* — an HTML ETag is not the JSON ETag — and `If-None-Match: *` enables idempotent [PUT-create](/apis/idempotency-and-safety/).
+
+<Mermaid code={String.raw`graph TD
+  W["PUT with If-Match ETag"] --> Q{"Stored ETag still matches?"}
+  Q -->|"yes"| OK["200 OK<br/>new ETag returned"]
+  Q -->|"no, changed"| Fail["412 Precondition Failed"]
+  Fail --> Retry["GET, merge, retry"]
+  Retry --> W`} />
+
+<Callout type="go" title="Use Vary to scope cache reuse">
+The Vary header declares which request elements must match for a cached entry to be reused — for example Vary: Authorization ensures one user's cached response is never served to another. Get this wrong and you leak data across consumers.
+</Callout>
+
+<Callout type="gotcha" title="Caching can hide broken deploys">
+A proxy's cached good response can mask broken software: a canary looks healthy because the proxy is replaying a stale success, you roll out fully, and then the proxy bounces and 500s appear everywhere. During risky changes, set Cache-Control: no-cache, no-store so you see the real behaviour.
+</Callout>
+
+<Callout type="tip" title="Keep no-cache sparing">
+no-cache is a cache-buster — overusing it throws away the very benefit you are trying to get. Reserve it for genuinely volatile or edit-critical reads, and let everything else cache to a lifetime that matches its change rate.
+</Callout>
+
+## See also
+
+- [Idempotency and safety](/apis/idempotency-and-safety/) — ETags and If-Match for safe writes.
+- [Pagination and filtering](/apis/pagination-and-filtering/) — cacheable, replayable query resources.
+- [REST and the Richardson Maturity Model](/apis/rest-and-the-richardson-maturity-model/) — cacheability as a REST constraint.

@@ -1,0 +1,141 @@
+---
+title: "What Are Microservices?"
+category: ms-foundations
+kind: guide
+order: 1
+difficulty: "Start here"
+status: ready
+intent: "Independently releasable services modeled around a business domain that own their own data — and why information hiding and independent deployability are the whole game."
+book: "Building Microservices, 2nd ed. (Sam Newman); Enabling Microservice Success (Sarah Wells)"
+related:
+  - benefits-and-costs
+  - when-not-to-use-microservices
+  - modeling-service-boundaries
+when_use:
+  - "You want to define microservices precisely before deciding whether they fit."
+  - "You need to distinguish microservices from the several kinds of monolith."
+  - "You want to understand why independent deployability is the single most important property."
+  - "You need a shared vocabulary (information hiding, cohesion, coupling) for a boundary discussion."
+when_avoid:
+  - "You are looking for an implementation tutorial — this is conceptual."
+  - "You have already adopted microservices and need operational guidance."
+  - "You are choosing between specific technologies (gRPC vs REST, Kafka vs RabbitMQ)."
+quiz:
+  - q: "What is Sam Newman's working definition of a microservice?"
+    options:
+      - text: "An independently releasable service modeled around a business domain that owns its own data"
+        correct: true
+      - text: "A service smaller than 1,000 lines of code"
+        correct: false
+      - text: "A function deployed to a serverless platform"
+        correct: false
+      - text: "Any service that exposes a REST API"
+        correct: false
+    explain: "Newman defines microservices by independent releasability and business-domain modeling, with each service encapsulating its own state — not by size or technology."
+  - q: "Which property does Newman call the single most important idea in the book?"
+    options:
+      - text: "Independent deployability"
+        correct: true
+      - text: "Small service size"
+        correct: false
+      - text: "Using containers and Kubernetes"
+        correct: false
+      - text: "Polyglot programming"
+        correct: false
+    explain: "Independent deployability acts as a forcing function that drives loose coupling, stable contracts, and the other benefits."
+  - q: "What is a 'distributed monolith'?"
+    options:
+      - text: "Multiple services that must be deployed together — the worst of both worlds"
+        correct: true
+      - text: "A monolith replicated across many machines"
+        correct: false
+      - text: "A modular monolith with separate database schemas"
+        correct: false
+      - text: "A monolith that calls a cloud database"
+        correct: false
+    explain: "A distributed monolith has all the disadvantages of a distributed system and of a single-process monolith, usually because information hiding and cohesion were neglected."
+  - q: "What does 'owning their own state' mean for a microservice?"
+    options:
+      - text: "Avoid shared databases; if a service needs another's data, it asks for it via an interface"
+        correct: true
+      - text: "Each service must use a different database technology"
+        correct: false
+      - text: "Services keep all data in memory"
+        correct: false
+      - text: "One central database is shared but with separate tables"
+        correct: false
+    explain: "Encapsulation applied to data: hiding the database behind the service boundary limits backward-incompatible changes and preserves independent deployability."
+  - q: "Why are microservices described as a specific flavour of SOA?"
+    options:
+      - text: "They are an opinionated kind of service-oriented architecture — opinionated about boundaries and independent deployability"
+        correct: true
+      - text: "They require an enterprise service bus (ESB)"
+        correct: false
+      - text: "They replace SOA entirely and share none of its ideas"
+        correct: false
+      - text: "They only differ from SOA in using JSON instead of XML"
+        correct: false
+    explain: "Newman frames microservices as a specific, opinionated kind of SOA — the way Scrum is a specific kind of Agile. Much of the industry 'failed to do SOA well' because of heavyweight middleware and bad guidance on granularity."
+takeaway: "A microservice is an independently deployable, domain-modeled service that hides its own database — and independent deployability is the property to protect above all others."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Think of a department store reorganized into independent specialty shops on one street. Each shop runs its own back room, hires its own staff, and can refurbish without closing its neighbours. Customers still get one shopping experience out front — but no single renovation shuts the whole street down. Microservices apply that to software: many small, self-contained services that you can change and release one at a time.
+</Callout>
+
+## A working definition
+
+Sam Newman defines microservices as **independently releasable services that are modeled around a business domain**. A service encapsulates some functionality and exposes it over the network — a REST API, a queue, a topic — and is treated externally as a **black box** that hides its internal implementation. Most importantly, *each microservice encapsulates its own database* rather than sharing one. Microservices are a specific, opinionated flavour of **service-oriented architecture (SOA)**, the way Scrum is a specific flavour of Agile.
+
+The intellectual core is **information hiding** (David Parnas): hide as much as possible inside a component and expose as little as possible, separating what changes easily (internal implementation) from what is hard to change (the external contract). Newman draws each microservice as a hexagon, a nod to Alistair Cockburn's **Hexagonal Architecture**.
+
+<Mermaid code={String.raw`graph TD
+  Out["Stable external contract<br/>(REST / events) — hard to change"] --> Svc["Microservice (black box)"]
+  subgraph Hidden["Hidden inside — free to change"]
+    Logic["Internal logic"]
+    DB[("Own database")]
+  end
+  Svc --- Hidden`} />
+
+## The key concepts
+
+- **Independent deployability** — the ability *and the discipline* to change, deploy, and release one microservice without deploying anything else. This is the single most important idea: pursuing it is a **forcing function** that drives loose coupling and stable contracts.
+- **Modeled around a business domain** — use techniques like [domain-driven design](/microservices/modeling-service-boundaries/) to make each service an end-to-end slice of business functionality, prioritizing cohesion of *business* capability over cohesion of *technology*.
+- **Owning their own state** — avoid shared databases. If a service needs another's data, it asks. "Don't share databases unless you really need to."
+- **Size is the least interesting aspect** — James Lewis: "a microservice should be as big as my head." Worry about *how many* services you can handle and *where* the boundaries go, not lines of code.
+- **Flexibility** — "microservices buy you options" (Lewis). They have a cost; adopt incrementally, *turning up a dial rather than flipping a switch*.
+
+## Microservices vs the kinds of monolith
+
+A **monolith is a unit of deployment** — all functionality shipped together — and it is a valid, sensible default, *not* a synonym for "legacy." Newman distinguishes three kinds, plus third-party black boxes.
+
+<Mermaid code={String.raw`graph TD
+  M["Monolith<br/>(unit of deployment)"]
+  M --> SP["Single-process monolith<br/>all code in one process"]
+  M --> MM["Modular monolith<br/>one deployable, separate modules"]
+  M --> DM["Distributed monolith<br/>many services, deployed together"]
+  SP -->|"good default"| OK["Sensible choice"]
+  MM -->|"Shopify"| OK
+  DM -->|"worst of both worlds"| BAD["Avoid"]`} />
+
+The **distributed monolith** — multiple services that must be released in lockstep — is the trap: it has the disadvantages of a distributed system *and* of a single-process monolith with the upsides of neither. It emerges precisely when information hiding and cohesion are neglected.
+
+<Callout type="gotcha" title="⚠️ The size trap">
+New teams obsess over how small a service should be. Newman calls size "the least interesting aspect." Splitting too small multiplies network calls, data duplication, and coordination; splitting in the wrong place couples services. Optimize boundaries for business cohesion, not byte count.
+</Callout>
+
+## Why now? The enabling ecosystem
+
+Microservices became practical thanks to **log aggregation and distributed tracing with correlation IDs** (Newman treats log aggregation as a near-prerequisite), **containers and Kubernetes**, **streaming with Kafka**, and **public cloud / serverless**. But Newman cautions strongly against adopting too much new technology at once — bring in tech to solve concrete, observed problems.
+
+<Callout type="go" title="🔑 Key insight">
+Independent deployability is the property you protect at all costs. If you cannot deploy one service without deploying others, you do not have microservices — you have a distributed monolith.
+</Callout>
+
+## See also
+
+- [Benefits and costs of microservices](/microservices/benefits-and-costs/) — the honest ledger of options versus complexity.
+- [When not to use microservices](/microservices/when-not-to-use-microservices/) — the contexts where they hurt.
+- [Modeling service boundaries](/microservices/modeling-service-boundaries/) — where to draw the lines with DDD and coupling/cohesion.

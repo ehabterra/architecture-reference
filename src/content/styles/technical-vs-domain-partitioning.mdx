@@ -1,0 +1,138 @@
+---
+title: "Technical vs Domain Partitioning"
+category: sty-fundamentals
+kind: topic
+order: 2
+difficulty: "Beginner"
+status: ready
+intent: "The orthogonal axis that decides whether your code is organized by technical layer or by business domain — and why it must match your teams and your changes."
+book: "Software Architecture Patterns (2nd ed.); Fundamentals of Software Architecture"
+related:
+  - reading-an-architecture-style
+  - layered-architecture
+  - microservices-architecture
+  - choosing-an-architecture-style
+when_use:
+  - "You are deciding how to organize top-level components and need to align them with team structure (Conway's Law)."
+  - "You want to predict the blast radius of a typical change before committing to a style."
+  - "You are doing domain-driven design and need components grouped by domain."
+when_avoid:
+  - "The decision is purely about code-level class design — partitioning is about top-level component organization."
+  - "You expect frequent technical-layer swaps (whole UI framework, database type) — those are painful under domain partitioning."
+quiz:
+  - q: "In a technically partitioned (layered) architecture, where does a single domain like 'customer' live?"
+    options:
+      - text: "Spread across every layer — presentation.customer, business.customer, persistence.customer"
+        correct: true
+      - text: "In one self-contained customer module"
+        correct: false
+      - text: "Only in the database layer"
+        correct: false
+      - text: "In a dedicated customer microservice"
+        correct: false
+    explain: "Technical partitioning groups by technical usage, so any one domain is smeared across all the layers — the signature being the repeated 'customer' node in each layer's namespace."
+  - q: "Why does a domain-level change hurt a technically partitioned architecture?"
+    options:
+      - text: "It ripples through every layer — new column, new SQL, new business rule, new contract, new screen — possibly across multiple teams"
+        correct: true
+      - text: "It cannot be done at all without a rewrite"
+        correct: false
+      - text: "It only affects the database layer"
+        correct: false
+      - text: "It forces a switch to microservices"
+        correct: false
+    explain: "Because the domain is spread across layers, a domain change such as adding a wish-list expiration date touches the DB, persistence, business, contracts, and presentation — coordinating up to three or four teams."
+  - q: "Which principle says partitioning should match how your teams are organized?"
+    options:
+      - text: "Conway's Law"
+        correct: true
+      - text: "The 80-20 rule"
+        correct: false
+      - text: "The single responsibility principle"
+        correct: false
+      - text: "The law of demeter"
+        correct: false
+    explain: "Conway's Law observes that systems mirror the communication structure of the organization that builds them, so partitioning should align with team structure and expected change type."
+  - q: "Which style is unique in that it can be EITHER technically or domain partitioned?"
+    options:
+      - text: "Microkernel"
+        correct: true
+      - text: "Layered"
+        correct: false
+      - text: "Microservices"
+        correct: false
+      - text: "Space-based"
+        correct: false
+    explain: "Microkernel is the only style with this duality: plug-ins used as adapters/configuration make it technical; plug-ins that add functionality make it domain partitioned."
+takeaway: "Partition by technical layer when changes and teams are technical; partition by domain when changes and teams follow the business — and match Conway's Law either way."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Think of a hospital. You could organize it by *function* — all the x-ray machines on one floor, all the surgeons on another, all the records in a basement. Or you could organize it by *patient journey* — a cardiology wing with its own imaging, surgeons, and records. The first is technical partitioning; the second is domain partitioning. Both work; which one is painful depends on whether your problems cross floors or stay in a wing.
+</Callout>
+
+## The two ways to slice a system
+
+Partitioning is one of the architect's first and most consequential decisions. It is **orthogonal** to the monolithic-vs-distributed axis: you can be technically partitioned in a monolith (layered) or in a distributed system (event-driven, space-based), and domain partitioned in a monolith (modular monolith) or distributed system (microservices).
+
+<Mermaid code={String.raw`graph TD
+  subgraph Technical["Technical partitioning"]
+    P["presentation.customer"] --> B["business.customer"]
+    B --> Pe["persistence.customer"]
+  end
+  subgraph Domain["Domain partitioning"]
+    C["app.customer<br/>(UI + logic + data)"]
+    Sh["app.shipping<br/>(UI + logic + data)"]
+    Pa["app.payment<br/>(UI + logic + data)"]
+  end`} />
+
+## Technical partitioning
+
+Organizes components by **technical usage** — the classic case being the **layered (n-tier)** style with presentation, business, persistence, and database layers. Any single domain (e.g., *customer*) is **spread across all layers**: `app.presentation.customer`, `app.business.customer`, `app.persistence.customer`. The repeated third node is the signature of technical partitioning.
+
+- **Strength:** ideal when most changes are isolated to *one technical area* — constantly restyling the UI without touching business rules, or swapping a database type.
+- **Weakness:** a *domain* change (adding an expiration date to wish-list items) ripples through **every** layer: new DB column, new SQL, new business rule, new contract, new screen — possibly coordinated across three or four teams.
+
+<Mermaid code={String.raw`graph TD
+  Ch["One domain change<br/>(wish-list expiry date)"] --> Pr["Presentation: new screen field"]
+  Ch --> Bu["Business: new rule"]
+  Ch --> Pe["Persistence: new mapping"]
+  Ch --> Db["Database: new column"]
+  Pr --> T1["UI team"]
+  Bu --> T2["Backend team"]
+  Db --> T3["DBA team"]`} />
+
+Examples: layered, microkernel, pipeline, event-driven, space-based.
+
+## Domain partitioning
+
+Organizes components by **domain area** (`app.customer`, `app.shipping`, `app.payment`), grouping presentation, business, and persistence logic together per domain (optionally layered *within* a domain). Popularized by **domain-driven design** (Eric Evans), which emphasizes modeling the domain and collaborating with domain experts.
+
+- **Strength:** domain changes are **self-contained** — the wish-list change stays inside `app.customer.wishlist`, so maintenance, testing, and deployment are easier and lower-risk.
+- **Weakness:** *technical-layer* changes (swapping the database type, replacing the whole UI framework) are hard because that concern is now spread across every domain.
+
+Examples: microkernel, microservices, modular monolith, service-based.
+
+<Callout type="go" title="Microkernel is the exception">
+Microkernel is the only style that can be **either** technically **or** domain partitioned. Plug-ins used as adapters or configuration make it technical; plug-ins that add functionality or extensions make it domain. See [Microkernel architecture](/styles/microkernel-architecture/).
+</Callout>
+
+## Choosing: match teams and change type
+
+The decision is an instance of **Conway's Law** — systems mirror the communication structure of the organization that builds them. Align partitioning with **both** team structure and the **expected type of change**:
+
+- **Choose technical** if teams are organized by technical specialty (UI devs, backend devs, DB devs) or most changes are technical (multiple UIs, look-and-feel changes, swapping databases).
+- **Choose domain** if you are doing DDD, have cross-functional domain teams (UI + backend + DB on one team per domain), or expect mostly domain-scoped changes.
+
+<Callout type="gotcha" title="The mismatch tax">
+Pick the wrong partitioning and every routine change fights the structure. A domain-heavy product on a technically partitioned layered architecture means every feature touches three teams; a UI-replacement project on a domain-partitioned architecture means touching every service. The cheapest change is the one that stays inside a single partition.
+</Callout>
+
+## See also
+
+- [Reading an architecture style](/styles/reading-an-architecture-style/) — how this axis fits the bigger picture.
+- [Layered architecture](/styles/layered-architecture/) — the canonical technical partition.
+- [Microservices architecture](/styles/microservices-architecture/) — domain partitioning taken to the extreme.
+- [Choosing an architecture style](/styles/choosing-an-architecture-style/) — putting partitioning into the decision.

@@ -1,0 +1,143 @@
+---
+title: "Choreography and Async Communication"
+category: api-messaging
+kind: topic
+order: 14
+difficulty: "Advanced"
+status: ready
+intent: "Coordinate independent services without a central conductor: stateless choreography, shared correlation IDs, progress resources, and fallbacks for the failures distributed systems guarantee."
+book: "RESTful Web API Patterns and Practices Cookbook; Mastering API Architecture"
+related:
+  - messaging-styles-and-patterns
+  - idempotency-and-safety
+  - service-mesh
+when_use:
+  - "An involved, branching workflow spans services owned by different teams."
+  - "You want loose coupling and resilience over a central orchestration engine."
+  - "Independent services must coordinate while remaining individually deployable."
+when_avoid:
+  - "A short workflow with few steps and branches — central orchestration is simpler to reason about."
+  - "When end-to-end progress monitoring is the dominant requirement and you cannot add a progress resource."
+quiz:
+  - q: "What distinguishes choreography from orchestration?"
+    options:
+      - text: "Choreography has no central conductor — workflow emerges from independent services reacting to each other"
+        correct: true
+      - text: "Choreography requires a single workflow engine"
+        correct: false
+      - text: "Choreography only works synchronously"
+        correct: false
+      - text: "Choreography forbids shared state"
+        correct: false
+    explain: "In choreography the workflow is an emergent by-product of loosely coupled services; orchestration uses a central engine (the conductor)."
+  - q: "What is the main drawback of choreography, and how is it mitigated?"
+    options:
+      - text: "Hard to monitor overall progress — mitigated with a per-job progress resource"
+        correct: true
+      - text: "It cannot scale — mitigated by removing queues"
+        correct: false
+      - text: "It is always slower — mitigated by caching"
+        correct: false
+      - text: "It cannot use HTTP — mitigated by gRPC"
+        correct: false
+    explain: "Loose coupling makes the whole picture hard to see; a progress resource per job restores observability without a central engine."
+  - q: "How are individual tasks correlated across a distributed job?"
+    options:
+      - text: "A jobID as the correlation-id header and a taskID as the request-id header"
+        correct: true
+      - text: "A shared database primary key only"
+        correct: false
+      - text: "The client's IP address"
+        correct: false
+      - text: "The TLS session ID"
+        correct: false
+    explain: "Each job/task gets a UUID: jobID travels as correlation-id, taskID as request-id, in both request and response."
+  - q: "Which methods are safe to automatically retry on transient failure?"
+    options:
+      - text: "Only idempotent methods — GET, HEAD, PUT, DELETE — never POST or PATCH"
+        correct: true
+      - text: "All methods, since retries are harmless"
+        correct: false
+      - text: "Only POST"
+        correct: false
+      - text: "Only GET"
+        correct: false
+    explain: "Retry only idempotent and retryable cases (5xx/connection errors, not 4xx); never auto-retry non-idempotent POST/PATCH, and prefer exponential backoff."
+takeaway: "Choreograph independent services with shared state and correlation IDs, restore visibility with a progress resource, and plan an idempotent-only fallback per dependency."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="💃 Analogy">
+Choreography is a flock of starlings. No bird is in charge, yet the murmuration moves as one because each bird reacts to its neighbours by simple shared rules. Take any bird away and the flock adapts. An orchestrated system is a marching band following a drum major — impressive, but if the drum major trips, everyone stops.
+</Callout>
+
+## Workflow without a conductor
+
+In **stateless choreography**, there is no central engine. The workflow is an **emergent by-product** of independent services reacting to one another — the style that inspired the language Ballerina, and the model behind cloud pub/sub services (Pub/Sub, Eventarc, SNS/SQS). Compared with [orchestration](/apis/messaging-styles-and-patterns/), it is **loosely coupled, resilient, and easy to modify in parts**. The trade-off is observability: it is **hard to monitor overall progress** and ecosystem health.
+
+**When to choose it:** few steps and branches favour orchestration; **involved, branching workflows** favour choreography.
+
+<Mermaid code={String.raw`sequenceDiagram
+  participant Cart as Cart service
+  participant Tax as Tax service
+  participant Pay as Payment service
+  participant Ship as Shipping service
+  Cart->>Tax: checkout event (correlation-id: J1)
+  Tax->>Pay: taxed event (correlation-id: J1)
+  Pay->>Ship: paid event (correlation-id: J1)
+  Ship-->>Cart: shipped event (correlation-id: J1)
+  Note over Cart,Ship: No central engine — each service reacts to the previous`} />
+
+## Shared state and correlation
+
+Services in a choreography **share state, not data models**. Use a standalone HTTP **shared-state resource** per job (advertised via `rel="sharedState"`), read by each task and written back with idempotent `PUT`. Property names must be agreed via a shared vocabulary, and values must be expressed idempotently (an absolute `updatedPrice`, never a `percentIncrease`).
+
+Correlate the distributed work with IDs that travel on every message:
+
+- **`jobID`** → the `correlation-id` header (the whole job).
+- **`taskID`** → the `request-id` header (one step), in both request and response.
+
+## Restore visibility with a progress resource
+
+To compensate for choreography's blind spot, expose a **progress resource** per job — a cacheable HTTP resource holding job and task metadata (`jobStatus`, `taskStatus`, start/stop times, `taskMaxTTL`) plus a `refresh` link to poll. Keep it **basic feedback, not a trace log**, and never include private or debugging data.
+
+<Callout type="gotcha" title="Keep the progress resource minimal">
+A progress resource is for monitoring, not diagnostics. Don't embed management actions (restart, rollback) in it — with code- or DSL-driven workflows those cause runtime conflicts — and never leak internal/private values, which is a security exposure.
+</Callout>
+
+## Plan for failure — it is guaranteed
+
+*"Any large system is going to be operating most of the time in failure mode."* With several dependencies, failure likelihood grows fast, so plan a **fallback per dependency**:
+
+- **Automatic retries** — only on **idempotent** methods (`GET`, `HEAD`, `PUT`, `DELETE`), only for retryable cases (5xx and connection errors, never 4xx). Prefer **exponential backoff**, capped at ~3 attempts; mitigate locally so an external mitigation service does not become a fatal dependency.
+- **Static fallback** — a configured alternate location.
+- **Dynamic fallback** — a service-registry lookup.
+- **Queue for later replay** — respond `202 Accepted` and replay when the dependency recovers (must be in the documented design).
+- **Give up** — stop and return `500`, ideally with a wait time.
+
+<Mermaid code={String.raw`graph TD
+  F["Dependency failure"] --> Q{"Transient and idempotent?"}
+  Q -->|"yes, 5xx or connection"| Retry["Retry with backoff, cap ~3"]
+  Q -->|"no"| Alt{"Alternate available?"}
+  Alt -->|"static or dynamic"| Fallback["Use fallback location"]
+  Alt -->|"can defer"| Queue["202 Accepted, replay later"]
+  Alt -->|"none"| GiveUp["Return 500 with wait time"]`} />
+
+<Callout type="go" title="Idempotency makes choreography safe">
+Because messages cross unreliable networks and may be redelivered, every step must be safely repeatable. Make writes idempotent (replacement values, conditional ETags) so a retried or duplicated event never double-applies — the bedrock that lets a leaderless flow recover on its own.
+</Callout>
+
+## Time and human escalation
+
+Bound each job with a **`maxTTL`**; exceeding it forces a `cancel` and, where state changed, a "Revert Them All" across tasks. When retries cannot resolve a halting error, **call for help**: alert a predetermined human (email/SMS) with links to the job, progress, shared state, and error report — because you cannot predict every runtime failure.
+
+<Callout type="tip" title="Watch compounding delays">
+Retry and undo delays compound across sequential steps — three steps each retrying three times at 10s is roughly 90s. Only MaxTTL-bounded, workflow-compliant services keep this in check; reserve heavy delayed-undo for batch, never real-time.
+</Callout>
+
+## See also
+
+- [Messaging styles and patterns](/apis/messaging-styles-and-patterns/) — orchestration vs choreography vs hypermedia workflow.
+- [Idempotency and safety](/apis/idempotency-and-safety/) — the foundation that makes async retries safe.
+- [Service mesh](/apis/service-mesh/) — consistent reliability patterns for east–west traffic.

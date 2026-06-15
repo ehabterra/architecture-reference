@@ -1,0 +1,125 @@
+---
+title: "Fallacies of Distributed Computing"
+category: sty-fundamentals
+kind: topic
+order: 3
+difficulty: "Beginner"
+status: ready
+intent: "The eight false assumptions that make distributed styles powerful but costly — what breaks, why, and what it means for choosing monolithic vs distributed."
+book: "Fundamentals of Software Architecture; Software Architecture: The Hard Parts"
+related:
+  - reading-an-architecture-style
+  - microservices-architecture
+  - service-based-architecture
+  - choosing-an-architecture-style
+when_use:
+  - "You are weighing a distributed style and need to budget for its hidden costs."
+  - "You are debugging mysterious timeouts, latency spikes, or data inconsistency in a distributed system."
+  - "You need to justify to stakeholders why distributed is expensive."
+when_avoid:
+  - "The system is a single deployment unit — these fallacies are about networked services."
+  - "You are choosing between two monolithic styles, where none of these apply."
+quiz:
+  - q: "What is a 'fallacy' in this context?"
+    options:
+      - text: "Something we assume is true but is actually false"
+        correct: true
+      - text: "A logical error in code"
+        correct: false
+      - text: "A design pattern that should be avoided"
+        correct: false
+      - text: "A type of distributed transaction"
+        correct: false
+    explain: "The eight fallacies (Deutsch et al., Sun, 1994) are assumptions developers wrongly take for granted — the network is reliable, latency is zero, and so on."
+  - q: "Which latency must you know besides the average?"
+    options:
+      - text: "The 95th-to-99th percentile (the long tail), which is what kills performance"
+        correct: true
+      - text: "The minimum latency only"
+        correct: false
+      - text: "The latency of the database only"
+        correct: false
+      - text: "There is only one latency to know"
+        correct: false
+    explain: "Averages hide the long tail; 100 ms across 10 chained calls is already 1,000 ms, and a slow tail compounds across a request path."
+  - q: "What is 'stamp coupling', the problem behind 'bandwidth is infinite'?"
+    options:
+      - text: "Returning far more data than the caller needs, multiplying total bytes on the wire"
+        correct: true
+      - text: "Two services sharing a database table"
+        correct: false
+      - text: "A service calling itself recursively"
+        correct: false
+      - text: "Using SOAP instead of REST"
+        correct: false
+    explain: "Returning 500 KB when 200 bytes are needed, times thousands of requests per second, can saturate a link; fix it with field selectors, private endpoints, GraphQL, or consumer-driven contracts."
+  - q: "Because distributed transactions can't span services, what consistency model do you fall back to?"
+    options:
+      - text: "Eventual consistency, managed with sagas and BASE"
+        correct: true
+      - text: "Strict ACID across all services"
+        correct: false
+      - text: "No consistency at all"
+        correct: false
+      - text: "Two-phase commit always works fine"
+        correct: false
+    explain: "There is no easy ACID across services; you rely on eventual consistency, transactional sagas for compensation, and BASE (basic availability, soft state, eventual consistency)."
+takeaway: "The network is neither reliable, fast, infinite, secure, free, nor uniform — every distributed style pays for assuming otherwise."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Calling a function in your own process is like asking the person next to you a question. Calling a remote service is like mailing a letter overseas: it might get lost, it takes time you can't predict, the envelope has a size limit, it can be intercepted, postage costs money, and the postal systems on each end aren't identical. Distributed computing forgets this and assumes the letter is a whisper.
+</Callout>
+
+## Why this page sits in fundamentals
+
+The split between **monolithic** styles (a single deployment unit) and **distributed** styles (many cooperating services) is the deepest fork in the styles catalog. Distributed styles buy operational superpowers — scalability, elasticity, fault tolerance — but every one of them pays the same tax: the **eight fallacies of distributed computing** (L. Peter Deutsch et al., Sun, 1994). Knowing them is prerequisite to choosing any distributed style.
+
+<Mermaid code={String.raw`graph LR
+  A["Service A"] -->|"network call:<br/>unreliable, slow,<br/>bandwidth-limited,<br/>insecure, costly"| B["Service B"]
+  B -.->|"may time out,<br/>change topology,<br/>lose packets"| A`} />
+
+## The eight fallacies
+
+1. **The network is reliable.** It is not — hence timeouts and circuit breakers. The more a system relies on the network (microservices), the less reliable it can be.
+2. **Latency is zero.** A remote call (milliseconds) is orders of magnitude slower than a local call (nanoseconds). Know your production **average and the 95th–99th percentile**; 100 ms across 10 chained calls is already 1,000 ms.
+3. **Bandwidth is infinite.** **Stamp coupling** — returning 500 KB when 200 bytes are needed — times thousands of requests per second can saturate a link. Fix with private endpoints, field selectors, GraphQL, and consumer-driven contracts that pass the minimum data.
+4. **The network is secure.** Every endpoint must be secured; the attack surface grows by magnitudes, and securing interservice calls slows synchronous architectures.
+5. **The topology never changes.** It changes constantly; a "minor" network upgrade can invalidate every latency assumption and trip timeouts. Stay in contact with ops and network admins.
+6. **There is only one administrator.** Large companies have dozens; coordination complexity is high — something monoliths avoid entirely.
+7. **Transport cost is zero.** Not latency — actual money. Distributed needs more hardware, gateways, firewalls, subnets, and proxies.
+8. **The network is homogeneous.** Multiple hardware vendors don't always integrate seamlessly; lost packets feed back into fallacies 1, 2, and 3.
+
+Latency compounds along a request path — a healthy average hides a punishing tail when calls are chained:
+
+<Mermaid code={String.raw`graph LR
+  C["Client"] -->|"100 ms"| A["Gateway"]
+  A -->|"100 ms"| S1["Service 1"]
+  S1 -->|"100 ms"| S2["Service 2"]
+  S2 -->|"100 ms"| S3["Service 3"]
+  S3 -->|"... x10 hops = 1,000 ms"| R["Response"]`} />
+
+<Callout type="gotcha" title="Data latency is the silent killer">
+The biggest performance hit in distributed systems is often **data latency**. When one service needs another's data, the owner must make an *extra* database call — where a monolith would have used a single join. This is why microservices, despite five-star scalability, score poorly on performance.
+</Callout>
+
+## Other distributed considerations
+
+Beyond the eight fallacies, distributed styles add three recurring burdens:
+
+- **Distributed logging** — dozens to hundreds of logs in different places and formats; consolidation tools (e.g., Splunk) only scratch the surface of root-cause analysis.
+- **Distributed transactions** — no easy ACID across services. You rely on **eventual consistency**, managed with **transactional sagas** (compensation via event sourcing or finite state machines) and **BASE** (Basic availability, Soft state, Eventual consistency).
+- **Contract maintenance and versioning** — contracts between decoupled services owned by different teams are hard to evolve, and communicating deprecation is especially complex.
+
+<Callout type="go" title="The cost is the point of the comparison">
+Every distributed style on the [scorecard](/styles/comparing-the-styles/) carries this same tax — that is precisely why monolithic styles win on simplicity and cost. Reach for distributed only when operational characteristics genuinely dominate.
+</Callout>
+
+## See also
+
+- [Reading an architecture style](/styles/reading-an-architecture-style/) — the monolithic-vs-distributed split.
+- [Microservices architecture](/styles/microservices-architecture/) — where every fallacy bites hardest.
+- [Service-based architecture](/styles/service-based-architecture/) — distributed with far fewer network hops.
+- [Comparing the styles](/styles/comparing-the-styles/) — how the tax shows up on the scorecard.

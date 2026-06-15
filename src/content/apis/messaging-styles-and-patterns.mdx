@@ -1,0 +1,142 @@
+---
+title: "Messaging Styles and Patterns"
+category: api-messaging
+kind: topic
+order: 13
+difficulty: "Intermediate"
+status: ready
+intent: "Beyond synchronous request/response: be message-centric, use shared vocabularies, and coordinate work via orchestration, choreography, or hypermedia workflow."
+book: "RESTful Web API Patterns and Practices Cookbook; Mastering API Architecture"
+related:
+  - choreography-and-async-communication
+  - api-styles-overview
+  - hypermedia-and-hateoas
+when_use:
+  - "Work spans multiple independent services that must coordinate to reach a goal."
+  - "You want loose coupling and resilience over synchronous chains of calls."
+  - "You need long-running or asynchronous operations the caller cannot block on."
+when_avoid:
+  - "A single, fast, self-contained request/response that needs no coordination."
+  - "A few simple sequential steps where central orchestration is easier to reason about."
+quiz:
+  - q: "What does it mean to be 'message-centric' rather than object/function-centric?"
+    options:
+      - text: "Pass generalized, structured messages that are easier to constrain and evolve over time"
+        correct: true
+      - text: "Serialize internal objects directly onto the wire"
+        correct: false
+      - text: "Expose remote functions for direct invocation"
+        correct: false
+      - text: "Always use binary protocols"
+        correct: false
+    explain: "Berners-Lee made HTTP/HTML message-centric; passing generalized messages (not localized objects/functions) is easier to constrain and modify, surviving failed experiments."
+  - q: "What are the three coordination styles for multi-service workflow?"
+    options:
+      - text: "Centralized orchestration, stateless choreography, and hypermedia workflow"
+        correct: true
+      - text: "REST, gRPC, and GraphQL"
+        correct: false
+      - text: "Push, pull, and poll"
+        correct: false
+      - text: "Sync, async, and batch"
+        correct: false
+    explain: "The Cookbook contrasts orchestration (a conductor), choreography (a dance), and hypermedia workflow (jazz — declarative documents + controls)."
+  - q: "What is the main drawback of centralized orchestration?"
+    options:
+      - text: "The central engine is a single point of failure and tends toward tighter coupling"
+        correct: true
+      - text: "It is impossible to monitor"
+        correct: false
+      - text: "It cannot validate the workflow"
+        correct: false
+      - text: "It only works with GraphQL"
+        correct: false
+    explain: "Orchestration is easy to reason about and monitor, but the conductor is a SPOF, assumes synchronous processing, and couples services to the engine rather than each other."
+  - q: "How should a known-slow operation respond to keep perceived speed acceptable?"
+    options:
+      - text: "Return 202 Accepted with follow-up status/refresh links"
+        correct: true
+      - text: "Block until complete with no response"
+        correct: false
+      - text: "Return 500 immediately"
+        correct: false
+      - text: "Return 200 with an empty body"
+        correct: false
+    explain: "Delayed reads hurt perceived speed; for known-slow work make the delay explicit with 202 Accepted plus a progress/refresh resource to poll."
+takeaway: "Be message-centric and coordinate multi-service work via orchestration, choreography, or hypermedia workflow — and make long-running operations explicit with 202 Accepted."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🎼 Analogy">
+Coordinating services is like making music together. Orchestration has a conductor everyone watches (one engine drives the steps). Choreography is a dance — each performer knows their own moves and reacts to the others, with no central caller. Hypermedia workflow is jazz: a written chart sets the structure, but each player improvises within it at runtime.
+</Callout>
+
+## Be message-centric
+
+The Cookbook's foundation is that passing **generalized, structured messages** — rather than localized objects or remote functions — is easier to constrain and modify over time. Berners-Lee deliberately made HTTP and HTML **message-centric**, and that resilience is why the web survived failed experiments (Applets, Flash, XHTML) without lasting damage. Messages need three things to be useful between strangers: a **shared format** (a registered media type), a **shared vocabulary** (semantic profiles), and **actions** (links and forms that say what to do next — see [hypermedia and HATEOAS](/apis/hypermedia-and-hateoas/)).
+
+This matters because the **8 fallacies of distributed computing** are all false — the network is not reliable, latency is not zero — so coordination must assume failure. *"Treat all data as if it was remote."*
+
+## Three ways to coordinate work
+
+When the goal of an API is to mix independent services into new solutions, three coordination styles are available.
+
+<Mermaid code={String.raw`graph TD
+  subgraph Orchestration
+    Eng["Workflow engine<br/>(conductor)"] --> O1["Service A"]
+    Eng --> O2["Service B"]
+    Eng --> O3["Service C"]
+  end
+  subgraph Choreography
+    C1["Service A"] --> C2["Service B"]
+    C2 --> C3["Service C"]
+    C3 -. event .-> C1
+  end`} />
+
+- **Centralized orchestration** — one workflow document submitted to an engine (the "conductor"); services talk to the engine, not each other. *Pros:* easy to reason about, validate, test, and monitor. *Cons:* the engine is a **single point of failure**, assumes synchronous processing, and tends toward tighter coupling.
+- **Stateless choreography** — a "dance" of independent services; the workflow is an **emergent by-product**. *Pros:* loosely coupled, resilient, easy to modify parts. *Cons:* hard to monitor overall progress — fix with a per-job **progress resource**. Covered in depth in [choreography and async communication](/apis/choreography-and-async-communication/).
+- **Hypermedia workflow** — declarative documents plus hypermedia controls describe interactions at runtime, combining choreography's independence with orchestration's central description. It needs each service to have a **composable interface** supporting task-level `Execute`, `Repeat`, `Revert`, `Cancel`, collected into **jobs** that add `Continue`, `Restart`, `Cancel`.
+
+**Rule of thumb:** few steps and branches → orchestration; involved, branching workflows → choreography.
+
+## Workflow as documents
+
+A robust workflow is described **declaratively**: a job document carries metadata (`jobID`, `jobStatus`, `jobMaxTTL`) and links (`jobProgressURL`, `jobSharedStateURL`, `jobSuccessURL`, …), with tasks each carrying `taskStatus`, `taskMaxTTL`, and start/rollback/rerun/cancel links. Services share **state, not data models**, via a standalone HTTP **shared-state resource** keyed by the job ID, written back with idempotent `PUT`.
+
+<Callout type="gotcha" title="No branching logic in the document">
+Keep decision logic — if/then/else, 'when state == X' — inside the tasks, never in the job document. Declarative workflow describes *what* must happen, not *how*; smuggling imperative branching into the document breaks that separation and makes it brittle.
+</Callout>
+
+## Long-running and asynchronous work
+
+HTTP is synchronous, but real work takes minutes or hours. Writes can usually be safely delayed; **delayed reads** are noticed and hurt perceived speed. For known-slow operations, make the delay explicit:
+
+- Return **`202 Accepted`** with a result document carrying `status`, `percentCompleted`, `refresh`, and `completed`/`failed`/`cancel` links — even before work begins.
+- The consumer **polls** the self link until it becomes `200`, then follows the completed link.
+
+<Mermaid code={String.raw`sequenceDiagram
+  participant C as Consumer
+  participant S as Service
+  C->>S: POST start long job
+  S-->>C: 202 Accepted with status and refresh link
+  loop until done
+    C->>S: GET status resource
+    S-->>C: 202 with percentCompleted
+  end
+  C->>S: GET status resource
+  S-->>C: 200 OK with completed link`} />
+
+<Callout type="go" title="Scale workflow transparently with queues and clusters">
+Put a message queue between the interface and the service to decouple a fast 202 acknowledgment from slower processing, and add workflow engines behind one IP to absorb load and survive machine failure — both introduced without changing the public interface.
+</Callout>
+
+<Callout type="tip" title="Limit writes to one storage target">
+Reads tolerate delay and caching; writes prioritize data integrity. Limit each write to a single storage target (one is best) and make the operation idempotent so a retried message never double-applies.
+</Callout>
+
+## See also
+
+- [Choreography and async communication](/apis/choreography-and-async-communication/) — loose coupling and event-driven coordination.
+- [API styles overview](/apis/api-styles-overview/) — when synchronous request/response is the wrong tool.
+- [Hypermedia and HATEOAS](/apis/hypermedia-and-hateoas/) — actions as the engine of workflow.

@@ -1,0 +1,122 @@
+---
+title: "Data Mesh Principles"
+category: ed-datamesh
+kind: topic
+order: 10
+difficulty: "Intermediate"
+status: ready
+intent: "The four principles of data mesh — domain ownership, data as a product, federated governance, and a self-service platform — and why it is as much a social shift as a technical one."
+book: "Building an Event-Driven Data Mesh (Adam Bellemare)"
+related:
+  - data-products
+  - event-first-design
+  - data-in-motion-and-flow
+when_use:
+  - "Many domains need trustworthy, well-documented data without point-to-point pipelines"
+  - "Analytics and operations should draw on the same source of truth"
+  - "You can adopt incrementally — data mesh is not all-or-nothing"
+when_avoid:
+  - "A single team's private data with no cross-domain consumers"
+  - "There is no institutional or social mandate (the effort will stall)"
+  - "You expect a big-bang rewrite rather than incremental adoption"
+quiz:
+  - q: "What are the four principles of data mesh?"
+    options:
+      - text: "Domain ownership, data as a product, federated governance, and self-service platform"
+        correct: true
+      - text: "Centralization, batch ETL, schema-on-read, and a data lake"
+        correct: false
+      - text: "Microservices, queues, sagas, and CQRS"
+        correct: false
+      - text: "Replication, polling, dual writes, and snapshots"
+        correct: false
+    explain: "These four principles, from Zhamak Dehghani, reorganize how teams create, access, and share data — promoting it to a first-class product owned by its domain."
+  - q: "Domain ownership means data leaves the domain only through…"
+    options:
+      - text: "An anti-corruption layer, so consumers never couple on the internal model"
+        correct: true
+      - text: "A shared database table"
+        correct: false
+      - text: "The central data team"
+        correct: false
+      - text: "A nightly bulk export"
+        correct: false
+    explain: "Exposing a curated public model behind an anti-corruption layer lets the owner evolve internals freely while consumers depend only on the contract."
+  - q: "Federated governance balances domain autonomy against…"
+    options:
+      - text: "Consumer ease-of-use, compliance/security, and global interoperability requirements"
+        correct: true
+      - text: "Maximizing the number of supported technologies"
+        correct: false
+      - text: "Eliminating all domain ownership"
+        correct: false
+      - text: "Centralizing all data in one team"
+        correct: false
+    explain: "Governance reduces technological sprawl by selecting a small supported toolbox and standardizing cross-domain concerns, while leaving most choices local."
+  - q: "Why does the book stress both an institutional and a social mandate?"
+    options:
+      - text: "Without leadership authority and grassroots buy-in, the mesh effort is doomed"
+        correct: true
+      - text: "Because data mesh is purely a technology"
+        correct: false
+      - text: "Because mandates replace the need for tooling"
+        correct: false
+      - text: "Because only managers use the mesh"
+        correct: false
+    explain: "Data mesh is a renegotiation of social contracts as much as a technical change; missing either mandate dooms it."
+takeaway: "Data mesh promotes data to a first-class product via four principles — domain ownership, data as a product, federated governance, self-service platform — adopted incrementally."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A data mesh is a well-run farmers' market, not a single supermarket warehouse. Each grower (domain) owns their stall and the quality of their produce; a market committee (governance) sets shared rules — opening hours, labeling, weights — so shoppers can trust any stall; and shared infrastructure (the stalls, scales, signage) lets anyone set up quickly. No central buyer reaches into each farm and grabs crates of unlabeled goods.
+</Callout>
+
+## Why data mesh exists
+
+Bellemare's *Building an Event-Driven Data Mesh* is a pragmatic companion to Zhamak Dehghani's *Data Mesh*. Its diagnosis: business data has long been treated as **exhaust** — a second-class by-product accessed through ad hoc, point-to-point, "reach-in-and-grab-it" pipelines, producing bad data, divergent copies, and unowned dependencies. Data mesh fixes this by **promoting data to a first-class product** with dedicated ownership, schemas, SLAs, and standardized access. It is "as much about technological reorganization as it is about the renegotiation of social contracts," and — importantly — **it is not all-or-nothing**; you adopt the pieces that help where you are today.
+
+<Callout type="go" title="The key insight">
+Both a **social mandate** (grassroots buy-in from the people meant to use the mesh) and an **institutional mandate** (leadership endorsement and authority) are required. Missing either one dooms the effort, because data mesh changes how people work, not just what tools they run.
+</Callout>
+
+## The four principles
+
+<Mermaid code={String.raw`graph TD
+  DM["Data Mesh"] --> P1["1. Domain Ownership<br/>those who know the data make it available"]
+  DM --> P2["2. Data as a Product<br/>code + infrastructure + access ports"]
+  DM --> P3["3. Federated Governance<br/>autonomy vs. global interoperability"]
+  DM --> P4["4. Self-Service Platform<br/>easy to discover, publish, manage, secure"]`} />
+
+### 1. Domain ownership
+
+The domain owner has sovereignty over their domain and the responsibility to export a curated selection of internal data for outside use — including on-call duty, reliable access, schema-evolution compatibility, and meeting SLAs. This is a total shift of responsibility *away* from centralized data teams. Data leaves the domain only through an **anti-corruption layer**, so external consumers never couple on the internal model and the owner can evolve internals freely. To decide what to expose, identify fundamental entities (items, orders, inventory, payments) and — best of all — **ask your consumers**.
+
+### 2. Data as a product
+
+A **data product** is not just data: it is also the **code** that builds it, the **infrastructure** that stores it, and the **ports/modes** by which it is accessed. Key factors include being *immutable and time-stamped*, *multimodal*, *push or pull*, and one of three *alignment types*. This principle gets its own page: [data products](/event-driven/data-products/).
+
+### 3. Federated governance
+
+Governance balances domain-owner autonomy against consumer ease-of-use, compliance/security, and global requirements — "like any form of effective government." A cross-organizational team reduces technological sprawl by selecting a deliberately **small supported toolbox** (e.g., standardizing on PostgreSQL not because it's superior but because the org can support it). It standardizes **cross-domain polysemes** (a user ID that's a `long` in one domain and a UUID `string` in another), schemas, time zones, and partition-key conventions. New standards enter by proposal and must be **trialed off the critical path** before being sanctioned.
+
+### 4. Self-service platform
+
+The platform makes it easy for everyone to discover, use, publish, manage, and secure data products. It serves three roles — *prospective consumers* (find, subscribe, extract), *data product creators* (compute, storage, CI/CD), and *owners* (life-cycle, notifications, on-call).
+
+<Mermaid code={String.raw`graph TD
+  Plat["Self-service platform<br/>(catalog · access · lineage)"]
+  Plat --> Cons["Consumers: discover, subscribe, extract"]
+  Plat --> Creators["Creators: compute, storage, CI/CD"]
+  Plat --> Owners["Owners: lifecycle, notifications, on-call"]`} /> It is best built as an **MVP from existing technologies and iterated** (the YAGNI maturity model), "like building the airplane while you're flying it," with a searchable **data catalog**, access controls, and **lineage** at its core.
+
+<Callout type="gotcha" title="Schema-on-read pushed errors downstream">
+The big-data era's *schema-on-read* — write anything, resolve schema at query time — is, per Bellemare, "one of the costliest and most damaging tenets" of big data. It moves error detection to consumers two or three degrees removed from the domain expert. Data mesh restores a **schema-on-write** sanity check at the source.
+</Callout>
+
+## See also
+
+- [Data products](/event-driven/data-products/) — the second principle in depth.
+- [Event-first design](/event-driven/event-first-design/) — the producer-side mindset the mesh depends on.
+- [Data in motion and flow](/event-driven/data-in-motion-and-flow/) — extending the idea across organizations.

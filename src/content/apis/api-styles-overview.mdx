@@ -1,0 +1,128 @@
+---
+title: "API Styles: REST vs RPC/gRPC vs GraphQL"
+category: api-design
+kind: guide
+order: 1
+difficulty: "Start here"
+status: ready
+intent: "It is never 'REST versus gRPC' — choose the most appropriate format for each producer/consumer exchange based on coupling, traffic, and payload."
+book: "Mastering API Architecture"
+related:
+  - designing-good-apis
+  - rest-and-the-richardson-maturity-model
+  - messaging-styles-and-patterns
+when_use:
+  - "You are starting a new out-of-process API and must pick an interaction style."
+  - "You need to justify a style choice to other teams in an ADR."
+  - "You are weighing loose coupling against raw performance for a given call."
+when_avoid:
+  - "The interaction is in-process (a method call inside one process) — these trade-offs do not apply."
+  - "An organisation-wide mandate or platform already fixes the style for you."
+quiz:
+  - q: "According to Mastering API Architecture, what is the right framing for choosing an API style?"
+    options:
+      - text: "Pick the most appropriate format for the specific producer/consumer exchange — it is not 'REST versus gRPC'"
+        correct: true
+      - text: "Always prefer REST because it is the most popular"
+        correct: false
+      - text: "Always prefer gRPC because it is the fastest"
+        correct: false
+      - text: "Use whatever the first team chose, for consistency"
+        correct: false
+    explain: "The book's recurring theme is that the real work is design and structure; you choose the format per exchange, weighing coupling, traffic and payload."
+  - q: "Which style is best suited to high-traffic, east–west service-to-service calls where performance matters?"
+    options:
+      - text: "gRPC (HTTP/2, binary, multiplexing)"
+        correct: true
+      - text: "REST at Richardson Level 3 (HATEOAS)"
+        correct: false
+      - text: "GraphQL over a single gateway URL"
+        correct: false
+      - text: "SOAP over HTTP/1.1"
+        correct: false
+    explain: "gRPC uses HTTP/2 and a binary protocol with full multiplexing over one connection — ideal when bandwidth/cost matter and callers are two producer-controlled services."
+  - q: "What problem does GraphQL primarily solve?"
+    options:
+      - text: "Letting a client request exactly the fields it needs, spanning multiple APIs, behind one schema/version"
+        correct: true
+      - text: "Guaranteeing idempotent writes across services"
+        correct: false
+      - text: "Encrypting traffic between services"
+        correct: false
+      - text: "Replacing the need for an API gateway"
+        correct: false
+    explain: "GraphQL is a query layer over existing services giving clients precise field selection across APIs with a single version — strong for mobile, UIs and reporting."
+  - q: "Why is coupling not always a bad thing when choosing RPC?"
+    options:
+      - text: "For two producer-controlled services where performance matters, tighter coupling buys speed at acceptable risk"
+        correct: true
+      - text: "Coupling is always bad and should never be chosen"
+        correct: false
+      - text: "RPC removes all coupling automatically"
+        correct: false
+      - text: "Coupling only matters for north–south traffic"
+        correct: false
+    explain: "RPC conveys exact method-level functionality and can be more coupled; that is acceptable for east–west services you control where high performance is the priority."
+takeaway: "Don't ask 'REST or gRPC?' — match the format to the exchange: REST for loose external coupling, gRPC for fast internal calls, GraphQL for precise multi-API queries."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Choosing an API style is like choosing how to send a parcel. A standardised postal service (REST) is universal and works for strangers, but it is verbose and a little slow. A dedicated courier on a fixed route between two warehouses you own (gRPC) is fast and efficient. A personal-shopper service that fetches exactly the items you list from many shops in one trip (GraphQL) saves you sorting through everything yourself. None is "best" — each fits a different errand.
+</Callout>
+
+## It is not REST versus gRPC
+
+*Mastering API Architecture* hammers one point: the real architectural work is **design and structure**, not picking a winning protocol. You choose the most appropriate format for each **exchange** between a **producer** (owns the API) and a **consumer** (calls it), considering *who* they are and *what* they exchange. Most answers are "it depends" — record the decision in an [ADR](/apis/designing-good-apis/).
+
+Two traffic directions drive the choice:
+
+- **North–south traffic** — ingress from outside your ecosystem (a mobile app, an external partner). Usually high latency, loosely coupled, security-critical.
+- **East–west traffic** — internal service-to-service calls. One north–south request often triggers many east–west exchanges, so east–west efficiency compounds.
+
+<Mermaid code={String.raw`graph TD
+  C["External consumer<br/>(mobile app, partner)"] -->|"north-south<br/>REST / GraphQL"| GW["API Gateway"]
+  GW --> A["Attendee service"]
+  A -->|"east-west<br/>gRPC"| S["Session service"]
+  A -->|"east-west<br/>gRPC"| B["Booking service"]`} />
+
+## REST — loose coupling, stateless, a domain model
+
+**REST** (Representational State Transfer) is a set of architectural constraints, usually over HTTP. To be RESTful an API must model **resources**, be **stateless** (the consumer sends all context each request), be **cacheable**, present a **uniform interface** (verbs + resources), and be a **layered system** that hides the backing implementation. Because REST projects a *domain model* rather than exact functions, it favours **loose coupling** — ideal for external consumers you cannot coordinate with easily, like a third-party Call-for-Papers system. The trade-off is verbosity (JSON inflates payloads) and chattiness. See [REST and the Richardson Maturity Model](/apis/rest-and-the-richardson-maturity-model/).
+
+## RPC and gRPC — fast, schema-driven, potentially coupled
+
+**RPC** (Remote Procedure Call) exposes a *method* in one process to be called from another, rather than projecting an abstraction. **gRPC** is the de facto modern RPC framework: it requires a `.proto` schema, uses a client-side **stub**, runs on **HTTP/2** with a **binary protocol**, and multiplexes many requests over one connection. This makes it excellent for **high-traffic east–west exchanges** and **large payloads**.
+
+<Callout type="go" title="HTTP/2 multiplexing">
+Under HTTP/1, 20 attendee requests meant 20 TCP connections. Under HTTP/2, all 20 ride a single connection through a transparent binary framing layer that splits and compresses messages — a major win when bandwidth or transfer cost is the concern.
+</Callout>
+
+gRPC is far **stricter** than REST. Field *numbers* govern wire layout, so removing, renaming, retyping, or renumbering a field is a breaking change; you may only add a service, method, or **non-mandatory** field safely. RPC can also build up state and is potentially more coupled — but coupling is not always bad for two services you control.
+
+<Mermaid code={String.raw`graph TD
+  Q{"What is the exchange?"} -->|"external, loose coupling"| REST["REST"]
+  Q -->|"internal, high traffic, performance"| GRPC["gRPC"]
+  Q -->|"precise fields across many APIs"| GQL["GraphQL"]
+  REST --> NS["north-south ingress"]
+  GRPC --> EW["east-west service to service"]
+  GQL --> UI["mobile, UI, reporting"]`} />
+
+## GraphQL — precise queries across many APIs
+
+**GraphQL** is a technology layer over existing services and datastores that gives clients a **query language** to request exactly the fields they need, including fields that span multiple APIs, behind a **single schema and version**. It removes consumer-side version juggling and shines for **mobile** (small screens, constrained networks), **UI modelling**, and **reporting/data-warehouse** access over many interconnected services. It can act as a facade over legacy systems, and is simplest when layered over already well-designed APIs.
+
+## Can one service offer all three?
+
+Yes — but it is usually the wrong thing to do. Tools like `openapi2proto` reorder fields alphabetically (silently breaking gRPC compatibility), and `grpc-gateway` makes RPC pretend to be REST. Conflating an extended hypermedia domain model with low-level function calls makes versioning painful.
+
+<Callout type="gotcha" title="Pitfall: the 'golden specification'">
+Once you generate one specification from another (REST↔gRPC), versioning becomes hard and every change ripples. The book's recommendation, recorded as an ADR: design the **RPC (east–west)** and **REST (north–south)** representations *independently* so each can evolve freely.
+</Callout>
+
+## See also
+
+- [Designing good APIs](/apis/designing-good-apis/) — API-as-a-product and consumer-first design.
+- [REST and the Richardson Maturity Model](/apis/rest-and-the-richardson-maturity-model/) — how RESTful an API really is.
+- [Messaging styles and patterns](/apis/messaging-styles-and-patterns/) — when synchronous request/response is the wrong tool entirely.

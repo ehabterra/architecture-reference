@@ -1,0 +1,138 @@
+---
+title: "Architecture Characteristics (the -ilities)"
+category: fnd-characteristics
+kind: topic
+order: 5
+difficulty: "Beginner"
+status: ready
+intent: "What an architecture characteristic is, the three-part test that qualifies one, and the categories of -ilities a system must support."
+book: "Fundamentals of Software Architecture; Head First Software Architecture"
+related:
+  - identifying-architecture-characteristics
+  - measuring-and-governing-characteristics
+  - thinking-in-trade-offs
+when_use:
+  - "When translating business goals into the non-domain success criteria a system must meet"
+  - "When deciding whether a concern needs special structural support or is just baseline hygiene"
+  - "When establishing a shared vocabulary for quality attributes across teams"
+  - "When distinguishing a domain requirement (the what) from a capability (the how/why)"
+when_avoid:
+  - "When tempted to support every -ility — each one adds complexity, so keep the list short"
+  - "When a concern is purely domain functionality rather than a non-domain capability"
+  - "When a quality is baseline hygiene that needs no special structure (then it is not yet architectural)"
+  - "When you would chase the single 'best' value of one -ility at the cost of all the others"
+quiz:
+  - q: "Which three criteria must something meet to count as an architecture characteristic?"
+    options:
+      - text: "It is non-domain, influences a structural aspect of the design, and is critical to success"
+        correct: true
+      - text: "It is measurable, documented, and tested"
+        correct: false
+      - text: "It is fast, secure, and scalable"
+        correct: false
+      - text: "It is requested by the customer, the architect, and the team"
+        correct: false
+    explain: "A characteristic specifies a non-domain consideration, rises to architectural significance only when it needs special structure, and must be critical or important to success."
+  - q: "Why do the authors prefer 'architecture characteristics' over 'nonfunctional requirements'?"
+    options:
+      - text: "The term 'nonfunctional' is self-denigrating and misleading — these capabilities ARE functional, just non-domain"
+        correct: true
+      - text: "It is shorter"
+        correct: false
+      - text: "Nonfunctional requirements are not real"
+        correct: false
+      - text: "Only ISO uses the other term"
+        correct: false
+    explain: "'Nonfunctional' downplays importance and 'quality attributes' implies after-the-fact assessment; the authors prefer 'characteristics'."
+  - q: "What distinguishes an implicit characteristic from an explicit one?"
+    options:
+      - text: "Implicit characteristics are inferred from domain knowledge and rarely appear in requirements; explicit ones are stated"
+        correct: true
+      - text: "Implicit ones are always more important"
+        correct: false
+      - text: "Explicit ones cannot be measured"
+        correct: false
+      - text: "There is no difference"
+        correct: false
+    explain: "Availability, reliability, and security are often implicit — architects surface them via domain knowledge; explicit ones are written in the requirements."
+  - q: "Why aim for the 'least worst' architecture rather than the best?"
+    options:
+      - text: "Characteristics conflict, so improving one usually degrades another — you cannot maximise them all"
+        correct: true
+      - text: "Best architectures are illegal"
+        correct: false
+      - text: "Customers prefer mediocrity"
+        correct: false
+      - text: "It saves licensing costs"
+        correct: false
+    explain: "Characteristics are synergistic and oppositional (security vs performance, performance vs scalability); the goal is the least-worst balanced set, not an unattainable best."
+takeaway: "An architecture characteristic is a non-domain capability that needs special structure and is critical to success — pick the fewest, because they conflict."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🍔 Analogy">
+A restaurant's *menu* is its domain — the dishes it serves. Its *characteristics* are how fast food arrives, whether it stays open during a rush, and whether the kitchen survives one cook calling in sick. Two restaurants can serve the same menu yet succeed or fail entirely on these qualities. Software is the same: functionality is the menu; characteristics decide whether the system actually works.
+</Callout>
+
+## What is a characteristic?
+
+A software solution = **domain (functional) requirements** + **architecture characteristics** — the non-domain things the system must do (scalability, availability, performance...). The books reject "nonfunctional requirements" (self-denigrating — these *are* functional, just non-domain) and "quality attributes" (implies after-the-fact assessment).
+
+Something becomes an architecture characteristic only when it meets **three mutually supporting criteria**:
+
+<Mermaid code={String.raw`graph TD
+  C["Architecture<br/>characteristic"] --> N["1. Non-domain<br/>design consideration"]
+  C --> S["2. Influences a structural<br/>aspect of the design"]
+  C --> K["3. Critical or important<br/>to application success"]`} />
+
+1. **Non-domain** — it specifies the *how/why*, not the *what*. Performance never appears in a requirements document.
+2. **Influences structure** — it rises to architectural significance only when it needs *special structural support*. Third-party payment is standard security hygiene (no special structure); in-app payment must be isolated in its own module (a characteristic).
+3. **Critical to success** — each characteristic adds complexity, so it must earn its place.
+
+## Implicit vs explicit
+
+**Explicit** characteristics appear in the requirements (a stated user count, a latency number). **Implicit** characteristics — availability, reliability, security, good modularity — rarely appear yet are necessary; architects surface them through domain knowledge. No requirement says "don't ruin the internal modularity."
+
+A characteristic may also be **composite** — it decomposes into measurable parts. "Reliability" breaks into availability, data integrity, and workflow consistency; "performance" must be drilled down to something like *first contentful paint*. The test: *can I objectively measure this?* If not, it is a composite.
+
+## The zoo of -ilities
+
+There is no universal standard list, so the books organise characteristics like a zoo's animal houses:
+
+<Mermaid code={String.raw`graph TD
+  Z["The -ilities zoo"] --> O["Operational"]
+  Z --> S["Structural"]
+  Z --> P["Process"]
+  Z --> X["Cross-cutting"]
+  O --> O1["availability · performance<br/>scalability · recoverability<br/>reliability · robustness"]
+  S --> S1["maintainability · extensibility<br/>portability · configurability<br/>reuse · upgradeability"]
+  P --> P1["agility · testability<br/>deployability · modularity"]
+  X --> X1["security · usability · privacy<br/>accessibility · auth · legal"]`} />
+
+- **Operational** — availability, continuity, performance, recoverability, reliability/safety, robustness, scalability.
+- **Structural** — configurability, extensibility, maintainability, portability, localization, leverageability/reuse, upgradeability.
+- **Process** (Head First) — agility, testability, deployability, modularity.
+- **Cross-cutting** — the "platypuses" that defy categories: accessibility, authentication, authorization, legal, privacy, security, usability.
+
+<Callout type="gotcha" title="⚠️ The Vasa and the Generic Architecture trap">
+The 17th-century warship *Vasa* was over-specified to be the most magnificent ever — two gun decks, oversized cannons — and capsized on its maiden voyage. The **Generic Architecture anti-pattern** tries to support every characteristic and collapses under its own complexity. Pick the *fewest*, not the most.
+</Callout>
+
+<Callout type="tip" title="The magical number seven">
+*Head First* suggests limiting committed characteristics to roughly **seven** (Miller's 1956 "magical number seven, plus or minus two") — enough for variety, few enough to avoid choice paralysis. When stakeholders say "we want all of them," resist.
+</Callout>
+
+## They conflict — aim for least worst
+
+Characteristics are **synergistic** (changing one forces changes in others) and often **oppositional** (improving security usually hurts performance; high performance can fight high scalability). Like flying a helicopter, every input affects the others. The guidance is blunt:
+
+<Callout type="go" title="💡 Key insight">
+Never shoot for the *best* architecture — shoot for the **least worst** architecture. Establish a **ubiquitous language** so "performance" means the same thing in every department, then balance a small set deliberately.
+</Callout>
+
+## See also
+
+- [Identifying architecture characteristics](/foundations/identifying-architecture-characteristics/) — how to uncover the driving ones.
+- [Measuring and governing characteristics](/foundations/measuring-and-governing-characteristics/) — making them concrete.
+- [Thinking in trade-offs](/foundations/thinking-in-trade-offs/) — why they must be balanced.

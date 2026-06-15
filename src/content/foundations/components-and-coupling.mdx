@@ -1,0 +1,133 @@
+---
+title: "Components and Coupling"
+category: fnd-components
+kind: topic
+order: 8
+difficulty: "Beginner"
+status: ready
+intent: "Components as the architect's primary building block, and the afferent/efferent coupling that measures how they depend on one another."
+book: "Head First Software Architecture; Fundamentals of Software Architecture"
+related:
+  - connascence
+  - identifying-component-boundaries
+  - modularity-and-metrics
+when_use:
+  - "When defining the functional building blocks of a system and their responsibilities"
+  - "When you need to reason about which components are most depended-upon or most fragile"
+  - "When deciding where knowledge should live to keep coupling manageable"
+when_avoid:
+  - "When tempted to eliminate all coupling — some is necessary, and 'loose' is itself a trade-off"
+  - "When micromanaging class-level design that belongs to developers"
+quiz:
+  - q: "What is a logical component, physically?"
+    options:
+      - text: "A directory or namespace holding the source code for one well-defined responsibility"
+        correct: true
+      - text: "A single class"
+        correct: false
+      - text: "A database table"
+        correct: false
+      - text: "A microservice"
+        correct: false
+    explain: "A component is the physical packaging of modules, typically represented as a directory/namespace with one clear role."
+  - q: "Afferent coupling (CA) of a component measures…"
+    options:
+      - text: "How many other components depend on it (incoming / fan-in)"
+        correct: true
+      - text: "How many components it depends on (outgoing)"
+        correct: false
+      - text: "Its cyclomatic complexity"
+        correct: false
+      - text: "Its line count"
+        correct: false
+    explain: "Afferent = incoming/fan-in; efferent = outgoing/fan-out. Mnemonic: a before e = incoming before outgoing; efferent = exit."
+  - q: "What does the Law of Demeter (Principle of Least Knowledge) advise?"
+    options:
+      - text: "A component should have limited knowledge of other components — less knowledge means less coupling"
+        correct: true
+      - text: "Each component should know everything"
+        correct: false
+      - text: "Components should never communicate"
+        correct: false
+      - text: "Coupling should be maximised for performance"
+        correct: false
+    explain: "Less knowledge → less coupling; moving knowledge between components changes where coupling lives, but only removing knowledge reduces total system coupling."
+  - q: "Is loose coupling always better?"
+    options:
+      - text: "No — it is a trade-off: distributed knowledge means no single component shows the whole workflow"
+        correct: true
+      - text: "Yes, always"
+        correct: false
+      - text: "Yes, except in databases"
+        correct: false
+      - text: "No — tight coupling is always better"
+        correct: false
+    explain: "Tightly coupled orchestration makes a workflow easy to read in one place but fragile; loose coupling is more independent but harder to follow end-to-end."
+takeaway: "Components are directories with one responsibility; measure their dependencies with afferent (fan-in) and efferent (fan-out) coupling, and remember loose coupling is itself a trade-off."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧱 Analogy">
+Think of components as the rooms of a house and coupling as the doorways between them. A room everyone walks through (the hallway) is depended on by many — fan-in. A room that opens onto many others is itself dependent on many — fan-out. Too many doorways and the house becomes a maze where moving one wall disturbs the rest.
+</Callout>
+
+## Components: the physical building block
+
+A **component** is the physical packaging of modules — a directory or namespace (e.g. `app/order/payment` → the "Payment Processing" component) that holds the source code for one business function. It is the **architect's primary building block and the lowest level the architect directly designs**; class and function design belong to developers. Components come in varieties: **libraries** (run in the caller's memory), subsystems/layers, and **services** (own address space, network communication — the building block of microservices).
+
+Each component must have a **single, clear responsibility** and a descriptive name — even functionality you outsource to a third-party library is still part of the logical architecture.
+
+## Coupling: how components depend on each other
+
+Two components are **coupled** if a change in one might force a change in the other. Coupling is measured in two directions (Yourdon and Constantine):
+
+<Mermaid code={String.raw`graph TD
+  AR["Auction Registration"] --> BP["Bidder Profile"]
+  AP["Automatic Payment"] --> BP
+  BC["Bid Capture"] --> BS["Bid Streamer"]
+  BC --> BT["Bid Tracker"]
+  BP -. "CA = 2 (fan-in)" .- BP
+  BC -. "CE = 2 (fan-out)" .- BC`} />
+
+- **Afferent coupling (CA)** — incoming / fan-in: how many components depend on this one. `Bidder Profile`, depended on by two components, has CA = 2.
+- **Efferent coupling (CE)** — outgoing / fan-out: how many components this one depends on. `Bid Capture`, depending on two, has CE = 2.
+- **Total coupling (CT) = CA + CE** per component; summed across the system, it gives the overall coupling level — telling you the most-coupled component and the system's overall health.
+
+A mnemonic: *a* before *e* = incoming before outgoing; *e*fferent = *e*xit.
+
+## The Law of Demeter
+
+The **Law of Demeter** (Principle of Least Knowledge) is named for the Greek goddess of agriculture, who produced grain but had no knowledge of what mortals did with it. The principle: a component should have **limited knowledge** of other components. Less knowledge means less coupling.
+
+<Callout type="gotcha" title="⚠️ Moving knowledge isn't removing it">
+If `Order Placement` knows too much and orchestrates everything (high CT), moving the "low stock" logic into `Inventory Management` lowers Order Placement's coupling but raises Inventory Management's — **total system coupling is unchanged** because the knowledge was *moved*, not *removed*. Only deleting unnecessary knowledge reduces total coupling.
+</Callout>
+
+## Loose coupling is a trade-off
+
+The First Law applies even here:
+
+- **Tightly coupled** (one component orchestrates): you can read the whole workflow in one place, but that component depends on many others and breaks when they change.
+- **Loosely coupled** (knowledge distributed): components evolve independently, but no single place reveals the full workflow — you must visit many components to understand it.
+
+<Mermaid code={String.raw`graph TD
+  subgraph Tight["Tightly coupled — readable, fragile"]
+    O["Order<br/>(orchestrates all)"] --> P1["Payment"]
+    O --> I1["Inventory"]
+    O --> S1["Shipping"]
+  end
+  subgraph Loose["Loosely coupled — independent, diffuse"]
+    P2["Payment"] -. "reacts" .-> I2["Inventory"]
+    I2 -. "reacts" .-> S2["Shipping"]
+  end`} />
+
+<Callout type="go" title="💡 Key insight">
+The goal is not zero coupling — complex software requires some. The goal is *appropriate* coupling: restrict it to the tightest scope possible to avoid brittleness, then govern it with [metrics](/foundations/modularity-and-metrics/).
+</Callout>
+
+## See also
+
+- [Connascence](/foundations/connascence/) — a richer vocabulary for *how* components are coupled.
+- [Identifying component boundaries](/foundations/identifying-component-boundaries/) — finding the right components.
+- [Modularity and metrics](/foundations/modularity-and-metrics/) — measuring coupling objectively.

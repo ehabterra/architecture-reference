@@ -1,0 +1,135 @@
+---
+title: "Systems Thinking Basics"
+category: path-systems-thinking
+kind: topic
+order: 9
+difficulty: "Beginner"
+status: ready
+intent: "Systems thinking is a practice of nonlinear thinking — seeing stocks, flows, and feedback loops, and using the Iceberg Model to look beneath events to the structures and mental models that cause them."
+book: "Learning Systems Thinking (Diana Montalion)"
+related:
+  - emergence-and-complexity
+  - leverage-points
+  - applying-systems-thinking-to-organizations
+when_use:
+  - "When relational complexity has outpaced reductionist, divide-and-conquer thinking."
+  - "When a problem keeps recurring despite repeated surface fixes."
+  - "When you need to look beneath visible events to the structures and beliefs driving them."
+when_avoid:
+  - "When the problem is genuinely simple and linear thinking (find the bug, follow best practice) is exactly right."
+  - "When you mistake making a diagram for actually modeling and thinking together."
+  - "When you stay abstract instead of going deeper — systems thinking means going down, not floating up."
+quiz:
+  - q: "What is the core difference between linear and nonlinear (systems) thinking?"
+    options:
+      - text: "Linear thinking understands a whole by breaking it into parts; systems thinking sees how relationships among parts produce behavior the parts don't have alone"
+        correct: true
+      - text: "Linear thinking is always wrong; systems thinking is always right"
+        correct: false
+      - text: "Linear thinking is for managers; systems thinking is for engineers"
+        correct: false
+      - text: "They are the same thing with different names"
+        correct: false
+    explain: "Linear thinking is reductionist, predictable, and control-focused — and necessary in its place. Systems behavior is emergent: relationships among parts drive it, and it is not fully controllable or predictable."
+  - q: "What are the four levels of the Iceberg Model, top to bottom?"
+    options:
+      - text: "Events → Patterns and Trends → Structures → Mental Models"
+        correct: true
+      - text: "Inputs → Processing → Outputs → Feedback"
+        correct: false
+      - text: "Data → Information → Knowledge → Wisdom"
+        correct: false
+      - text: "Strategy → Tactics → Operations → Execution"
+        correct: false
+    explain: "The Iceberg dives from the visible tip (events) down through recurring patterns and the structures that hold them in place, to the mental models that are 'almost always' the root cause."
+  - q: "In Donella Meadows' basic system model, what is a 'discrepancy'?"
+    options:
+      - text: "The gap between what we want the system to do and what it currently does"
+        correct: true
+      - text: "A bug in the code"
+        correct: false
+      - text: "A disagreement between two teams"
+        correct: false
+      - text: "The difference between revenue and cost"
+        correct: false
+    explain: "A central state box has inflows and outflows; we change inflows until the discrepancy approaches zero. Linear thinking stops at 'delivered', but systems thinking keeps observing because outputs generate new discrepancies."
+  - q: "What does the Beer Game teach about systemic outcomes?"
+    options:
+      - text: "Structure produces behavior — bad outcomes come mostly from the system's structure, not from people being foolish"
+        correct: true
+      - text: "Beer supply chains are inherently unprofitable"
+        correct: false
+      - text: "Customers are irrational"
+        correct: false
+      - text: "More inventory always wins"
+        correct: false
+    explain: "A hierarchical ordering structure with no system-wide real-time information makes everyone over-order. As Sterman noted, 'it just cannot be true that, by chance, all the smart people ended up as retailers' — blame the structure, not the players."
+takeaway: "Systems thinking is nonlinear: look beneath events to the patterns, structures, and mental models that cause them — structure produces behavior, and time is always a factor."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🌱 Analogy">
+In a linear world, 7 kale seeds give 7 plants in 50 days. In a real garden you get 9 (kale is biennial) or 0 — rabbits, deer, heat, nitrogen, cabbage worms, slugs, and birds all act on each other in hard-to-predict ways. That is nonlinearity in its simplest form. Software has become a garden, not an assembly line.
+</Callout>
+
+Diana Montalion frames systems thinking as a **practice** — "reading a book about tennis won't teach you to play tennis" — not a body of knowledge you finish. As software became *systems of software*, **relational complexity** (the number of variables you must consider to make a decision) outran the linear, reductionist thinking we were trained in. We have moved from the machine age into the **systems age**.
+
+## Linear and nonlinear thinking
+
+Both are necessary; neither is "good" or "bad."
+
+- **Linear thinking** is sequential, predictable, repeatable, and control-focused. It is exactly right for breaking a problem into parts, finding a bug, following best practice, and driving toward elegant simplicity.
+- **Nonlinear (systems) thinking** sees that **relationships among parts produce behavior the parts don't have alone**. Systems are **emergent** and not fully controllable or predictable.
+
+A **system** is "a group of interrelated hardware, software, people, organizations, and other elements that interact and/or interdepend to serve a shared purpose." A group of parts with no relationships among them is just a **collection**.
+
+## Stocks, flows, and feedback
+
+Donella Meadows' basic model is a central **state** box (the system's parts and activities at a moment) with **inflows** and **outflows**.
+
+<Mermaid code={String.raw`graph LR
+  IN["Inflows"] --> S["State<br/>(stock at a moment in time)"]
+  S --> OUT["Outflows"]
+  S -.->|"compare to goal"| D["Discrepancy<br/>(want vs. have)"]
+  D -.->|"adjust inflows until → 0"| IN
+  OUT -->|"feedback loop"| IN`} />
+
+A **discrepancy** is the gap between what we want the system to do and what it does; we adjust inflows until it approaches zero. The model works for intangibles too — trust rises with transparency and falls with lies. **Time is always a factor**, because the state changes over time, asynchronously, while the world changes around it. A **feedback loop** uses output to improve future input.
+
+<Callout type="go" title="🔑 Conceptual integrity">
+Our ideas design our systems — "everything running in production represents our concepts." <strong>Conceptual integrity</strong> (Brooks: "the most important consideration in system design") is concepts in good relationship, serving the whole. Its opposite is "many good but independent and uncoordinated ideas." To change production, first change the concepts. Relationship design <em>is</em> systems design.
+</Callout>
+
+## The Iceberg Model
+
+We react endlessly to **events** — bugs, outages, late initiatives — patching and adding features, yet "nothing ever really changes." The Iceberg Model guides thinking *downward* through four levels to the real causes:
+
+1. **Events** — what happened and was visible (two teams fight for control).
+2. **Patterns and Trends** — has this happened before, under what circumstances? (Hiring valued a tech-centric skillset and never "how well do you think with others?")
+3. **Structures** — the rules, rituals, and processes that hold the pattern in place (whiteboard tests measure knowledge *stock* but not knowledge *flow*).
+4. **Mental Models** — the beliefs that generate the structures ("soft skills aren't a priority for engineers"). Root causes are *almost always* mental models.
+
+<Mermaid code={String.raw`graph TD
+  EV["Events<br/>what happened, visible"] -->|"look deeper"| PT["Patterns and Trends<br/>has this happened before?"]
+  PT -->|"look deeper"| ST["Structures<br/>rules and rituals holding it"]
+  ST -->|"look deeper"| MM["Mental Models<br/>beliefs that generate structures"]
+  MM -->|"root causes almost always live here"| RC["Lasting change"]`} />
+
+<Callout type="gotcha" title="⚠️ Structure produces behavior — the Beer Game">
+In Jay Forrester's <strong>Beer Game</strong>, a demand spike ripples up a supply chain (Retailer → Wholesaler → Distributor → Brewery). Almost everyone over-orders and loses — because a hierarchical ordering structure with no shared real-time information makes it inevitable. As Sterman put it, "it just cannot be true that, by chance, all the smart people ended up as retailers." Blame the structure, not the players.
+</Callout>
+
+## A hands-on practice
+
+Systems thinking is hands-on: you make **artifacts** (documents, models, whiteboard photos), not just abstractions. The first step is **willingness** — to see differently, change your mind, and step into the unknown.
+
+<Callout type="tip" title="💡 The central paradox">
+"The most valuable quality of a systems thinker is they know they don't know." Two obstacles block us: we are spectacularly bad at nonlinear thinking, and we don't know we're bad at it — "the worse we are at it, the more certain we are that we are good at it."
+</Callout>
+
+## See also
+
+- [Emergence and complexity](/strategy/emergence-and-complexity/) — why the whole behaves differently from its parts.
+- [Leverage points](/strategy/leverage-points/) — where a small shift produces big change.
+- [Applying systems thinking to organizations](/strategy/applying-systems-thinking-to-organizations/) — the sociotechnical system in practice.

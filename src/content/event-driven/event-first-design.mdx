@@ -1,0 +1,133 @@
+---
+title: "Event-First Design"
+category: ed-foundations
+kind: topic
+order: 2
+difficulty: "Beginner"
+status: ready
+intent: "Make the event stream the first place shared data lands — aligning bounded contexts to business requirements and adopting the stream-first mindset over application-first thinking."
+book: "Building Event-Driven Microservices; Building an Event-Driven Data Mesh (Adam Bellemare)"
+related:
+  - thinking-in-events
+  - the-outbox-and-idempotency
+  - data-products
+when_use:
+  - "You are carving services or domains and want boundaries that survive business change"
+  - "Shared, business-critical data is currently pulled point-to-point from a source database"
+  - "You want analytics and operations to draw on the same source of truth"
+when_avoid:
+  - "Data is genuinely private to one bounded context and never shared"
+  - "A legacy 'big ball of mud' cannot be refactored yet (use unidirectional liberation instead)"
+  - "The interaction is a true synchronous request-response with no downstream consumers"
+quiz:
+  - q: "Bounded contexts should be aligned to…"
+    options:
+      - text: "Business requirements, because they change far less often than implementations"
+        correct: true
+      - text: "Technical layers (app layer, data layer) for clean separation"
+        correct: false
+      - text: "Whatever team happens to be free"
+        correct: false
+      - text: "The database schema"
+        correct: false
+    explain: "Aligning on technical layers spreads one business function across many teams and APIs; aligning on business requirements keeps contexts cohesive and loosely coupled."
+  - q: "What is 'application-first thinking' and why does the data mesh reject it?"
+    options:
+      - text: "Treating data as exhaust — a by-product of an app — which leads to ad hoc pipelines, divergent copies, and unowned dependencies"
+        correct: true
+      - text: "Writing the application before the tests"
+        correct: false
+      - text: "Building the UI before the backend"
+        correct: false
+      - text: "Choosing a framework before a database"
+        correct: false
+    explain: "When data is a second-class by-product, others reach in and grab it, producing bad data and untraceable lineage. Event-first design promotes data to a first-class product."
+  - q: "The 'single writer principle' states that…"
+    options:
+      - text: "Each event stream has exactly one producing, owning microservice"
+        correct: true
+      - text: "Only one consumer may read a stream at a time"
+        correct: false
+      - text: "Only one schema may ever exist"
+        correct: false
+      - text: "Writes must be single-threaded"
+        correct: false
+    explain: "One owner per stream gives clear data lineage and is enforced via access control — the foundation of dependency tracking and a real source of truth."
+  - q: "What does it mean that 'data that starts in motion simply stays in motion'?"
+    options:
+      - text: "Produce the data as events at its origin so it never has to be extracted later"
+        correct: true
+      - text: "Streams must never be stored"
+        correct: false
+      - text: "Events must always be reprocessed"
+        correct: false
+      - text: "Latency is irrelevant"
+        correct: false
+    explain: "If a source (e.g., an analytics server) natively emits events, there is no extraction step — the most direct form of event-first design and the cleanest source-aligned product."
+takeaway: "Publish shared data to the stream first; align bounded contexts to business requirements, give every stream one owner, and let data that starts in motion stay in motion."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Most companies treat data the way a kitchen treats steam — an unavoidable by-product that escapes and condenses wherever it lands. Event-first design treats that steam as the product: you capture it deliberately at the source, label it, and pipe it to whoever needs it, instead of letting everyone mop puddles off the floor.
+</Callout>
+
+## From application-first to event-first
+
+The default posture in most organizations is **application-first thinking**: build the app, store its data in a private database, and treat the data as **exhaust** — a by-product. New consumers then "reach in and grab it" through ad hoc, point-to-point pipelines. The results are predictable: tight coupling on the source's *internal* model, divergent copies, untraceable lineage, and silent breakage when the source refactors (Bellemare's example: a field quietly changing from boolean to `long` and corrupting every downstream job).
+
+**Event-first design** inverts the order. Shared, business-critical data is published to a durable stream *first*, and only then materialized back into stores — including, ideally, the producer's own. Consumers couple on the **data contract** of the stream, never on the underlying store. The purest form of this is when a source natively emits events: **data that starts in motion stays in motion**, with no extraction step at all.
+
+<Mermaid code={String.raw`graph TD
+  subgraph AF["Application-first (exhaust)"]
+    App["App + private DB"] -.->|"reach in (ad hoc)"| X1["Consumer 1"]
+    App -.->|"point-to-point"| X2["Consumer 2"]
+  end
+  subgraph EF["Event-first (stream first)"]
+    App2["App"] -->|"publish facts"| Str["Owned stream"]
+    Str --> Y1["Consumer 1"]
+    Str --> Y2["Consumer 2"]
+    Str --> App2b["Producer's own store"]
+  end`} />
+
+<Callout type="go" title="The key insight">
+The goal of liberating data into streams is to enforce two properties at once: a **single source of truth** and the **elimination of direct coupling**. Both come for free once consumers depend on the stream rather than the store.
+</Callout>
+
+## Bounded contexts aligned to the business
+
+Event-first design rests on domain-driven design. A **bounded context** is the logical boundary — inputs, outputs, events, processes, data models — of a subdomain. Two rules matter:
+
+- Contexts should be **highly cohesive** internally and **loosely coupled** to each other.
+- Contexts should be aligned to **business requirements, not technical layers** — because business requirements change far less often than implementations.
+
+Aligning on technical layers (separate app-layer and data-layer ownership) is the classic monolith anti-pattern: it distributes one business function across multiple teams and APIs, creating brittle cross-cutting dependencies.
+
+<Mermaid code={String.raw`graph LR
+  subgraph BC1["Bounded context: Sales"]
+    A["Service + private store"] --> O1["Sales stream (owned)"]
+  end
+  subgraph BC2["Bounded context: Billing"]
+    O1 --> B["Service"]
+    B --> O2["Invoice stream (owned)"]
+  end
+  subgraph BC3["Bounded context: Analytics"]
+    O1 --> C["Service"]
+  end`} />
+
+## One stream, one owner
+
+The **single writer principle** says every event stream has exactly one producing, owning microservice. Enforced through access control, it yields clear data lineage and makes the dependency graph reconstructable from permissions alone. Consumers may model and aggregate freely on their side, but only the owner writes the canonical facts.
+
+To decide *what* to expose, identify the fundamental entities of the domain — items, orders, inventory, payments — and, best of all, **ask your consumers**. Expose a deliberately focused *public* model behind an [anti-corruption layer](/event-driven/data-products/) so the internal model can keep evolving.
+
+<Callout type="gotcha" title="CDC bootstraps — it is not the destination">
+Change-data capture tools let you liberate data out of a legacy database quickly, but they expose the *internal* model and push denormalization downstream. Counterintuitively, minimizing CDC-framework usage and having teams own their own capture (e.g., the [outbox](/event-driven/the-outbox-and-idempotency/)) eliminates cross-team dependencies and instills the event-first mindset.
+</Callout>
+
+## See also
+
+- [Thinking in events](/event-driven/thinking-in-events/) — the medium that makes this possible.
+- [The outbox and idempotency](/event-driven/the-outbox-and-idempotency/) — emitting events atomically with state.
+- [Data products](/event-driven/data-products/) — formalizing a stream as an owned product.

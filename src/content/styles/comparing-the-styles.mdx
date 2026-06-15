@@ -1,0 +1,142 @@
+---
+title: "Comparing the Styles"
+category: sty-choosing
+kind: topic
+order: 11
+difficulty: "Intermediate"
+status: ready
+intent: "The consolidated scorecard — every style rated across partitioning, cost, simplicity, scalability, fault tolerance, performance, and more — and how to read it for trade-offs."
+book: "Software Architecture Patterns (2nd ed.); Fundamentals of Software Architecture"
+related:
+  - reading-an-architecture-style
+  - choosing-an-architecture-style
+  - layered-architecture
+  - microservices-architecture
+when_use:
+  - "You want to scan one characteristic (e.g., scalability) across all styles at once."
+  - "You need to justify a style choice with a side-by-side comparison."
+  - "You are narrowing a shortlist of candidate styles before deeper analysis."
+when_avoid:
+  - "You are treating the matrix as a decision instead of a guide — it ignores skills, budget, and infrastructure."
+  - "You haven't yet identified which characteristics actually matter for your system."
+quiz:
+  - q: "Which styles all score 5/5 on scalability?"
+    options:
+      - text: "Event-driven, microservices, and space-based"
+        correct: true
+      - text: "Layered, microkernel, and pipeline"
+        correct: false
+      - text: "Layered and service-based"
+        correct: false
+      - text: "Only microservices"
+        correct: false
+    explain: "The three pure distributed styles in the matrix all hit 5/5 scalability — at the cost of simplicity (1/5) and higher expense."
+  - q: "Which monolithic style is the most extensible, and the only one that can be technical or domain partitioned?"
+    options:
+      - text: "Microkernel"
+        correct: true
+      - text: "Layered"
+        correct: false
+      - text: "Pipeline"
+        correct: false
+      - text: "Space-based"
+        correct: false
+    explain: "Microkernel scores higher extensibility than layered and is uniquely able to be technically OR domain partitioned."
+  - q: "What is the standout trade-off of microservices on the matrix?"
+    options:
+      - text: "Top agility and extensibility but the highest cost and weakest performance among distributed styles"
+        correct: true
+      - text: "Highest simplicity but lowest scalability"
+        correct: false
+      - text: "Lowest cost but lowest fault tolerance"
+        correct: false
+      - text: "Best performance but worst scalability"
+        correct: false
+    explain: "Microservices is the agility/extensibility champion (both 5) with 5/5 scalability and fault tolerance, but $$$$$ cost and only 2/5 performance."
+  - q: "How should the comparison matrix be used?"
+    options:
+      - text: "As a guide to weigh against skills, budget, deadlines, and infrastructure — not as a decision by itself"
+        correct: true
+      - text: "As the single source of truth for the right style"
+        correct: false
+      - text: "To pick whichever style has the most 5s"
+        correct: false
+      - text: "Only for distributed styles"
+        correct: false
+    explain: "The book stresses the matrix is a guide; you must also weigh infrastructure, developer skills, budget, deadlines, and app size."
+takeaway: "Monoliths win simplicity and cost; distributed wins scalability and fault tolerance. Read the scorecard as a guide, never as the decision."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+This is the spec sheet you compare before buying. Just as you'd lay out cars by price, mileage, cargo, and safety to spot the one that fits your life, the consolidated matrix lets you scan one characteristic — say scalability — straight down every style and see instantly who wins and who pays for it.
+</Callout>
+
+## The consolidated scorecard
+
+The book closes with a single matrix so an architect can scan a characteristic across all styles at a glance. Ratings are 1 (poorly supported) to 5 (excellently supported); cost is in dollar signs ($ cheapest to $$$$$ most expensive); partitioning is **T** (technical), **D** (domain), or **D/T** (either).
+
+| Characteristic | Layered | Microkernel | Event-driven | Microservices | Space-based |
+|---|---|---|---|---|---|
+| **Partitioning** | T | D/T | T | D | T |
+| **Overall cost** | $ | $ | $$$ | $$$$$ | $$$$$ |
+| **Agility** | 1 | 3 | 3 | 5 | 2 |
+| **Simplicity** | 5 | 4 | 1 | 1 | 1 |
+| **Scalability** | 1 | 1 | 5 | 5 | 5 |
+| **Fault tolerance** | 1 | 1 | 5 | 5 | 3 |
+| **Performance** | 3 | 3 | 5 | 2 | 5 |
+| **Extensibility** | 1 | 3 | 5 | 5 | 3 |
+
+Service-based (covered in [Service-based architecture](/styles/service-based-architecture/)) and pipeline (in [Pipeline architecture](/styles/pipeline-architecture/)) round out the landscape: service-based sits between the monoliths and microservices with many 4-star ratings and the best ACID support among distributed styles; pipeline tracks layered with slightly better modularity.
+
+<Mermaid code={String.raw`graph LR
+  subgraph Monolithic["Monolithic: win simplicity + cost"]
+    L["Layered<br/>simple, cheap"]
+    M["Microkernel<br/>extensible"]
+  end
+  subgraph Distributed["Distributed: win scalability + fault tolerance"]
+    E["Event-driven<br/>balanced"]
+    MS["Microservices<br/>agile, costly"]
+    SB["Space-based<br/>extreme scale"]
+  end
+  Monolithic -->|"pay: scalability,<br/>fault tolerance"| Distributed
+  Distributed -->|"pay: simplicity,<br/>cost"| Monolithic`} />
+
+<Mermaid code={String.raw`quadrantChart
+  title Simplicity vs scalability
+  x-axis Low scalability --> High scalability
+  y-axis Low simplicity --> High simplicity
+  quadrant-1 Scales and simple
+  quadrant-2 Simple, limited scale
+  quadrant-3 Hard and limited
+  quadrant-4 Scales, complex
+  Layered: [0.15, 0.9]
+  Microkernel: [0.2, 0.78]
+  Event-driven: [0.85, 0.18]
+  Microservices: [0.88, 0.12]
+  Space-based: [0.92, 0.15]`} />
+
+## Reading the matrix — the key trade-offs
+
+- **Monolithic styles (layered, microkernel)** win on **simplicity** (5 and 4) and **cost** ($), but lose on **scalability** and **fault tolerance** (both 1). The right default for simple systems and tight budgets.
+- **Distributed styles (event-driven, microservices, space-based)** all score **5 on scalability**, paying with **simplicity = 1** and higher cost. Choose them when operational characteristics dominate.
+- **Microservices** is the **agility and extensibility champion** (both 5) with 5/5 scalability and fault tolerance — but the **most expensive** ($$$$$) and the **weakest on performance** (2) among distributed styles, due to remote-communication latency.
+- **Event-driven** is the **most balanced** distributed style — 5s in scalability, fault tolerance, performance, and extensibility — at a **moderate** cost ($$$), though its simplicity is the lowest and it demands eventual consistency.
+- **Space-based** uniquely pairs top **scalability** (5) and **performance** (5) for extreme/elastic load, at high cost, low agility (2), and the constraint that all transactional data fit in memory.
+- **Microkernel** is the most extensible *monolithic* option (3) and the only style that can be technical *or* domain partitioned.
+
+<Callout type="go" title="Two worked reads">
+The book demonstrates: if your primary concern is **scalability**, the matrix points to event-driven, microservices, and space-based. If you pick **layered**, the matrix flags deployment, performance, and scalability as your risk areas to manage.
+</Callout>
+
+<Callout type="gotcha" title="The matrix is a guide, not a verdict">
+Don't pick the style with the most 5s. The book is emphatic: this matrix is a *guide*. You must also weigh infrastructure support, developer skill set, project budget, deadlines, and application size — and remember that changing an architecture once it's in place is very hard and expensive.
+</Callout>
+
+## See also
+
+- [Reading an architecture style](/styles/reading-an-architecture-style/) — how to interpret a single scorecard.
+- [Choosing an architecture style](/styles/choosing-an-architecture-style/) — turning the matrix into a decision.
+- [Microservices architecture](/styles/microservices-architecture/) — the most extreme profile on the matrix.
+- [Layered architecture](/styles/layered-architecture/) — the simplest, cheapest baseline.

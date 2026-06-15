@@ -1,0 +1,128 @@
+---
+title: "Observability and Cost"
+category: cld-serverless
+kind: topic
+order: 6
+difficulty: "Advanced"
+status: ready
+intent: "Operating pay-per-use systems: infer internal state from metrics, logs, and traces, and treat the monthly bill as a direct measure of architectural efficiency."
+book: "Serverless Development on AWS (Brisals & Hedger)"
+related:
+  - testing-serverless
+  - the-well-architected-lens
+  - event-driven-serverless-patterns
+when_use:
+  - "Running serverless workloads in production where you must catch operational (not just functional) bugs"
+  - "Diagnosing failures across distributed, decoupled services"
+  - "Building cost-awareness (FinOps) into design and operations"
+when_avoid:
+  - "Relying on logs alone for distributed debugging (prefer traces)"
+  - "Leaving log retention indefinite or alarming on raw counts instead of percentages"
+  - "Ignoring service limits and units of scale when estimating cost and capacity"
+quiz:
+  - q: "Why must you ship serverless to production to fully validate it?"
+    options:
+      - text: "Operational problems (throttling, poison-pills, exceeding limits) only surface in production — 'there is no substitute for production'"
+        correct: true
+      - text: "Local testing is impossible"
+        correct: false
+      - text: "Functions cannot run outside AWS"
+        correct: false
+      - text: "Cost only accrues in production"
+        correct: false
+    explain: "You catch functional bugs pre-production, but operational bugs emerge from real load, real limits, and real failures."
+  - q: "Why prefer traces over logs for distributed systems?"
+    options:
+      - text: "Logs tell you what happened; traces tell you where, across distributed services"
+        correct: true
+      - text: "Traces are always free"
+        correct: false
+      - text: "Logs cannot record errors"
+        correct: false
+      - text: "Traces replace the need for metrics"
+        correct: false
+    explain: "Over-logging adds cost and security risk; traces (e.g., AWS X-Ray) localize problems across service boundaries with correlation IDs."
+  - q: "Why is CloudWatch often the top cost line item?"
+    options:
+      - text: "It charges per GB ingested and stored, and log retention defaults to indefinite"
+        correct: true
+      - text: "It charges per function"
+        correct: false
+      - text: "It bills for every Region"
+        correct: false
+      - text: "Tracing is mandatory and expensive"
+        correct: false
+    explain: "Always set log retention, alarm on percentages, and avoid third parties polling the CloudWatch API (prefer metric streams)."
+  - q: "What is the cheapest Lambda function?"
+    options:
+      - text: "One that is never invoked — block invalid invocations with API Gateway request validation"
+        correct: true
+      - text: "One written in the fastest runtime"
+        correct: false
+      - text: "One with the least memory"
+        correct: false
+      - text: "One with provisioned concurrency"
+        correct: false
+    explain: "Pay-per-use means avoiding needless invocations is the biggest cost lever; validate requests before they trigger compute."
+takeaway: "Infer internal state from metrics, logs, and traces (prefer traces); the bill mirrors your architecture, so build cost-awareness in and set retention and budget alerts."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A modern car shows you speed, fuel flow, engine temperature, and a check-engine light — and you pay for exactly the fuel you burn. Serverless is the same: observability is your dashboard for inferring what's happening under the hood, and the monthly bill is the fuel gauge that tells you, honestly, how efficiently you're driving.
+</Callout>
+
+## You enter a cloud contract
+
+In production, serverless's defining trait is **scalability**: managed services auto-scale from zero to peak with pay-per-use billing. But you enter a **cloud contract** — AWS provides autoscaling and HA while *you* must operate within **service limits** and know your **units of scale**: Lambda = concurrency, Kinesis = buffer limits, DynamoDB = read/write capacity, API Gateway = response latency. Annotate architecture diagrams with expected usage and limits. As systems shift from custom function logic toward **application integration**, bugs move from code to operations — and "there is no substitute for production."
+
+## Metrics, logs, and traces
+
+Observability is a sociotechnical practice, not a tool — inferring internal state from external outputs via three signals:
+
+<Mermaid code={String.raw`graph TD
+  S["Serverless system"] --> M["Metrics<br/>(CloudWatch: errors,<br/>throttles, duration)"]
+  S --> L["Logs<br/>(event-driven, structured)"]
+  S --> T["Traces<br/>(X-Ray: segments,<br/>annotations)"]
+  M --> AL["Alarm (metric + threshold)<br/>use percentages"]
+  AL --> AT["Alert: Obvious,<br/>Actionable, Singular"]
+  T --> WW["Decouple what is wrong<br/>from why"]`} />
+
+- **Metrics → Amazon CloudWatch.** An **alarm** is a metric plus threshold (use *percentages* for errors to absorb spikes); an **alert** is an action when an alarm fires — make alerts **Obvious, Actionable, Singular**. Build a **critical health dashboard** with the **RED method** (Rate, Errors, Duration) and use **composite alarms** for capability-based alerting instead of noisy per-resource alarms.
+- **Logs.** Use *event-driven logging* with a standard envelope (e.g., CloudEvents). Logs are overused — they add cost and security risk.
+- **Traces → AWS X-Ray.** Prefer traces to logs: logs tell *what*, traces tell *where*. Components: **segments**, **subsegments**, indexed **annotations** (≤50/trace), non-indexed **metadata**, and **correlation IDs** tying traces across systems. Use **sampling** (100% at launch, reduced over time).
+
+Define **SLIs** (binary good/bad), **SLOs** (targets, e.g., 99.98% within 6s), and **error budgets** — the flip side of SLOs that grant permission to ship. SLO-based alerts answer *what* is wrong while you investigate *why*.
+
+<Callout type="gotcha" title="Cost gotchas">
+**CloudWatch is often the top line item** — always set log **retention** (it defaults to indefinite) and avoid third parties *polling* the CloudWatch API (use **metric streams**). Other traps: expensive API Gateway caching, services calling services (Athena at $5/TB scanned), **infinite Lambda loops** (enable recursive-loop detection), and non-production costs.
+</Callout>
+
+## The bill mirrors the architecture
+
+Pay-per-use must be approached "with caution as well as optimism" — costs scale down *and* up, but inefficiencies are punished with disproportionate bills at scale. **Three cost factors:** compute, storage, and outbound data transfer. The broader lens is **total cost of ownership (TCO)**: engineering (usually the largest cost — the humans), delivery, operations (the monthly bill), and maintenance.
+
+- **Compute** — Lambda is "rarely the most expensive line"; priced on requests + duration. "The cheapest Lambda function is one that is never invoked" — block invalid invocations at the API Gateway. Step Functions **standard** is billed per state transition (each retry = an extra transition); **express** per request + duration.
+- **Storage** — S3 priced by size × duration × storage class; use lifecycle policies and TTL. DynamoDB billed on requests + storage with **on-demand** vs. **provisioned** modes.
+
+<Callout type="go" title="Key insight">
+Build a **cost-awareness culture (FinOps)**: estimate costs in solution designs, annotate diagrams, give every engineer access to Cost Explorer, identify the top three costs monthly, and set **AWS Budgets** alerts (80/90/100%) plus **Cost Anomaly Detection**. "You build it, you pay for it."
+</Callout>
+
+## Recovery and resilience
+
+Two failure categories: **transient faults** (auto-retried with exponential backoff and jitter) and **permanent faults** (retries exhausted → DLQs, restore from backup). Push retry/backoff into **Step Functions** rather than functions, eliminate single points of failure, and use the **core analysis loop**: verify the problem on the health dashboard → find outliers → filter wider telemetry → remedy or loop.
+
+<Mermaid code={String.raw`graph LR
+  V["Verify on health dashboard"] --> O["Find outliers"]
+  O --> F["Filter wider telemetry"]
+  F --> R{"Remedy found?"}
+  R -- Yes --> X["Remediate"]
+  R -- No --> V`} />
+
+## See also
+
+- [Testing serverless](/cloud/testing-serverless/) — observe and recover complete the square of balance.
+- [The Well-Architected lens](/cloud/the-well-architected-lens/) — the operational excellence, reliability, and cost pillars.
+- [Event-driven serverless patterns](/cloud/event-driven-serverless-patterns/) — the integrations you instrument.

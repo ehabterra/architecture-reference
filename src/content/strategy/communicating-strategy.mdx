@@ -1,0 +1,134 @@
+---
+title: "Communicating Strategy"
+category: path-strategy
+kind: topic
+order: 8
+difficulty: "Advanced"
+status: ready
+intent: "Winning approval is its own discipline — the 30-second answer, Ars Rhetorica, dramatic structure, the meeting before the meeting, and the Ask Deck that turns analysis into funded action."
+book: "Technology Strategy Patterns (Eben Hewitt)"
+related:
+  - what-is-technology-strategy
+  - analyzing-strategy
+  - communicating-with-the-organization
+when_use:
+  - "When you must ask an executive body for money and want a 'yes' on slide one."
+  - "When a cold or skeptical audience could derail your meeting."
+  - "When you need to structure a recommendation as a persuasive narrative, not a data dump."
+when_avoid:
+  - "When you lead with pathos for a decision that calls for logos (a CIO writing a check)."
+  - "When you 'blind with science' to appear unchallengeable rather than to inform."
+  - "When you skip 'the meeting before the meeting' and let drama erupt in the room."
+quiz:
+  - q: "What is the structure of the '30-Second Answer'?"
+    options:
+      - text: "A simple declarative answer, then three high-level supporting points, then stop talking and let them drill down"
+        correct: true
+      - text: "A detailed technical explanation followed by a Q&A"
+        correct: false
+      - text: "Three caveats followed by 'it depends'"
+        correct: false
+      - text: "A full slide deck walked through linearly"
+        correct: false
+    explain: "Executives are time-starved and need direction. Picture one slide — a headline plus three points in 30-pt font — then stop and let them choose what to drill into."
+  - q: "In Ars Rhetorica, which appeal is right for asking a CIO to approve a budget?"
+    options:
+      - text: "Logos — logical charts, data, reasoning, and probabilities"
+        correct: true
+      - text: "Pathos — emotional appeal"
+        correct: false
+      - text: "Ethos alone — credibility with no data"
+        correct: false
+      - text: "All three weighted equally in every setting"
+        correct: false
+    explain: "Pathos suits town halls and demos, not a CIO's check; that decision wants logos. Ethos (credibility, the basis of PageRank) underpins all of it — 'you can use facts and logic, be right, and still lose'."
+  - q: "What is the purpose of 'The Meeting Before the Meeting' (Fait Accompli)?"
+    options:
+      - text: "To 'suck the drama out of your own meeting' by interviewing key stakeholders and incorporating their ideas first"
+        correct: true
+      - text: "To rehearse the slides with your own team"
+        correct: false
+      - text: "To get the agenda approved by HR"
+        correct: false
+      - text: "To shorten the real meeting to 15 minutes"
+        correct: false
+    explain: "People don't dislike change; they dislike change imposed on them. Interview the most-affected stakeholders, fold in their ideas, then credit them in the room to create an 'echo chamber of support'."
+  - q: "How is the Ask Deck's first slide ('the ask') written?"
+    options:
+      - text: "It is written last — a single-sentence headline of exactly what you want, with the number up front, aiming for a 'yes' on slide one"
+        correct: true
+      - text: "It is written first and kept vague to build suspense"
+        correct: false
+      - text: "It hides the cost until the appendix"
+        correct: false
+      - text: "It lists every technical detail before the ask"
+        correct: false
+    explain: "Execs flip to the back for the number anyway, so give it up front. Hewitt claims that with the Dramatic Structure (status quo → inciting incident → plan → shock and awe) he has 'never been told no'."
+takeaway: "Communicating strategy is theater with a budget: answer in 30 seconds, use logos/ethos/pathos for the right room, hold the meeting before the meeting, and ask for the money on slide one."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🎭 Analogy">
+Aristotle's *Poetics* gave us the five-part plot — status quo, inciting incident, problem, battle, resolution. The Lion King is Hamlet; your funding request is a story too. Hewitt's lesson: "you can use facts and logic, and be right, and still lose." Analysis earns you the right to speak; rhetoric earns you the budget.
+</Callout>
+
+The 20 communication patterns turn analysis into funded action. They divide into **approach patterns** (mental models), **templates** (spreadsheets and slides), and **decks** (frameworks for executive requests) — all serving the two culminating artifacts, the **Strategy Deck** and the **Ask Deck**.
+
+## Approach: how to talk to power
+
+- **30-Second Answer** — executives need *direction*. Give a simple declarative answer, then three high-level points (one slide, 30-pt font), then **stop talking** and let them drill down. The boss almost always wants one of three things: status, whether they need to help, or your recommendation. Avoid the cliché "it depends."
+- **Ars Rhetorica** — Aristotle's three appeals: **Logos** (charts, data, reasoning, probabilities), **Ethos** (credibility and trust — the basis of Google's PageRank), and **Pathos** (emotion — for town halls and demos, *not* for a CIO's check). Match the appeal to the room.
+
+<Mermaid code={String.raw`graph TD
+  ET["Ethos<br/>credibility"] -->|"underpins all"| MSG["The message"]
+  LO["Logos<br/>data and reasoning"] -->|"for a CIO's check"| MSG
+  PA["Pathos<br/>emotion"] -->|"for town halls and demos"| MSG
+  MSG -->|"match appeal to room"| WIN["Approval"]`} />
+- **Fait Accompli** — handle the deciding meeting by holding **the meeting before the meeting**. People don't dislike change; they dislike change *imposed* on them. Interview the most-affected stakeholders (include the grumblers), fold in their ideas, then credit them in the room to build an "echo chamber of support." Be the "guide at their side," not the "sage on the stage."
+
+<Callout type="gotcha" title="⚠️ Logical fallacies to avoid">
+Watch for <strong>HIPPO</strong> (Highest Paid Person's Opinion — the blind-authority fallacy), <strong>blinding with science</strong> (burying execs in acronyms to seem unchallengeable; the antidote is genuine curiosity — "explain it to me like I'm 10"), <strong>ad hominem</strong>, <strong>affirming the consequent</strong>, and <strong>post hoc ergo propter hoc</strong>. Being right is not the same as winning.
+</Callout>
+
+## Dramatic structure
+
+The **Ask Deck** is a story in four stages:
+
+<Mermaid code={String.raw`graph LR
+  SQ["Establish the<br/>Status Quo"] --> II["Inciting Incident<br/>(what if we do nothing?)"]
+  II --> PL["The Plan<br/>(the 'therefore' moment)"]
+  PL --> SA["Shock and Awe<br/>(true brutal facts)"]
+  SA --> ASK["The Ask<br/>(ask for the decision)"]`} />
+
+- **Establish the Status Quo** — common ground, shared goals, current-state architecture.
+- **Create an Inciting Incident** — show, with real data, what happens if you do nothing. The bad outcome always reduces to one of **five stories**: costs up / quality down; slower to market and competition wins; lose this revenue opportunity; lose these key customers; lose these key employees.
+- **The Plan** — the "therefore" moment: a one-sentence goal, changes across people/process/technology, and **Directional Costing**.
+- **Shock and Awe** — overwhelm with brutal but *only true* facts, then state your **definition of done**, how you'll **measure success**, and the **reporting structure**.
+
+<Callout type="go" title="🔑 Directional costing beats false precision">
+Technologists estimate badly (writing code is ~33% of the work). Refuse single-number death-march estimates. Give a funnel with stage gates: <strong>Rough</strong> (~±50%, a few days), <strong>Refined</strong> (~±25%, a couple weeks), <strong>Realistic</strong> (~±5–10%, after the architecture definition). Often the exec just wants to know "is it $1M or $10M?"
+</Callout>
+
+## The Ask Deck
+
+The deck that asks for money, built from a **Ghost Deck** (headlines only, no data yet — if the audience believed only the headlines, they'd have the whole story). Its structure:
+
+- **The ask** (first slide, written *last*) — one sentence of exactly what you want, with the number up front. Execs flip to the back anyway, so give it on slide one. Goal: a "yes" on slide one.
+- **Imperil the hero** — Shock and Awe; show the dire situation.
+- **Let the data drive** — objective data so any reasonable person reaches the same conclusion (logos).
+- **Save the hero** — the path forward / roadmap: how long, how much, who does the work.
+- **The ask, again** — explicitly ask for the decision; salespeople always ask for the sale.
+- **Appendix** — all the substantiating charts.
+
+Size the main deck at **12–15 slides** (never past 18). With this structure, Hewitt claims he has "never been told no."
+
+<Callout type="tip" title="💡 Tell truth to power, like a Rented Brain">
+Pretend you're an outside consultant who can <strong>speak truth to power</strong> — tell leaders what they need to hear, not what they want. And use a <strong>MergeSort Meeting</strong> to defeat groupthink: gather everyone's <em>independent</em> lists first, then merge and prioritize them.
+</Callout>
+
+## See also
+
+- [What is technology strategy?](/strategy/what-is-technology-strategy/) — why the Ask Deck is the point of the whole exercise.
+- [Analyzing strategy](/strategy/analyzing-strategy/) — the analysis that fills the deck's body.
+- [Communicating with the organization](/strategy/communicating-with-the-organization/) — Hohpe's complementary take on rhetoric and questions.

@@ -1,0 +1,132 @@
+---
+title: "API Versioning and Evolution"
+category: api-design
+kind: topic
+order: 3
+difficulty: "Intermediate"
+status: ready
+intent: "Plan for change with semantic versioning, additive backward-compatible changes, and automated diff tooling — so consumers track only the major version."
+book: "Mastering API Architecture; RESTful Web API Patterns and Practices Cookbook"
+related:
+  - designing-good-apis
+  - api-styles-overview
+  - api-gateways
+when_use:
+  - "You must change a consumer-facing API that other teams or partners depend on."
+  - "You want a build-time gate that catches accidental breaking changes."
+  - "You are deciding how to expose a version to consumers (URL vs header)."
+when_avoid:
+  - "An internal API with one consumer you redeploy in lockstep — coordination is cheaper than versioning machinery."
+  - "Over-granular versioning (v1.1.1, v1.1.2) where a stable identifier per breaking change is enough."
+quiz:
+  - q: "In semantic versioning (Major.Minor.Patch), which change requires consumers to take active action?"
+    options:
+      - text: "A Major change — it is non-backward-compatible"
+        correct: true
+      - text: "A Minor change"
+        correct: false
+      - text: "A Patch change"
+        correct: false
+      - text: "All version bumps require active action"
+        correct: false
+    explain: "Major = non-compatible (active consumer decision, usually with a migration guide). Minor = backward-compatible. Patch = bug fixes, no new functionality."
+  - q: "Renaming a response field from givenName to firstName is classified as what?"
+    options:
+      - text: "A breaking change — consumers parsing givenName will fail"
+        correct: true
+      - text: "A backward-compatible change"
+        correct: false
+      - text: "A patch"
+        correct: false
+      - text: "An internal-only change"
+        correct: false
+    explain: "openapi-diff reports a renamed/removed property as breaking. Adding a new optional field (e.g. age) is backward-compatible."
+  - q: "Combined with the API Lifecycle, what should a consumer typically need to track?"
+    options:
+      - text: "Only the major version — there should ever be only one live API"
+        correct: true
+      - text: "Every patch release"
+        correct: false
+      - text: "The exact build hash"
+        correct: false
+      - text: "Both the deployed and released version separately"
+        correct: false
+    explain: "With semantic versioning plus the API Lifecycle (Planned → Beta → Live → Deprecated → Retired), consumers only need awareness of the major version."
+  - q: "Why is gRPC versioning even more demanding than REST/OpenAPI?"
+    options:
+      - text: "Field numbers govern the binary wire layout, so renumbering or retyping a field breaks compatibility"
+        correct: true
+      - text: "gRPC has no schema"
+        correct: false
+      - text: "gRPC cannot add new methods"
+        correct: false
+      - text: "REST ignores all field changes"
+        correct: false
+    explain: "In gRPC, removing/renaming/retyping/renumbering a field is breaking; you may only add a service, method, or non-mandatory field — far stricter than REST."
+takeaway: "Plan versioning before you need it: semver, additive changes, openapi-diff in the pipeline, and run one live major version with a deprecated predecessor."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🚇 Analogy">
+Versioning an API is like renovating a busy train station while trains keep running. You cannot just demolish platform 1 and send everyone home — you build the new platform alongside the old, signpost the migration, run both for a while, and only close the old one once everyone has moved. Slam the doors early and you strand the passengers who never agreed to your schedule.
+</Callout>
+
+## The three upgrade options
+
+When a change is requested, *Mastering API Architecture* identifies three immediate options — and you usually need a blend of all three, which is exactly why you need versioning rules:
+
+1. **New version at a new location** — old consumers keep using the old version; the producer must maintain and patch multiple versions.
+2. **A new backward-compatible version** — additive changes only; even correcting a field *name* breaks this.
+3. **Break compatibility, force everyone to upgrade** — risky, can trigger a coordinated lockstep change with downtime; sometimes unavoidable.
+
+## Semantic versioning
+
+Use `Major.Minor.Patch` (semver.org), classified by the *nature* of the change:
+
+- **Major** — non-compatible changes; upgrading is an **active** consumer decision (migration guide, tracking).
+- **Minor** — backward-compatible; consumers may receive it without changing their code.
+- **Patch** — bug fixes on an existing `Major.Minor`, no new functionality.
+
+<Mermaid code={String.raw`graph LR
+  P["Planned"] --> B["Beta<br/>(may break, unversioned)"]
+  B --> L["Live<br/>(versioned, ONE live API)"]
+  L --> D["Deprecated<br/>(usable, no new dev)"]
+  D --> R["Retired<br/>(removed)"]`} />
+
+Combined with the **API Lifecycle** (Planned → Beta → Live → Deprecated → Retired), a consumer only ever needs to be aware of the **major** version, and there should only ever be **one live API**. Major changes mean running the **live and deprecated** versions in parallel for a significant time; minor and patch changes can be released transparently.
+
+## Catch breaking changes automatically
+
+Put a diff tool such as **openapi-diff** into the build pipeline so accidental breaks fail the build:
+
+- Renaming `givenName` → `firstName`: reported as **"Missing property"** and *"API changes broke backward compatibility."*
+- Adding a new field `age`: reported as *"API changes are backward compatible."*
+
+<Mermaid code={String.raw`graph TD
+  Change["Proposed API change"] --> Q{"Backward compatible?"}
+  Q -->|"add optional field"| Minor["Minor bump<br/>release transparently"]
+  Q -->|"bug fix only"| Patch["Patch bump<br/>release transparently"]
+  Q -->|"rename, remove, retype"| Major["Major bump<br/>migration guide, run two versions"]`} />
+
+<Callout type="gotcha" title="Diff tools are version-specific">
+Tooling is often tied to a particular OpenAPI version — an older spec version may fail to detect a real breaking change. Verify the tool supports your spec version before trusting its verdict.
+</Callout>
+
+## Exposing the version
+
+For major changes you can put the version **in the URL** (`GET /v1/attendees`) — practical and visible, though not strictly part of the resource — or **in a header** (`Version: v1`), which influences routing at the [gateway](/apis/api-gateways/) ingress. Either way, run live and deprecated versions simultaneously.
+
+## gRPC is stricter
+
+Binary protocols are unforgiving. In gRPC, **field numbers identify fields on the wire**, so removing, renaming, retyping, or renumbering a field breaks compatibility. You may safely add a new service, a new method, or a new **non-mandatory** field — that is all. REST/OpenAPI, by contrast, treat the spec as "only a guide": extra fields and ordering do not matter, so REST tolerates additive change more gracefully.
+
+## Evolve, don't fork casually
+
+The Cookbook's complement is **"Don't change it, add it"** and the **Hippocratic Oath of APIs**: take nothing away, don't redefine things, make additions optional. When a truly breaking change is unavoidable, **fork** the interface — publish the new one and run both in parallel during migration. Beware **Hyrum's Law**: *"all observable behaviours of your system will be depended on by somebody."* Documentation is necessary but insufficient; run the existing test suite against the new interface to be sure.
+
+## See also
+
+- [Designing good APIs](/apis/designing-good-apis/) — building evolvability in from the start.
+- [API styles overview](/apis/api-styles-overview/) — why gRPC and REST evolve differently.
+- [API gateways](/apis/api-gateways/) — routing live and deprecated versions side by side.

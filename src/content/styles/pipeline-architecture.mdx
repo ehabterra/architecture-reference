@@ -1,0 +1,154 @@
+---
+title: "Pipeline Architecture"
+category: sty-monolithic
+kind: topic
+order: 5
+difficulty: "Beginner"
+status: ready
+intent: "The pipes-and-filters monolith — stateless single-task filters connected by one-way pipes, behind Unix shells, ETL, and stream processing."
+book: "Fundamentals of Software Architecture; Software Architecture Patterns (2nd ed.)"
+related:
+  - layered-architecture
+  - microkernel-architecture
+  - event-driven-architecture
+  - comparing-the-styles
+when_use:
+  - "You are building ETL, EDI, stream processing, or an orchestrator/mediator workflow."
+  - "Processing is a one-way sequence of discrete transformation and filtering steps."
+  - "You want high compositional reuse and easy extensibility from small, stateless parts."
+when_avoid:
+  - "You need high scalability, elasticity, or fault tolerance — it is a single-quantum monolith."
+  - "Processing is bidirectional, conversational, or requires shared mutable state across steps."
+  - "The workflow is highly interactive and request-response rather than a flow."
+quiz:
+  - q: "What are the two core building blocks of a pipeline architecture?"
+    options:
+      - text: "Pipes (one-way channels) and filters (self-contained processing units)"
+        correct: true
+      - text: "Layers and contracts"
+        correct: false
+      - text: "Core and plug-ins"
+        correct: false
+      - text: "Processors and brokers"
+        correct: false
+    explain: "Pipes are unidirectional point-to-point channels; filters are self-contained, independent, stateless, single-task units connected by those pipes."
+  - q: "Which filter type is the starting point that only sends output?"
+    options:
+      - text: "Producer"
+        correct: true
+      - text: "Transformer"
+        correct: false
+      - text: "Tester"
+        correct: false
+      - text: "Consumer"
+        correct: false
+    explain: "A producer is the source (outbound only); a transformer maps input to output; a tester filters; a consumer terminates the flow by persisting or displaying."
+  - q: "Why are filters required to be stateless and single-task?"
+    options:
+      - text: "So they can be modified, replaced, and recomposed independently — high compositional reuse"
+        correct: true
+      - text: "To make the system distributed"
+        correct: false
+      - text: "To allow two-way communication"
+        correct: false
+      - text: "To avoid using pipes"
+        correct: false
+    explain: "Statelessness and single responsibility are what let you add or swap a filter without touching others — the property celebrated in the 'more shell, less egg' story."
+  - q: "Why does pipeline score low on scalability and fault tolerance?"
+    options:
+      - text: "It is a monolith — a single deployment unit and single quantum"
+        correct: true
+      - text: "Its filters are too large"
+        correct: false
+      - text: "It uses too many network calls"
+        correct: false
+      - text: "Pipes are too slow"
+        correct: false
+    explain: "Like other monoliths it deploys as one unit, so it shares layered's weak scalability/elasticity/fault-tolerance, though its filter modularity gives slightly better deployability and testability."
+takeaway: "Compose one-way processing from stateless single-task filters joined by pipes — perfect for ETL and streams, still a low-scale monolith."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A pipeline is an assembly line — or a kitchen brigade. Raw ingredients enter at one end; each station does exactly one thing (wash, chop, sauté, plate) and passes the result to the next. No station reaches back upstream or knows the whole recipe. Rearrange or insert a station and the line still flows, because each only depends on what arrives in front of it.
+</Callout>
+
+## Topology
+
+The **pipeline (pipes-and-filters)** architecture composes one-way processing out of **filters** connected by **pipes**. It is the principle behind Unix shells, MapReduce, ETL tools, and orchestration engines, and it is a technically partitioned monolith.
+
+- **Pipes** — unidirectional, point-to-point communication channels between filters. Small payloads are favored for performance.
+- **Filters** — self-contained, independent, **stateless**, single-task units.
+
+There are four filter types:
+
+- **Producer** — the source; the starting point, outbound only.
+- **Transformer** — input → optional transform → output (the functional *map*).
+- **Tester** — input → test criteria → optional output (akin to functional *reduce/filter*).
+- **Consumer** — the termination point; persists to a database or displays.
+
+<Mermaid code={String.raw`graph LR
+  P["Producer<br/>Service Info Capture"] --> T1["Tester<br/>Duration Filter"]
+  T1 --> Tr1["Transformer<br/>Duration Calculator"]
+  P --> T2["Tester<br/>Uptime Filter"]
+  T2 --> Tr2["Transformer<br/>Uptime Calculator"]
+  Tr1 --> C["Consumer<br/>Database Output"]
+  Tr2 --> C`} />
+
+## Why one-way flow matters
+
+The unidirectional, stateless design encourages **compositional reuse**. The book's "More Shell, Less Egg" anecdote captures it: Donald Knuth wrote 10+ pages of Pascal for a word-frequency task that Doug McIlroy solved with a six-line shell pipeline of standard filters. Because each filter does one thing and holds no state, you assemble solutions by composing existing parts.
+
+<Callout type="go" title="Extensibility by insertion">
+Adding behavior often means inserting a new tester or transformer filter into the flow without touching the others. A telemetry pipeline can gain a new metric by adding one tester-plus-transformer branch off the producer — the existing branches are untouched.
+</Callout>
+
+The four filter types compose into any flow:
+
+<Mermaid code={String.raw`graph LR
+  Pr["Producer<br/>(source, outbound only)"] --> Tr["Transformer<br/>(map: in to out)"]
+  Tr --> Te["Tester<br/>(filter: pass/drop)"]
+  Te --> Co["Consumer<br/>(sink: persist/display)"]`} />
+
+## Common uses
+
+EDI tools, ETL processing, orchestrators and mediators (e.g., Apache Camel), and stream processing (e.g., service telemetry streamed through Kafka to MongoDB).
+
+## Characteristics
+
+| Characteristic | Rating |
+|---|---|
+| Partitioning | Technical |
+| Overall cost | $ (low) |
+| Simplicity | High |
+| Modularity | 3 / 5 (better than layered) |
+| Deployability | 3 / 5 |
+| Testability | 3 / 5 |
+| Scalability | 1 / 5 |
+| Elasticity | 1 / 5 |
+| Fault tolerance | 1 / 5 |
+
+Its strengths are **cost, simplicity, and modularity** — the separation of concerns into filters lets each be modified or replaced independently, earning slightly higher deployability and testability than layered. But it is still a monolith (one quantum): a fatal error in any filter brings down the process, MTTR is measured in minutes, and scaling means replicating the whole pipeline.
+
+<Callout type="gotcha" title="A pipeline is not an event-driven system">
+Pipes look like message channels, but pipeline is a synchronous, single-deployment-unit monolith. If you need decoupled, asynchronous, independently scalable processors with fault tolerance, you want [event-driven architecture](/styles/event-driven-architecture/), not a pipeline — though the two combine well.
+</Callout>
+
+## When to use it
+
+- Building **ETL, EDI, stream processing, or orchestration** workflows.
+- Processing is a **one-way sequence** of discrete transform/filter steps.
+- You want high **compositional reuse** and **extensibility** from small parts.
+
+## When to avoid it
+
+- You need high **scalability, elasticity, or fault tolerance**.
+- Processing is **bidirectional or conversational**, or steps share mutable state.
+
+## See also
+
+- [Layered architecture](/styles/layered-architecture/) — the other simple technical monolith.
+- [Microkernel architecture](/styles/microkernel-architecture/) — extensibility via plug-ins instead of filters.
+- [Event-driven architecture](/styles/event-driven-architecture/) — the distributed, asynchronous cousin.
+- [Comparing the styles](/styles/comparing-the-styles/) — pipeline on the full scorecard.

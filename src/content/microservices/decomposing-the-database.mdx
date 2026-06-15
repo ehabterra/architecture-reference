@@ -1,0 +1,138 @@
+---
+title: "Decomposing the Database"
+category: ms-decomposition
+kind: topic
+order: 6
+difficulty: "Advanced"
+status: ready
+intent: "Microservices must own their data, so migration means splitting the shared database — coping patterns, ownership transfer, and the hard losses of joins, foreign keys, and ACID transactions."
+book: "Monolith to Microservices (Sam Newman)"
+related:
+  - the-strangler-fig-pattern
+  - migration-patterns
+  - handling-data-consistency
+when_use:
+  - "You are giving each service ownership of its own data."
+  - "You need stepping-stone patterns when the schema is too hard to split right now."
+  - "You must decide whether to split the schema first or the code first."
+when_avoid:
+  - "You can keep state and its managing logic together in one service — then don't split the data at all."
+  - "You are tempted to split database and code simultaneously (avoid)."
+quiz:
+  - q: "What is the only generally acceptable use of a directly shared database?"
+    options:
+      - text: "Read-only static reference data, or a deliberately-exposed managed read-only endpoint"
+        correct: true
+      - text: "Any data two services both read"
+        correct: false
+      - text: "Frequently-changing order data"
+        correct: false
+      - text: "Whenever joins are needed for performance"
+        correct: false
+    explain: "Sharing is acceptable only for read-only static reference data (country/currency codes) or a database-as-a-service interface deliberately exposed and managed."
+  - q: "What does Newman recommend for a foreign-key relationship that spans two future services?"
+    options:
+      - text: "Move the join into application code, accept added latency, and choose a deletion-handling strategy"
+        correct: true
+      - text: "Keep the foreign key and share the table"
+        correct: false
+      - text: "Use a distributed transaction to enforce it"
+        correct: false
+      - text: "Duplicate the entire referenced table"
+        correct: false
+    explain: "The join moves from the data tier into code (latency rises — mitigate with caching/bulk lookups); favor 'don't delete' plus 'handle missing gracefully' (e.g., HTTP 410 GONE), never 'check before deletion'."
+  - q: "Which sequencing does Newman strongly advise against?"
+    options:
+      - text: "Splitting database and code together at the same time"
+        correct: true
+      - text: "Splitting the schema first"
+        correct: false
+      - text: "Splitting the code first"
+        correct: false
+      - text: "Database per bounded context for new systems"
+        correct: false
+    explain: "Splitting both at once is a much bigger step, slower to assess; split one then the other."
+  - q: "What replaces ACID transactions that spanned the now-split boundary?"
+    options:
+      - text: "Sagas (compensating transactions) — avoid distributed transactions / two-phase commit"
+        correct: true
+      - text: "Two-phase commit across services"
+        correct: false
+      - text: "Locking all databases simultaneously"
+        correct: false
+      - text: "Disabling consistency checks entirely"
+        correct: false
+    explain: "Splitting loses whole-operation atomicity; Newman strongly avoids 2PC and prefers sagas."
+takeaway: "Give each service its own data: use views/wrappers as stepping stones, move joins and FKs into code, split schema-first when you can, and replace lost ACID atomicity with sagas — never 2PC."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Splitting a shared database is like dividing a house where everyone shared one filing cabinet. Handing each person their own drawer is easy; untangling documents that reference each other — a lease pointing to a tenant record now in someone else's drawer — is the hard part. You lose the convenience of reaching into any folder, and you must agree who owns each piece of paper.
+</Callout>
+
+## Why this is the hard part
+
+Microservices work best when they fully **encapsulate their own data**. A **shared database** is the most common form of *implementation coupling*: you can't tell what's safe to change, who controls the data, and business logic smears across services (if three services all change order data, behaviour drifts and every change touches all three). "Database" here means a logically isolated schema.
+
+<Callout type="gotcha" title="⚠️ The database as an accidental public contract">
+A bank's credit-derivative system had 20+ external apps reading its schema via one shared login. They disabled the account and waited for complaints — most consumers were unmaintained, so the *schema itself* had silently become a frozen public contract no one could change. Give each consumer distinct, short-lived, scoped credentials, and never let your tables leak out as an interface.
+</Callout>
+
+## Coping patterns (stepping stones, not destinations)
+
+When you can't split the schema yet:
+
+- **Database View** — present a limited, usually read-only projection that hides what a consumer shouldn't see; change your own schema freely as long as you maintain the view. Limits: typically read-only, usually same engine, single point of failure.
+- **Database Wrapping Service** — hide the schema behind a thin service, converting DB dependencies into service dependencies. Unlike a view it can take **writes** and richer projections; it stops dependence growing and buys breathing room (an Australian bank wrapped a 30-year-old entitlements schema buckling under load).
+- **Database-as-a-Service Interface** — a dedicated **read-only** database exposed as an endpoint, populated by a mapping engine (prefer **change data capture**, e.g. Debezium). Fowler's "reporting database," renamed; great for reporting clients that join across lots of a service's data.
+
+## Transferring ownership
+
+- **Aggregate Exposing Monolith** — the new service needs data the monolith still owns; expose it via a proper API or event stream (the monolith still owns allowed state changes). Defining the need reveals future boundaries.
+- **Change Data Ownership** — the inverse: move the data into the extracted service and make the monolith treat that service as the **source of truth**. Clear-cut when the extracted service owns the logic that *changes* the data.
+
+## Split the schema first, or the code first?
+
+<Mermaid code={String.raw`graph TD
+  Q{"Can you change the monolith,<br/>and worry about performance<br/>or consistency?"}
+  Q -->|Yes| SF["Split schema FIRST<br/>surfaces join/transaction issues early<br/>repository / database per bounded context"]
+  Q -->|No| CF["Split code FIRST<br/>(most teams) — monolith as data-access layer,<br/>multischema storage"]
+  SF --> BOTH["Avoid splitting<br/>code AND schema together"]
+  CF --> BOTH`} />
+
+- **Split schema first** if you can change the monolith and worry about performance/consistency — it surfaces join and transaction problems early and lets you revert without affecting consumers. Patterns: **repository per bounded context**, then **database per bounded context** (Newman's near-default for *brand-new* systems).
+- **Split code first** (what most teams do) for a quick win, then split the DB; risk is stopping with a shared database forever. Patterns: **monolith as data-access layer**, **multischema storage** (new data the service creates goes in its own schema even while still reading the monolith's).
+- **Split both at once** — strongly avoid; too big a step to assess.
+
+## The low-level losses
+
+- **Joins** move from the data tier into **application code** — query for keys, then call the owning service. Latency rises; mitigate with caching or **bulk lookups**, and measure with distributed tracing.
+
+<Mermaid code={String.raw`graph TD
+  subgraph Before["Before — DB join (one query)"]
+    Q1["SELECT ... JOIN catalog ON ..."] --> DB1[("Shared DB")]
+  end
+  subgraph After["After — join in code"]
+    F["Finance service"] -->|"1. get album IDs"| FDB[("Finance DB")]
+    F -->|"2. fetch names (network call)"| Cat["Catalog service"]
+    Cat --> CDB[("Catalog DB")]
+  end`} />
+- **Foreign keys** — when an FK spans two services, do the join in code and pick a deletion strategy. Newman's choice: **both** disallow deletion (soft delete) *and* handle missing records gracefully (Finance shows "Album Information Not Available"; Catalog returns HTTP **`410 GONE`** to track inconsistencies). **Never** "check before deletion" (race conditions, distributed locks).
+- **Don't split an aggregate** — Order and Order Lines move together; only split genuinely separate aggregates.
+- **Transactions** — splitting loses whole-operation **atomicity**. Each service keeps local ACID, but the operation as a whole no longer rolls back together.
+
+<Callout type="tip" title="💡 Keep data in sync during the transition">
+While migrating state you often need two stores in sync. Use **Synchronize Data in Application** (bulk-copy a snapshot, then apply changes via CDC; write to both, read from old, then read from new) or **Tracer Write** (tolerate two sources of truth temporarily, growing the synced data and consumers over time — Square's Fulfillments service is the canonical example). Prefer write-to-one or write-to-both over **two-way sync** (very hard), and always run a **reconciliation** process — you only get eventual consistency.
+</Callout>
+
+<Callout type="go" title="🔑 Key insight">
+Don't reach for distributed transactions / two-phase commit. Either keep the state and its managing logic in one service (don't split the data), or model the cross-service process as a [saga](/microservices/sagas/).
+</Callout>
+
+## See also
+
+- [The strangler fig pattern](/microservices/the-strangler-fig-pattern/) — extracting the code half of a service.
+- [Migration patterns](/microservices/migration-patterns/) — branch by abstraction, parallel run, CDC.
+- [Handling data consistency](/microservices/handling-data-consistency/) — life after ACID across boundaries.

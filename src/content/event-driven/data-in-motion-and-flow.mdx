@@ -1,0 +1,123 @@
+---
+title: "Data in Motion and the World Wide Flow"
+category: ed-datamesh
+kind: topic
+order: 12
+difficulty: "Advanced"
+status: ready
+intent: "Unifying operational and analytical planes with data in motion, integrating with data at rest, and Urquhart's vision of a standards-based World Wide Flow linking activity across organizations."
+book: "Building an Event-Driven Data Mesh (Adam Bellemare); Flow Architectures (James Urquhart)"
+related:
+  - data-mesh-principles
+  - data-products
+  - coupling-and-asynchrony-tradeoffs
+when_use:
+  - "You want one source feeding both real-time operations and batch analytics"
+  - "You must integrate streams with existing data-at-rest pipelines (Parquet, warehouses)"
+  - "You are positioning for cross-organization, event-driven integration"
+when_avoid:
+  - "A batch workflow already works 'well enough' and has no bad-data or latency pain"
+  - "Cross-org integration needs an immediate synchronous response (use an API)"
+  - "Standards and provenance for external flow aren't mature enough for your risk tolerance"
+quiz:
+  - q: "How do event streams change the analytical (data-at-rest) workflow?"
+    options:
+      - text: "Streams become the source via sink connectors, replacing custom ETLs and pushing quality upstream to the owner"
+        correct: true
+      - text: "They eliminate the need for any storage"
+        correct: false
+      - text: "They force all analytics to be real-time"
+        correct: false
+      - text: "They remove the need for ownership"
+        correct: false
+    explain: "Consumers mainly configure sink connectors; data engineers are freed to build the platform, and the same source feeds both operational and analytical use — killing the 'similar-yet-different' problem."
+  - q: "Urquhart defines 'flow' as…"
+    options:
+      - text: "Networked software integration that is event-driven, loosely coupled, and highly adaptable, defined principally by standard interfaces and protocols"
+        correct: true
+      - text: "Any use of a message queue"
+        correct: false
+      - text: "Synchronous request-response over HTTP"
+        correct: false
+      - text: "Batch file transfer between companies"
+        correct: false
+    explain: "Flow's defining traits: consumers self-serve stream requests, producers choose what to accept, data is pushed (not polled), and it travels over standard protocols."
+  - q: "Why do request-response APIs NOT meet the definition of flow?"
+    options:
+      - text: "They give no advance signal of data availability and are not push-based self-service streams"
+        correct: true
+      - text: "They are too slow"
+        correct: false
+      - text: "They cannot use TLS"
+        correct: false
+      - text: "They are proprietary"
+        correct: false
+    explain: "Flow pushes data automatically once connected; an API requires the consumer to poll and offers no signal that new data exists."
+  - q: "The five properties businesses will require from flow are…"
+    options:
+      - text: "Security, Agility, Timeliness, Manageability, and Memory"
+        correct: true
+      - text: "Speed, Cost, Size, Color, and Weight"
+        correct: false
+      - text: "Consistency, Availability, Partition-tolerance, Latency, Durability"
+        correct: false
+      - text: "Bronze, Silver, Gold, Platinum, Diamond"
+        correct: false
+    explain: "Memory — the ability to replay streams in order — is the property most directly enabled by the durable log."
+takeaway: "Keep data in motion so one source serves operations and analytics; integrate with data at rest via connectors, and prepare for a standards-based World Wide Flow across organizations."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+For decades, sharing data between companies has been like mailing photocopies: slow, lossy, and formatted however the sender felt like. The World Wide Flow is what the World Wide Web did for *documents*, applied to *activity* — once there's a standard way to publish and subscribe to a live stream, linking your real-time data to anyone else's becomes as cheap as sharing a URL.
+</Callout>
+
+## Data in motion unifies the two planes
+
+Historically, organizations ran two separate worlds: the **operational plane** (OLTP databases powering services) and the **analytical plane** (OLAP warehouses fed by batch ETL). They drifted into "similar-yet-different" sources of truth — Bellemare's advertising case study shows finance and analytics billing a partner for *different* engagement counts because they computed independently from the same clicks, differing on session definitions and unique-user attribution.
+
+<Mermaid code={String.raw`graph TD
+  subgraph Before["Two planes, divergent truth"]
+    Clk1["Clicks"] --> Fin["Finance computes count A"]
+    Clk1 --> An["Analytics computes count B"]
+    Fin -.->|"A ≠ B"| Bug["Conflicting bills"]
+  end
+  subgraph After["One source in motion"]
+    Clk2["Click events (data product)"] --> Both["Finance AND analytics<br/>share one count"]
+  end`} />
+
+Event streams collapse the divide. Because a stream is durable, replayable, and low-latency, it serves **both** real-time operations and batch analytics from **one source of truth**. The principle: **"data that starts in motion simply stays in motion"** — promote the click events to a **source-aligned data product**, unify the duplicated logic upstream, and let both planes draw from it.
+
+<Callout type="go" title="The key insight">
+The architectural shift is that **event streams become the source of the batch workflow** via sink connectors, replacing custom ETLs. Quality and standardization move upstream to the owner; consumers mostly configure sink connectors; data engineers are freed to build the self-service platform.
+</Callout>
+
+## Integrating with data at rest
+
+"Meeting your users where they are" means integrating with existing batch pipelines rather than forcing everyone onto streams — Bellemare calls this the **acid test** of a genuine data communication layer. Mechanically: consume events, convert to a columnar format like **Parquet** (event formats like Avro/Protobuf are poor for big-data processing), and sink to cloud storage. Because frequent small files give low latency but slow, costly processing, a common technique is **post-connect file amalgamation** — write small files often, then recombine into large files on an hourly boundary and update the metastore.
+
+<Mermaid code={String.raw`graph TD
+  SRC["Operational source"] -->|"events"| STREAM["Event stream (source of truth)"]
+  STREAM -->|"low latency push"| OPS["Operational consumers (ms)"]
+  STREAM -->|"sink connector → Parquet"| LAKE["Cloud storage / lake"]
+  LAKE --> BATCH["Batch analytics / warehouse"]
+  STREAM -->|"db sink connector (UPSERT)"| LEGACY["Non-event-driven system"]`} />
+
+**Connectors are the vital bridge** between non-streaming systems and event-driven products — both *source* connectors (CDC, query-based) bringing legacy data in, and *sink* connectors (file, database) feeding data back out to systems that can't consume events.
+
+## The World Wide Flow
+
+James Urquhart's *Flow Architectures* extends the idea past the organization's walls. He defines **flow** as "networked software integration that is event-driven, loosely coupled, and highly adaptable," defined principally by **standard interfaces and protocols**. Its hallmarks: consumers self-serve stream requests, producers choose what to accept, data is **pushed** (not polled) once connected, and it travels over standard network protocols. Request-response APIs are explicitly *not* flow — they give no advance signal of data availability.
+
+Just as HTTP linked the world's *information* into the Web, Urquhart argues an emerging set of event interfaces and protocols (CNCF **CloudEvents** is an early piece) will create a **World Wide Flow (WWF)** linking the world's *activity* in real time — likely mainstream within five to ten years. Businesses will require five properties from it: **Security**, **Agility**, **Timeliness**, **Manageability**, and **Memory** (the replay of streams in order, exactly what a durable log provides).
+
+<Callout type="gotcha" title="Don't build flow as a solution looking for a problem">
+Urquhart's overriding caution: identify a real near-real-time business need *first*, adopt an **"event-first" strategy** for those integrations, and let flow *extend* existing applications rather than replace them. Building a new event architecture without a concrete pain point is the classic trap.
+</Callout>
+
+## See also
+
+- [Data mesh principles](/event-driven/data-mesh-principles/) — the ownership and governance foundation.
+- [Data products](/event-driven/data-products/) — the unit that flows between domains.
+- [Coupling and asynchrony trade-offs](/event-driven/coupling-and-asynchrony-tradeoffs/) — why push beats poll for timeliness.

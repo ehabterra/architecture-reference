@@ -1,0 +1,132 @@
+---
+title: "Creating Strategy"
+category: path-strategy
+kind: topic
+order: 7
+difficulty: "Intermediate"
+status: ready
+intent: "The creation patterns build a strategy's substance in concentric scopes — industry frameworks (SWOT, Porter's Five Forces, Ansoff) and corporate portfolio tools (BCG Growth-Share, APM, Value Chain)."
+book: "Technology Strategy Patterns (Eben Hewitt)"
+related:
+  - analyzing-strategy
+  - what-is-technology-strategy
+  - communicating-strategy
+when_use:
+  - "When assessing competitive advantage in your industry through a technology lens."
+  - "When rationalizing a portfolio of products or applications and deciding what to grow, retire, or modernize."
+  - "When choosing a growth avenue across the product × market grid."
+when_avoid:
+  - "When you treat a 2×2 matrix as a decision-maker rather than a guide — consultants 'adore' overlays."
+  - "When a tiny project needs only a few patterns, not the full concentric set."
+  - "When you claim 'cost savings' you never actually realize (call it benefit unless people leave payroll)."
+quiz:
+  - q: "What do Porter's Five Forces determine?"
+    options:
+      - text: "The competitive pressures on a business that determine its competitive advantage"
+        correct: true
+      - text: "The five phases of a project lifecycle"
+        correct: false
+      - text: "The five layers of a technology stack"
+        correct: false
+      - text: "The five steps of strategic analysis"
+        correct: false
+    explain: "Porter's forces are: threat of new entrants, ease of substitution, bargaining power of customers, bargaining power of suppliers, and industry rivalry. The most attractive segments have high entry barriers and low exit barriers."
+  - q: "In the BCG Growth-Share Matrix, where should you focus your analysis?"
+    options:
+      - text: "Question Marks (high growth / low share) — invest to make them Stars or they become Dogs"
+        correct: true
+      - text: "Cash Cows (low growth / high share)"
+        correct: false
+      - text: "Stars (high growth / high share)"
+        correct: false
+      - text: "Dogs (low growth / low share)"
+        correct: false
+    explain: "Cash Cows are milked for cash; Stars are protected; Dogs are retired. The decision energy belongs on Question Marks, where investment decides whether they rise or fall."
+  - q: "What are the four growth avenues in the Ansoff Matrix?"
+    options:
+      - text: "Market penetration, Market development, Product development, Diversification"
+        correct: true
+      - text: "Build, Buy, Partner, Retire"
+        correct: false
+      - text: "Strategic, Informational, Transactional, Infrastructure"
+        correct: false
+      - text: "Grow, Evolve, Maintain, Replace"
+        correct: false
+    explain: "Ansoff plots products × markets: penetration (existing/existing, easiest), development of markets or products, and diversification (new/new, riskiest but spreads risk like a portfolio)."
+  - q: "In Application Portfolio Management, why are compute and storage 'strategic' at AWS rather than 'infrastructure'?"
+    options:
+      - text: "Because AWS competes on them — the same asset class differs by company context"
+        correct: true
+      - text: "Because all cloud assets are strategic by definition"
+        correct: false
+      - text: "Because they are the most expensive line items"
+        correct: false
+      - text: "Because AWS has no infrastructure category"
+        correct: false
+    explain: "Asset classes (Strategic, Informational, Transactional, Infrastructure) depend on the business: what is mere infrastructure for one company is the competitive core for another."
+takeaway: "Build strategy in concentric scopes: read the industry with SWOT, Porter, and Ansoff, then rationalize the portfolio with BCG, the Value Chain, and APM — using 2×2s as guides, not deciders."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🎯 Analogy">
+Canon beat Xerox not by copying its big serviced machines but by reading the board: it built copiers with only eight basic parts and a disposable assembly, needing no service department, and sold them to individuals for a fraction of the price. Xerox's market share collapsed from 95% to 14% in five years. Creation patterns are how you read that board on purpose.
+</Callout>
+
+The 19 creation patterns are arranged in a **logical architecture of concentric scopes**, narrowing from broadest to narrowest: **Analysis → World → Industry → Company → Department.** You use only the patterns the job needs. This page covers the industry and corporate scopes — the frameworks businesspeople already know, applied through a technology lens.
+
+## Industry context
+
+<Mermaid code={String.raw`graph TD
+  I["Industry analysis"]
+  I --> SW["SWOT<br/>internal/external × helpful/harmful"]
+  I --> P5["Porter's Five Forces"]
+  I --> AN["Ansoff Growth Matrix<br/>products × markets"]
+  P5 --> NE["New entrants"]
+  P5 --> SU["Substitution"]
+  P5 --> BC["Buyer power"]
+  P5 --> BS["Supplier power"]
+  P5 --> RV["Industry rivalry"]`} />
+
+- **SWOT** — **Strengths, Weaknesses, Opportunities, Threats** on two axes: placement (internal vs. external) and potential (helpful vs. harmful). Start with internal items — "get your own house in order."
+- **Porter's Five Forces** (1980) — the pressures that determine **competitive advantage**: threat of **new entrants** (the most attractive segments have high entry barriers and low exit barriers — airlines), ease of **substitution** (a substitute solves the same need with different technology — cell phones replacing landlines, a threat from *outside* the industry), bargaining power of **customers**, bargaining power of **suppliers** (for software firms the two key suppliers are compute/storage and *developers themselves*), and **industry rivalry**. Make one slide per force, state how your technology direction supports or defends it, and tag each red/yellow/green.
+- **Ansoff Growth Matrix** (1957) — four growth avenues on products × markets: **market penetration** (existing/existing, easiest), **market development** (existing products, new markets — Canon selling copiers to individuals), **product development** (new products, existing customers — building a platform like AWS), and **diversification** (new/new, riskiest but spreads risk like a portfolio).
+
+<Callout type="go" title="🔑 Supplier power is about people">
+For a software business, your "supply" is largely <em>people</em>. Scarce AI PhDs command high salaries and thus considerable supplier power. The talent life cycle runs from emerging tech (huge differentiation) → maturing → commodity (little differentiation, like Java today) → eventually automated away.
+</Callout>
+
+## Corporate context: portfolio thinking
+
+Inside your own company, the maxim is: "the way to be successful is to do something that matters to someone who matters." The key portfolio tools:
+
+- **Value Chain** (Porter, 1985) — five primary activities (Inbound Logistics → Operations → Outbound Logistics → Marketing & Sales → Service) plus support functions. Three value types a technologist offers: **Sustain** the value (keep ops running), **Maximize** value (do the same things better), **Discover** value (invent new markets — like Post-it notes).
+- **Growth-Share Matrix** (the "BCG Box," 1970) — portfolio analysis on market growth × market share: **Cash Cows** (low/high — milk for cash), **Stars** (high/high — invest and protect), **Question Marks** (high/low — *focus your analysis here*), and **Dogs** (low/low — retire).
+
+<Mermaid code={String.raw`graph TD
+  ST["Stars<br/>high growth, high share<br/>invest and protect"]
+  CC["Cash Cows<br/>low growth, high share<br/>milk for cash"]
+  QM["Question Marks<br/>high growth, low share<br/>focus analysis here"]
+  DG["Dogs<br/>low growth, low share<br/>retire"]
+  QM -->|"invest"| ST
+  QM -->|"neglect"| DG
+  ST -->|"growth slows"| CC`} />
+- **Application Portfolio Management (APM)** — view all applications together and rationalize them. Tag each app by **asset class**: **Strategic** (competitive advantage), **Informational**, **Transactional** (the backbone), **Infrastructure**. Then plot business alignment × technical risk to decide **Grow/Evolve/Maintain**, **Tolerate**, **Retire**, or **Reengineer/Modernize/Replace** (the question marks — high alignment but high technical debt).
+
+<Callout type="gotcha" title="⚠️ The Law of the Product of Probabilities">
+When optimizing a multi-step process, the joint probability is the <strong>product</strong>, not the average. A five-step process at 80/85/90/85/90% looks like 86% averaged but is only ~<strong>47%</strong> as a product — a crucial trap when you "improve" each step in isolation.
+</Callout>
+
+## Department context: connecting work to vision
+
+At the narrowest scope, **Principles → Practices → Tools** links daily work to the vision: *"the tools support the practices; the practices realize the principles."* A principle with no practice is just a platitude. Use a **Process Posture Map** to tag each process — Start, Continue, Invest, Assess, Revise — and a **Project Heat Map** to score in-flight projects by net value and quality.
+
+<Callout type="tip" title="💡 2×2s are guides, not deciders">
+Strategy consultants "adore" 2×2 overlays — BCG, Ansoff, Investment Maps, Core/Innovation Waves. Use them to <em>think</em>, not to decide automatically. And per the "Get Real" rule: you can't claim cost savings you don't actually realize — if the people stay on payroll, call it a <em>benefit</em>, not a saving.
+</Callout>
+
+## See also
+
+- [Analyzing strategy](/strategy/analyzing-strategy/) — the metapatterns and world-context analysis that precede creation.
+- [What is technology strategy?](/strategy/what-is-technology-strategy/) — the concentric scopes and the trade-off mindset.
+- [Communicating strategy](/strategy/communicating-strategy/) — turning these frameworks into a deck that gets funded.

@@ -1,0 +1,160 @@
+---
+title: "Space-Based Architecture"
+category: sty-distributed
+kind: topic
+order: 9
+difficulty: "Advanced"
+status: ready
+intent: "The extreme-scalability style that removes the database from the transaction path — replicated in-memory data grids, processing units, virtualized middleware, and async data pumps."
+book: "Software Architecture Patterns (2nd ed.); Fundamentals of Software Architecture"
+related:
+  - event-driven-architecture
+  - microservices-architecture
+  - service-based-architecture
+  - comparing-the-styles
+when_use:
+  - "You face very high concurrent scalability or elasticity (tens of thousands of concurrent users or more)."
+  - "You need extreme performance and responsiveness with in-memory data access."
+  - "Load is variable and unpredictable, spiking suddenly (ticketing, auctions, viral social media)."
+when_avoid:
+  - "Transactional data volumes are too large to fit in memory (a multi-terabyte relational DB)."
+  - "You need strong data consistency rather than eventual consistency."
+  - "You have a tight budget/timeline — it is complex and hard to test at scale."
+quiz:
+  - q: "How does space-based architecture achieve near-infinite scalability?"
+    options:
+      - text: "It removes the database from the transaction path, keeping data in replicated in-memory data grids"
+        correct: true
+      - text: "It shards the database across thousands of nodes"
+        correct: false
+      - text: "It uses synchronous calls between processing units"
+        correct: false
+      - text: "It caches every request on the web server"
+        correct: false
+    explain: "The database is the ultimate bottleneck; space-based keeps transactional data in replicated in-memory grids and syncs to the DB asynchronously via data pumps, eliminating the bottleneck."
+  - q: "What does a processing unit contain?"
+    options:
+      - text: "Business logic, an in-memory data grid, and optionally web components"
+        correct: true
+      - text: "Only a database connection pool"
+        correct: false
+      - text: "A core system and plug-ins"
+        correct: false
+      - text: "An event mediator and channels"
+        correct: false
+    explain: "A processing unit (this style's term for 'service') holds the business functionality plus a replicated in-memory data grid, with data synced asynchronously to the DB."
+  - q: "What is the role of the deployment manager?"
+    options:
+      - text: "It dynamically starts and stops processing units based on load — the key to elasticity"
+        correct: true
+      - text: "It writes data to the database"
+        correct: false
+      - text: "It routes requests to processing units"
+        correct: false
+      - text: "It resolves data collisions"
+        correct: false
+    explain: "By monitoring response times and load, the deployment manager spins units up and down, which is what gives space-based its variable, elastic scalability."
+  - q: "What is the main hard limit of space-based architecture?"
+    options:
+      - text: "All transactional data must fit in memory across the grid"
+        correct: true
+      - text: "It cannot scale past 100 users"
+        correct: false
+      - text: "It cannot use a database at all"
+        correct: false
+      - text: "It only works on-premises"
+        correct: false
+    explain: "Because transactional data lives in in-memory grids, total data size is bounded — you cannot fit a 45-terabyte relational database in memory."
+takeaway: "Take the database out of the transaction path: replicated in-memory grids plus async data pumps give top scalability and performance for elastic load — if your data fits in memory."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Most apps make every customer queue at one cashier (the database) — fine until a crowd arrives, when the line backs up no matter how many doors you add. Space-based architecture gives every clerk their own synced copy of the ledger and reconciles the books later, in the back office. No one waits on the single cashier, so you can open as many clerks as the crowd demands.
+</Callout>
+
+## The problem it solves
+
+Most web apps follow browser → web server → app server → database, which bottlenecks cascade *down* to the database — the hardest and most expensive tier to scale. **Space-based architecture** solves this **architecturally**: it removes the database from *transactional* processing. The name comes from **tuple space** (parallel processors over shared memory). Transactional data lives in **replicated in-memory data grids**, replicated across all active processing units, and synced to a background database **asynchronously** via data pumps.
+
+<Mermaid code={String.raw`graph TD
+  subgraph Traditional["Traditional — DB on the hot path"]
+    R1["Requests"] --> A1["App servers"] --> DB1[("Database — bottleneck")]
+  end
+  subgraph SpaceBased["Space-based — DB off the hot path"]
+    R2["Requests"] --> PU["Processing units<br/>(in-memory grid)"]
+    PU -.->|"async pump"| DB2[("Database")]
+  end`} />
+
+## Topology and components
+
+<Mermaid code={String.raw`graph TD
+  MG["Messaging grid<br/>(routes requests)"] --> PU1["Processing unit<br/>+ in-memory grid"]
+  MG --> PU2["Processing unit<br/>+ in-memory grid"]
+  PU1 <-->|"replicate (async)"| PU2
+  DM["Deployment manager<br/>(elasticity)"] -.-> PU1
+  DM -.-> PU2
+  PU1 -->|"data pump (async)"| DW["Data writers"]
+  DW --> DB[("Database")]
+  DB --> DR["Data readers<br/>(cold start)"]
+  DR --> PU2`} />
+
+- **Processing units** (this style's "services") — business logic + an **in-memory data grid** of transactional data + optional web components. They start and stop dynamically with load.
+- **Virtualized middleware** manages the complexity:
+  - **Messaging grid** — routes incoming requests/session state to an available processing unit (round-robin or next-available); typically a load-balancing web server.
+  - **Data grid** — the most crucial component; replicates data updates so *every* unit holds *identical* in-memory data. Implemented via Hazelcast, Apache Ignite, or Oracle Coherence; sync is asynchronous.
+  - **Processing grid** *(optional)* — orchestrates requests spanning multiple processing-unit types.
+  - **Deployment manager** — dynamically starts/stops units based on load; the key to **elasticity**, usually via Kubernetes.
+- **Data pumps** — asynchronously send updates to the database via persistent queues. **Data writers** apply them to the DB; **data readers** repopulate a unit on a **cold start** (crash or redeploy) via a reverse data pump.
+
+<Callout type="go" title="Flexible deployment — cloud transactions, on-prem data">
+Space-based can run entirely in the cloud, entirely on-prem, or **split**: transactional processing in the cloud while the database stays on-prem. Data writers and readers live on-prem with the DB; async data pumps push updates from cloud-based processing units — ideal when data residency rules require on-prem storage.
+</Callout>
+
+## Data collisions
+
+With active/active replicated caching, replication latency can cause **data collisions** — two units updating the same data, each then overwritten with stale replicated data. The probability is `CollisionRate = N × (UR² / S) × RL` (N = instances, UR = update rate, S = cache size in rows, RL = replication latency). Lowering replication latency or using fewer instances reduces collisions; smaller caches increase them. Plan for min/normal/peak rates.
+
+<Callout type="gotcha" title="Everything must fit in memory">
+The hard ceiling is data volume: all transactional data lives in in-memory grids, so you cannot run this style over a multi-terabyte relational database. Space-based is a specialized tool for high-concurrency, in-memory-sized datasets — not a general-purpose architecture.
+</Callout>
+
+## Examples
+
+Best for high spikes and 10,000+ concurrent users: **concert ticketing** (dozens of users until tickets drop, then tens of thousands in seconds), **online auctions** (unpredictable spikes near the close), and **high-volume social media** (hundreds of thousands of posts/likes per second).
+
+## Characteristics
+
+| Characteristic | Rating |
+|---|---|
+| Partitioning | Technical |
+| Overall cost | $$$$$ (high) |
+| Scalability | 5 / 5 |
+| Performance | 5 / 5 |
+| Elasticity | 5 / 5 |
+| Fault tolerance | 3 / 5 |
+| Extensibility | 3 / 5 |
+| Agility | 2 / 5 |
+| Simplicity | 1 / 5 |
+
+It uniquely pairs top **scalability, performance, and elasticity** (in-memory access measured in nanoseconds), but at **high cost**, **low agility**, and **low simplicity** — high-volume scalability is notoriously hard to test outside production. Updates are always **eventually consistent**.
+
+## When to use it
+
+- Very high **concurrent scalability or elasticity** (tens of thousands of concurrent requests or more).
+- Very high **performance and responsiveness** with in-memory data.
+- **Variable, unpredictable** load that spikes suddenly.
+
+## When to avoid it
+
+- **Large transactional data volumes** that can't fit in memory.
+- **High data consistency** needs.
+- **Tight budget/timeline** — it is complex and hard to test at scale.
+
+## See also
+
+- [Event-driven architecture](/styles/event-driven-architecture/) — supplies the async data pumps; space-based EDA is a common hybrid.
+- [Microservices architecture](/styles/microservices-architecture/) — space-based microservices pairs the two.
+- [Service-based architecture](/styles/service-based-architecture/) — when extreme scale isn't actually required.
+- [Comparing the styles](/styles/comparing-the-styles/) — the only style with 5/5 on both scalability and performance.

@@ -1,0 +1,137 @@
+---
+title: "Fitness Functions"
+category: fnd-evolution
+kind: topic
+order: 13
+difficulty: "Intermediate"
+status: ready
+intent: "Objective, automatable integrity checks for architecture characteristics — the categories they fall into, and how they turn governance from aspiration into enforcement."
+book: "Building Evolutionary Architectures; Fundamentals of Software Architecture"
+related:
+  - evolutionary-architecture
+  - measuring-and-governing-characteristics
+  - architecture-decision-records
+when_use:
+  - "When you want a characteristic protected automatically as the system changes"
+  - "When manual code review or an architecture board keeps letting checks slip through"
+  - "When wiring governance into the deployment pipeline"
+when_avoid:
+  - "When no objective measure or data source exists for the characteristic"
+  - "When you would impose a check on developers without explaining its purpose"
+quiz:
+  - q: "What is the difference between an atomic and a holistic fitness function?"
+    options:
+      - text: "Atomic tests one characteristic in isolation; holistic tests combinations in a shared context"
+        correct: true
+      - text: "Atomic is automated; holistic is manual"
+        correct: false
+      - text: "Atomic runs once; holistic runs forever"
+        correct: false
+      - text: "There is no difference"
+        correct: false
+    explain: "Atomic checks one thing (a cycle check); holistic checks interactions — e.g. caching passes security and scalability alone but fails when combined."
+  - q: "When does a monitor become a fitness function?"
+    options:
+      - text: "When an architect attaches an objective alarm to it"
+        correct: true
+      - text: "When it is written in code"
+        correct: false
+      - text: "When it runs in production"
+        correct: false
+      - text: "When it produces a dashboard"
+        correct: false
+    explain: "A metric or monitor becomes a fitness function only with an objective measure, an alert, and fast continuous feedback."
+  - q: "Fitness functions are to architecture characteristics what ____ are to the domain."
+    options:
+      - text: "Unit tests"
+        correct: true
+      - text: "Diagrams"
+        correct: false
+      - text: "Databases"
+        correct: false
+      - text: "ADRs"
+        correct: false
+    explain: "They play the same protective role unit tests play for domain logic — but no single turnkey framework exists, so they draw on many tools."
+  - q: "Does a fitness function have to be code?"
+    options:
+      - text: "No — it is any objective measure, which may be executed manually (e.g. for regulatory checks)"
+        correct: true
+      - text: "Yes, always automated"
+        correct: false
+      - text: "Yes, it must be a unit test"
+        correct: false
+      - text: "No — it must never be automated"
+        correct: false
+    explain: "'Function' means an objective measure, not necessarily executable code; some legal/regulatory functions are manual pipeline stages."
+takeaway: "A fitness function is any objective integrity check for a characteristic — wire metrics, tests, monitors, and chaos into the pipeline so governance is enforced, not aspirational."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🛣️ Analogy">
+Fitness functions are guardrails on a mountain road. They don't drive the car or dictate the route — they keep travellers on the road no matter what the road is made of. Whatever the architecture becomes, the guardrails keep it from going over the edge.
+</Callout>
+
+## The definition
+
+An **architectural fitness function** is "any mechanism that provides an objective integrity assessment of some architecture characteristic(s)." The term is borrowed from evolutionary computing, where a fitness function measures how close each generated variant is to the goal (think traveling-salesperson route length). Fitness functions are to architecture characteristics what **unit tests** are to the domain — but no single turnkey framework exists, so they draw on **monitors, code metrics, chaos engineering, architecture-testing frameworks, and security scanning**.
+
+The motivating example is the **component cycle** anti-pattern, which a modern IDE's auto-import silently creates. An ArchUnit test wired into CI — `slices()...should().beFreeOfCycles()` — lets an architect "never worry about cycles again."
+
+```text
+# atomic fitness functions in the deployment pipeline
+assert archCycles == 0                 # structural integrity
+assert response_p99_ms < 100           # performance
+assert cyclomaticComplexity(method) < 5
+```
+
+## The taxonomy
+
+Fitness functions are categorised along several independent axes:
+
+<Mermaid code={String.raw`graph TD
+  FF["Fitness functions"] --> Scope["Scope: atomic vs holistic"]
+  FF --> Cadence["Cadence: triggered · continual · temporal"]
+  FF --> Result["Result: static vs dynamic"]
+  FF --> Invoke["Invocation: automated vs manual"]
+  FF --> Proact["Proactivity: intentional vs emergent"]`} />
+
+- **Scope — atomic vs holistic.** Atomic tests one characteristic in isolation (the cycle check). Holistic tests combinations in a shared context — the canonical case is **caching**, where security and scalability each pass alone but holistic testing reveals caching makes data too stale for security.
+- **Cadence — triggered vs continual vs temporal.** *Triggered* runs on an event (a pipeline run). *Continual* verifies constantly (**synthetic transactions** flowing through production but not committed). *Temporal* adds time (a *break-upon-upgrade* test; Dependabot reminders).
+- **Result — static vs dynamic.** Static has a fixed acceptable result (pass/fail, a range). Dynamic shifts with context (allowing responsiveness to degrade gracefully as users rise) — and dynamic is *not* in conflict with objective.
+- **Invocation — automated vs manual.** Most are automated in pipelines, but legal/regulatory checks may be **manual pipeline stages**.
+- **Proactivity — intentional vs emergent.** Intentional ones are defined at inception; **emergent** ones are discovered during development (the unknown-unknowns problem) — add them aggressively when you notice misbehaviour.
+
+## Governance is the killer application
+
+The fitness functions introduced for evolution do double duty as **automated architectural governance**, replacing weak manual mechanisms (code reviews, architecture boards) through which checks routinely "fall through the cracks." This is the same historical pattern as continuous integration replacing the disastrous integration phase — manual governance lets things slip; automation fixes it.
+
+<Mermaid code={String.raw`graph LR
+  Commit["Commit"] --> Build["Build & unit tests"]
+  Build --> FF1["FF: no cycles<br/>+ layer rules"]
+  FF1 --> FF2["FF: p99 latency<br/>+ coupling limits"]
+  FF2 --> FF3["FF: security scan"]
+  FF3 --> Deploy["Deploy"]
+  FF1 -.->|"fail"| Block["Build red — change rejected"]
+  FF2 -.->|"fail"| Block
+  FF3 -.->|"fail"| Block`} />
+
+Real examples span every level: **afferent/efferent coupling** and **distance from the main sequence** (JDepend, NDepend); **directionality of imports** (a JUnit test failing the build on forbidden dependencies); **ArchUnit / NetArchTest** for layer rules ("principles without enforcement are aspirational, not governance"); Netflix's **Simian Army** injecting failure continuously in production; and GitHub's **Scientist** running a candidate alongside the control for 1% of users (a *fidelity* fitness function).
+
+<Callout type="gotcha" title="⚠️ A metric is not yet a fitness function">
+Many of these tools predate the idea — fitness functions *unify* them. A metric becomes a fitness function only when you add three things: an **objective measure**, an **alert**, and **fast continuous feedback**. A monitor on a dashboard nobody acts on is not governance.
+</Callout>
+
+<Callout type="tip" title="Who writes them, and the checklist framing">
+Architects *define* fitness functions; both architects and developers *maintain* them, keeping them passing at all times. Frame them as a **checklist, not a stick** — surgeons and pilots use checklists not from incompetence. Collaboration ensures developers see governance as a useful constraint; post results in a visible space.
+</Callout>
+
+<Callout type="go" title="💡 Key insight">
+Care about **outcomes, not implementations** — *why* you measure something, not the particular *how*. The further you get from a single application, the fewer turnkey tools exist, so architects often write 10-20 lines of scripting glue. If the information you need exists somewhere, a handcrafted fitness function can deliver real architectural value.
+</Callout>
+
+## See also
+
+- [Evolutionary architecture](/foundations/evolutionary-architecture/) — the discipline fitness functions enable.
+- [Measuring and governing characteristics](/foundations/measuring-and-governing-characteristics/) — the measurement foundation.
+- [Architecture decision records](/foundations/architecture-decision-records/) — where a decision's compliance check is recorded.

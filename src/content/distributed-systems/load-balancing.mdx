@@ -1,0 +1,134 @@
+---
+title: "Load Balancing and Elasticity"
+category: ds-scalability
+kind: topic
+order: 6
+difficulty: "Intermediate"
+status: ready
+intent: "How a load balancer spreads requests across stateless replicas — Layer 4 vs Layer 7, distribution policies, health checks, elastic autoscaling, and the cascading-failure defenses that keep it all standing."
+book: "Foundations of Scalable Systems (Ian Gorton)"
+related:
+  - scalability-fundamentals
+  - serving-patterns
+  - asynchronous-messaging-at-scale
+when_use:
+  - "When scaling a service out across multiple replicas behind a single entry point."
+  - "When load fluctuates and you want capacity to grow and shrink automatically."
+  - "When you need to remove a single point of failure and survive replica crashes."
+when_avoid:
+  - "For a single-replica service whose SLA is met by orchestrator restart alone."
+  - "Relying on sticky sessions to scale a stateful service — externalize state instead."
+quiz:
+  - q: "What is the key difference between Layer 4 and Layer 7 load balancing?"
+    options:
+      - text: "Layer 4 routes on TCP/UDP via NAT (fast, simple); Layer 7 reassembles HTTP and routes on headers/content (richer, slightly slower)"
+        correct: true
+      - text: "Layer 4 is encrypted, Layer 7 is not"
+        correct: false
+      - text: "Layer 7 only works for databases"
+        correct: false
+      - text: "There is no difference"
+        correct: false
+    explain: "Network-level (L4) NAT routing is faster at low/medium load; application-level (L7) can route on HTTP headers, paths, and content at slightly higher cost. Once replicas saturate, both perform equally."
+  - q: "Why do sticky sessions cause load imbalance?"
+    options:
+      - text: "Sessions last varying durations, so some replicas stay overloaded while others are underutilized"
+        correct: true
+      - text: "They drop every other request"
+        correct: false
+      - text: "They require Layer 4 routing"
+        correct: false
+      - text: "They disable health checks"
+        correct: false
+    explain: "With sticky (session-affinity) routing, a replica is pinned to its sessions; because sessions end at different times, distribution becomes uneven — inevitable at millions of sessions."
+  - q: "In a chain A→B→C, what triggers a cascading failure?"
+    options:
+      - text: "Slow responses, not outright crashes — back pressure fills fixed-size thread pools up the chain"
+        correct: true
+      - text: "A single crashed instance returning an immediate error"
+        correct: false
+      - text: "Using round-robin distribution"
+        correct: false
+      - text: "Enabling autoscaling"
+        correct: false
+    explain: "A crash returns an immediate error; a slow service keeps returning late results, so B's thread pool fills waiting on C, then A's fills waiting on B — exhaustion cascades upward."
+  - q: "What does a circuit breaker do when a downstream service is failing?"
+    options:
+      - text: "Trips OPEN so calls fail immediately, relieving the overwhelmed server, then probes HALF_OPEN to recover"
+        correct: true
+      - text: "Retries immediately and indefinitely"
+        correct: false
+      - text: "Permanently shuts down the caller"
+        correct: false
+      - text: "Increases the thread pool size"
+        correct: false
+    explain: "On a threshold (e.g. 25% errors) the breaker trips OPEN, failing fast; after a timeout it goes HALF_OPEN to trial calls, returning to CLOSED on success — giving the downstream time to recover."
+takeaway: "Put stateless replicas behind an L4/L7 load balancer with health checks and autoscaling — and defend the call chain with timeouts, circuit breakers, and bulkheads."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A supermarket with one queue and twelve tills hires a greeter who waves each shopper to the shortest open till, closes a till whose card reader breaks, and opens more at rush hour. The greeter is a load balancer: clients only ever talk to the greeter, never to a till directly — which is also why the tills can sit safely behind a perimeter.
+</Callout>
+
+A **load balancer (LB)** is a reverse proxy that distributes R incoming requests across N service replicas. It is the keystone of [scaling out](/distributed-systems/scalability-fundamentals/): clients only ever contact the LB, which keeps stateless replicas equally busy and shields them behind a security perimeter. It must be very low latency, because every request flows through it.
+
+## Layer 4 vs Layer 7
+
+Load balancing happens at two levels:
+
+- **Network-level (Layer 4)** — routes on TCP/UDP using **NAT**. Fast and simple.
+- **Application-level (Layer 7)** — reassembles HTTP and routes on headers, paths, or body content. Richer, slightly slower.
+
+An AWS experiment found the network LB ~20% faster at low and medium load — but **equal** at 256 clients once the 4 replicas saturated, because the bottleneck had moved to the replicas themselves.
+
+## The four feature areas
+
+<Mermaid code={String.raw`graph TD
+  C["Clients"] --> LB["Load balancer"]
+  LB -->|"distribution policy"| R1["Replica 1 (healthy)"]
+  LB -->|"distribution policy"| R2["Replica 2 (healthy)"]
+  LB -. "health check fails" .-> R3["Replica 3 (removed)"]
+  LB -->|"autoscaling adds"| R4["Replica 4 (new)"]`} />
+
+- **Distribution policies** — round robin, least connections, HTTP header field, or HTTP operation. Replicas can be **weighted** by capacity.
+- **Health monitoring** — unhealthy replicas are removed and reincorporated when healthy again.
+- **Elasticity** — dynamically provision capacity. AWS **Auto Scaling groups** set min/max and scale **schedule-based** or **dynamically** on metrics, with warm-up periods and scale-in below thresholds. Essentially mandatory for fluctuating workloads.
+- **Session affinity (sticky sessions)** — pins a client to one replica for stateful services.
+
+<Callout type="gotcha" title="⚠️ Sticky sessions guarantee imbalance">
+Session affinity is the workaround for stateful services, but sessions last <em>varying</em> durations, so some replicas overload while others idle — inevitable at millions of sessions. Statelessness avoids the whole problem: failures yield retries elsewhere, slow replicas are health-checked out, and state lives in an external store. Prefer stateless.
+</Callout>
+
+## Behind the LB: the app server has its own limits
+
+A widened highway that ends in one lane doesn't help. Inside each replica, capacity is bounded too: listener threads accept connections (queuing in the OS **sockets backlog**), a **thread pool** of container threads serves requests (Tomcat defaults min 25 / max 200), and a smaller **database connection pool** can make threads block. Systems degrade before 100% utilization, so tune pool sizes to a target — and remember that scaling one tier just pushes the bottleneck downstream.
+
+## When the chain bends: cascading failures
+
+Load balancing keeps a single tier alive, but services call services, and **slow responses — not crashes — cause cascading failures**. In a chain A→B→C, growing load slows C, creating **back pressure**: B's fixed-size thread pool fills waiting on C, then A's fills waiting on B, then timeouts and refused connections cascade upward. A crash returns an immediate error; a slow service keeps returning late results, denying recovery time. **Immediate retries make it worse**; use **exponential backoff**.
+
+<Mermaid code={String.raw`graph LR
+  A["Service A<br/>pool fills waiting on B"] --> B["Service B<br/>pool fills waiting on C"]
+  B --> C["Service C<br/>SLOW (not crashed)"]
+  C -.->|"back pressure"| B
+  B -.->|"back pressure"| A`} />
+
+<Callout type="tip" title="🛠️ The defensive toolkit">
+Three patterns keep a load-balanced system standing under stress:
+<br/>• <strong>Fail fast</strong> — client-side timeouts (set near the P99 latency so a stalled call releases its thread) plus server-side throttling (HTTP 503 past a threshold), often returning a canned default response.
+<br/>• <strong>Circuit breaker</strong> — on a failure threshold (e.g. 25% errors) trip <strong>OPEN</strong> (fail immediately), then <strong>HALF_OPEN</strong> (trial calls), back to <strong>CLOSED</strong> on success — relieving the overwhelmed server and recovering automatically.
+<br/>• <strong>Bulkhead</strong> — reserve a subset of threads per request type so lightweight "order status" always has capacity even when heavyweight "create order" is saturated.
+</Callout>
+
+## Long-tail latency is the real metric
+
+Real workloads have **long-tail** response times, so **percentiles** (P50/P95/P99) describe them far better than averages. At 200M requests/day, a P99 of 3 s means 2M requests/day exceed 3 s. A slow service holds resources: a 50 ms API stalled at 3 s loses ~59 potential requests on that thread. Size timeouts and capacity against the tail, not the mean.
+
+## See also
+
+- [Scalability fundamentals](/distributed-systems/scalability-fundamentals/) — why statelessness makes load balancing work.
+- [Serving patterns](/distributed-systems/serving-patterns/) — replicated, sharded, and scatter/gather topologies.
+- [Asynchronous messaging at scale](/distributed-systems/asynchronous-messaging-at-scale/) — smoothing peaks the LB can't.
+- [Caching](/distributed-systems/caching/) — reducing the load each replica must serve.

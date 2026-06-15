@@ -1,0 +1,133 @@
+---
+title: "Architecting for Change and Options"
+category: path-elevator
+kind: topic
+order: 3
+difficulty: "Intermediate"
+status: ready
+intent: "The rate of change is the real driver of architecture — architects 'live in the first derivative' and create value by selling options: deferring decisions until uncertainty resolves."
+book: "The Software Architect Elevator (Gregor Hohpe)"
+related:
+  - the-architect-elevator
+  - the-architects-many-roles
+  - what-is-technology-strategy
+when_use:
+  - "When uncertainty is high and committing early would be the time of greatest ignorance."
+  - "When you want to measure architecture by the system's ability to absorb change, not by decisions made."
+  - "When the cost of a future change (the strike price) can be lowered cheaply today."
+when_avoid:
+  - "When a decision is genuinely cheap to reverse later — buying an option you don't need just adds complexity."
+  - "When minimizing every strike price is uneconomical; offer a range of options instead."
+  - "When the option's underlying uncertainty is low, so the option has little value."
+quiz:
+  - q: "What does it mean that architects 'live in the first derivative'?"
+    options:
+      - text: "Their concern is the rate of change of a system over time, not its static snapshot"
+        correct: true
+      - text: "They only work on the first version of a system"
+        correct: false
+      - text: "They prefer calculus to coding"
+        correct: false
+      - text: "They make the first decision and then stop"
+        correct: false
+    explain: "A system that never changes needs no architecture. Because architects deal with change, they focus on how fast a system's value and state change — the first derivative. A software system's first derivative is its build-and-deployment toolchain."
+  - q: "In 'architecture is selling options', what is an option?"
+    options:
+      - text: "The right, but not the obligation, to make a choice later at fixed parameters"
+        correct: true
+      - text: "A feature toggle in the codebase"
+        correct: false
+      - text: "A list of vendors to choose from"
+        correct: false
+      - text: "A mandatory decision deferred to the next sprint"
+        correct: false
+    explain: "Borrowed from finance: deferring a decision while fixing its parameters has provable value (Black-Scholes), so good architecture — which defers irreversible choices — has value."
+  - q: "What increases the value of an option?"
+    options:
+      - text: "Higher uncertainty (volatility) and more time until the decision must be made"
+        correct: true
+      - text: "A higher strike price"
+        correct: false
+      - text: "Lower uncertainty about the future"
+        correct: false
+      - text: "Making the decision as early as possible"
+        correct: false
+    explain: "Volatility sits in the numerator of Black-Scholes: scaling has little value for a constant user base but high value for an app that might have 100 or 100,000 users. More time to maturity also raises value."
+  - q: "Why is measuring an architect by 'decisions made' a bad KPI?"
+    options:
+      - text: "It rewards early, irreversible commitment at the time of highest ignorance — like measuring developers by lines of code"
+        correct: true
+      - text: "Architects never make decisions"
+        correct: false
+      - text: "Decisions are impossible to count"
+        correct: false
+      - text: "It encourages too much documentation"
+        correct: false
+    explain: "Deciding early is deciding at the time of highest ignorance. A good architect eliminates irreversibility and defers — so counting decisions punishes the right behavior."
+takeaway: "Don't decide early at the time of highest ignorance — sell options: defer irreversible choices, lower their future strike price, and let uncertainty raise their value."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="⛷️ Analogy">
+A ski resort sells a discounted season pass months in advance. Buying it commits you. The alternative — paying full price on each visit — costs more per day but lets you defer the decision while the conditions (snow, schedule, injury) reveal themselves. Architecture is full of these trade-offs: you pay a premium to keep your choices open.
+</Callout>
+
+For Hohpe, the single most important driver of architecture is the **rate of change**. A system that never changes needs no architecture at all. So good architects "live in the first derivative" — they care about how quickly a system's value and state change over time, not just its static structure.
+
+## The first derivative
+
+Change arrives in many forms: new functional requirements, growing traffic and data, a shifting runtime environment, a changing business context. Crucially, **a software system's first derivative is its build-and-deployment toolchain** — every change flows through CI/CD, so raising the rate of change means tuning that pipeline.
+
+<Mermaid code={String.raw`graph TD
+  C["Change arrives<br/>(features, traffic, context)"] --> T["Build & deployment toolchain<br/>(the first derivative)"]
+  T --> S["System value over time"]
+  D["Dependencies"] -.->|"impede"| T
+  F["Friction (manual deploys)"] -.->|"impede"| T
+  Q["Poor quality"] -.->|"impede"| T
+  FE["Fear"] -.->|"impede"| T
+  A["Automated tests"] -.->|"enable confidence → speed"| T`} />
+
+What impedes change? **Dependencies** (decoupling is the biggest contributor to sustained delivery, per *Accelerate*), **friction** (long provisioning, manual deploys), **poor quality** (which slows rather than speeds delivery), and **fear**. Fear is a spiral: poor quality plus low automation makes change risky, which makes developers afraid, which lets code rot, which raises risk further.
+
+<Callout type="go" title="🔑 Confidence brings speed">
+Automated tests raise the rate of change. Hohpe's <strong>20-line test</strong>: propose deleting 20 arbitrary lines of code. A team that would push the change straight to production has enough confidence — and enough coverage. "The change that's never made out of fear cannot be accelerated by the world's best toolchain."
+</Callout>
+
+## Architecture is selling options
+
+The deeper economic argument: a good architect does *not* make many irreversible decisions early, because **early is the time of highest ignorance.** Instead, the architect **sells options** — the right, but not the obligation, to make a choice later at fixed parameters.
+
+This is a financial option, and the **Black-Scholes formula** mathematically proves options have value. Two variables increase that value:
+
+- **Uncertainty (volatility).** Elastic scaling has little value for a constant user base, but high value for an app that might serve 100 or 100,000 users. Volatility sits in the numerator. The implication is profound: **the business must be involved in technical decisions**, because IT alone cannot judge how volatile the future is.
+- **Time (maturity).** The longer until you must decide, the more the option is worth — which is why a project manager (short horizon) and an enterprise architect (years) rationally value the *same* option differently.
+
+<Mermaid code={String.raw`graph TD
+  V["Higher uncertainty<br/>(volatility)"] -->|"increases"| OV["Option value"]
+  T["More time<br/>until decision"] -->|"increases"| OV
+  SP["Higher strike price"] -->|"decreases"| OV
+  OV -->|"defer at fixed parameters"| CH["Choice kept open"]`} />
+
+## Strike price and the cost of options
+
+Options are never free. You pay in complexity, or by giving up another option. The **strike price** is what it will cost to exercise the choice later:
+
+- Migrating to a cloud provider *lowers* the strike price to scale (automation handles it) but *raises* the strike price to switch providers (lock-in).
+- Building a cloud-abstraction layer lowers switching cost — but is itself an expensive option.
+
+<Callout type="gotcha" title="⚠️ Don't minimize every strike price">
+The lowest strike price is the ideal but rarely the most economical choice. Offer a *range* of options at different strike prices and let the business pick. Coding to an open-source interface is <strong>arbitrage</strong> — a cheap, near-risk-free option that is also just good practice.
+</Callout>
+
+Myers and Trigeorgis catalog the **real options** architecture grants: the option to **defer**, to **abandon** (salvage modules), to **expand** (scale out), and to **contract** (elastic reduction).
+
+<Callout type="tip" title="💡 Agile and architecture are friends">
+Both deal with uncertainty, and the value of each *grows* with uncertainty — the opposite of big up-front design. When you cannot know the options far enough ahead, build an <strong>evolutionary architecture</strong> guided by a fitness function rather than committing to a fixed end state.
+</Callout>
+
+## See also
+
+- [The architect elevator](/strategy/the-architect-elevator/) — why the business must ride down to value options.
+- [The architect's many roles](/strategy/the-architects-many-roles/) — the gardener who lets a system evolve.
+- [What is technology strategy?](/strategy/what-is-technology-strategy/) — trade-offs and the architect-as-strategist.

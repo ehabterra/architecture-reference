@@ -1,0 +1,51 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import CategorySection from '../../components/CategorySection.astro';
+import SkillTree from '../../components/SkillTree.astro';
+import { DDD_CATEGORIES } from '../../lib/consts';
+
+const topics = await getCollection('ddd');
+const sorted = [...topics].sort((a, b) => a.data.order - b.data.order);
+const first = sorted[0];
+const slugs = topics.filter((t) => t.data.kind !== 'pattern').map((t) => t.id).join(',');
+---
+<BaseLayout title="Domain-Driven Design" description="Modeling software around the business — strategic design (ubiquitous language, bounded contexts, subdomains, context maps) and tactical design (value objects, entities, aggregates, domain events, event sourcing and CQRS). Based on Learning Domain-Driven Design.">
+  <nav class="dp-breadcrumb dp-kicker"><a href="/">The Architecture Reference</a> › <span>Domain-Driven Design</span></nav>
+
+  <header class="dp-hero">
+    <p class="dp-hero__eyebrow" data-i18n="ddd.eyebrow">Modeling the domain</p>
+    <h1 data-i18n="ddd.h1">Domain-Driven Design</h1>
+    <p class="dp-hero__lede" data-i18n-html="ddd.lede">
+      Most bugs are <strong>translation errors</strong> between how the business talks and how the code is written. DDD closes that gap: a <strong>ubiquitous language</strong> inside explicit <strong>bounded contexts</strong>, and tactical building blocks — <strong>aggregates</strong>, <strong>value objects</strong>, <strong>domain events</strong> — that put the business rules in the model.
+    </p>
+    {first && (
+      <div class="dp-hero__cta">
+        <a class="dp-btn dp-btn--primary" href={`/ddd/${first.id}/`} data-i18n="ui.startJourney">Start the journey →</a>
+      </div>
+    )}
+  </header>
+
+  <div class="dp-overall">
+    <div class="dp-overall__top">
+      <strong data-i18n="ddd.progressTitle">Your domain-driven design progress</strong>
+      <button class="dp-btn dp-btn--ghost dp-btn--sm" data-dp-reset data-i18n="ui.reset">Reset</button>
+    </div>
+    <div class="dp-progress" data-dp-progress data-slugs={slugs}>
+      <div class="dp-progress__track"><div class="dp-progress__fill"></div></div>
+      <span class="dp-progress__label"></span>
+    </div>
+    <p class=”dp-kicker” style=”margin:.7rem 0 0;” data-i18n=”track.progressNote”>Mark a topic “learned” on its page and watch the bars fill.</p>
+  </div>
+
+  <SkillTree entries={topics} categories={DDD_CATEGORIES} base="/ddd" />
+
+  {DDD_CATEGORIES.map((c) => (
+    <CategorySection cat={c.key} title={c.title} blurb={c.blurb} collection="ddd" base="/ddd" />
+  ))}
+
+  <div class="dp-callout dp-callout--go" style="margin-top:2.6rem;">
+    <p class="dp-callout__title" data-i18n="ddd.callout.title">🗺️ Spend your modeling effort on the core domain</p>
+    <p data-i18n-html="ddd.callout.body">Not every part of a system deserves deep modeling. Find the <em>core domain</em> — the part that gives competitive advantage — and lavish DDD’s tactical patterns there. For generic and supporting subdomains, buy or build something simple. The art of DDD is knowing where the complexity is worth it.</p>
+  </div>
+</BaseLayout>

@@ -1,0 +1,146 @@
+---
+title: "Batch Computational Patterns: Work Queues, Event-Driven, Coordinated"
+category: ds-patterns
+kind: topic
+order: 12
+difficulty: "Advanced"
+status: ready
+intent: "Patterns for short-lived, parallel data processing — the work queue, the event-driven coordination primitives (copier, filter, splitter, sharder, merger), and the coordinated join/reduce that produces aggregates."
+book: "Designing Distributed Systems (Brendan Burns)"
+related:
+  - serving-patterns
+  - single-node-patterns
+  - asynchronous-messaging-at-scale
+when_use:
+  - "When a large batch of mostly independent work items must be processed within a time bound."
+  - "When processing needs multiple stages, chained so one queue's output feeds another."
+  - "When parallel outputs must be combined into an aggregate result (the reduce of MapReduce)."
+when_avoid:
+  - "For long-running serving systems — use the serving patterns instead."
+  - "When a single item needs a synchronous immediate response rather than queued processing."
+quiz:
+  - q: "Why does a work queue use a FILE-based interface for workers but an HTTP interface for the source?"
+    options:
+      - text: "Workers are one-shot, run in their own container group, and need security against malicious injection; a file (via ConfigMap) suits that and shell-script workers"
+        correct: true
+      - text: "HTTP cannot deliver work items"
+        correct: false
+      - text: "Files are always faster than HTTP"
+        correct: false
+      - text: "The source must be a database"
+        correct: false
+    explain: "The source is an ambassador exposing a RESTful list/detail API; the worker is a remote one-shot call needing isolation and simplicity, so it receives a WORK_ITEM_FILE env var pointing to mountable file data."
+  - q: "For a stable work queue, what must hold between processing time and interarrival time?"
+    options:
+      - text: "Processing time divided by parallelism must be less than the interarrival time"
+        correct: true
+      - text: "Processing time must always exceed interarrival time"
+        correct: false
+      - text: "Parallelism must equal the number of items"
+        correct: false
+      - text: "Interarrival time must be zero"
+        correct: false
+    explain: "If effective processing time (per-item time / parallelism) is below interarrival time, the queue keeps up and drains backlogs; if above, the backlog grows unboundedly."
+  - q: "What does a sharder do in an event-driven batch pipeline?"
+    options:
+      - text: "Divides one queue into evenly distributed shards for reliability (staged rollouts) and even resource distribution"
+        correct: true
+      - text: "Combines many queues into one"
+        correct: false
+      - text: "Drops items that fail a criterion"
+        correct: false
+      - text: "Waits for all items before continuing"
+        correct: false
+    explain: "A sharder splits a queue via a sharding function so a bad worker update or failure affects only a fraction (e.g. 25% with four shards), and work spreads evenly across regions; it spills to healthy shards as they shrink."
+  - q: "How does reduce differ from join (barrier synchronization)?"
+    options:
+      - text: "Join waits for ALL data before continuing; reduce optimistically merges partial outputs and can run in parallel while map is still producing"
+        correct: true
+      - text: "They are identical"
+        correct: false
+      - text: "Reduce waits for all data; join is optimistic"
+        correct: false
+      - text: "Join produces aggregates; reduce only filters"
+        correct: false
+    explain: "Join guarantees completeness (no missing data) at the cost of parallelism and latency; reduce repeatedly combines outputs pairwise until one remains and can start before all map work finishes."
+takeaway: "Build batch from reusable work queues, chain them with copier/filter/splitter/sharder/merger, and aggregate with join (complete) or reduce (optimistic, parallel)."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A mailroom processes a morning's mail in bursts: one clerk sorts incoming items (work queue), photocopies some for multiple departments (copier), discards junk (filter), routes invoices and letters to different desks (splitter), and a supervisor finally tallies the day's totals from every desk (reduce). Batch computational patterns are that mailroom — short-lived, parallel, and assembled from a few reusable roles.
+</Callout>
+
+Where [serving patterns](/distributed-systems/serving-patterns/) run long-lived servers, **batch computational patterns** are short-lived processes that handle large amounts of data quickly via parallelism — telemetry aggregation, daily reports, video transcoding. MapReduce is the famous example, but several smaller patterns compose into it.
+
+## The work queue
+
+A **work queue** is the simplest batch pattern: a batch of wholly independent work items processed within a time bound, with workers scaled up or down to keep pace. Most of its logic is independent of the work itself, so it is built from **reusable library containers** with two interfaces:
+
+- **Source interface** — supplies the stream of items, implemented as an **ambassador** to the generic queue manager. A RESTful API exposes `GET /api/v1/items` (list) and `GET /api/v1/items/<name>` (detail). Notably it has **no completion endpoint** — the manager tracks processed vs. pending itself, keeping logic generic. (Always version APIs as `v1` up front.)
+- **Worker interface** — processes one item. It is a **one-shot call** in its own container group needing isolation against malicious injection, so it uses a **file-based API**: a `WORK_ITEM_FILE` env var points to a file (mountable via ConfigMap) containing the item's data — also easier for shell-script workers.
+
+<Callout type="tip" title="🛠️ Let the orchestrator do the bookkeeping">
+The manager loads available work, diffs it against already-processed/in-progress state, and spawns workers for the rest. Built on Kubernetes <code>Job</code> objects (which reliably run a worker to completion even across machine failures) and annotations marking which item each job handles, the entire work queue needs <strong>no storage of its own</strong>.
+</Callout>
+
+The **dynamic scaling** math is concrete: for stability, **(per-item processing time / parallelism) must be less than the interarrival time**. An item arriving every minute taking 30 s keeps up (2:1) and drains backlogs; taking 1 minute is perfectly balanced but slackless; taking 2 minutes loses ground unboundedly. Four-way parallelism turns a 1-minute item into an effective 15 s. A **multi-worker** pattern (a specialization of the adapter) composes several reusable worker containers into one — detect faces → tag identities → blur faces.
+
+## Event-driven batch: coordination primitives
+
+When processing needs more than one action per item, work queues are **linked** so one queue's output feeds another — forming **workflows** (a DAG of stages coordinated by completion events). Beyond the trivial output→input chain, five coordination patterns:
+
+<Mermaid code={String.raw`graph TD
+  IN["Input queue"] --> COP["Copier: duplicate stream"]
+  COP --> Q1["Job A queue"]
+  COP --> Q2["Job B queue"]
+  IN2["Input queue"] --> FIL["Filter: drop non-matching"]
+  IN3["Input queue"] --> SPL["Splitter: route by type (no drops)"]
+  SPL --> EMAIL["Email queue"]
+  SPL --> SMS["SMS queue"]
+  IN4["Input queue"] --> SHA["Sharder: even shards"]
+  M1["Repo 1"] --> MER["Merger: many to one"]
+  M2["Repo 2"] --> MER --> BUILD["Shared build queue"]`} />
+
+- **Copier** — duplicates one stream into two or more identical streams (transcode a video to 4K, 1080p, mobile, and a GIF thumbnail).
+- **Filter** — drops items not meeting a criterion (keep only users who opted into promotional email); ideally an ambassador wrapping the source.
+- **Splitter** — routes different inputs to different queues **without dropping any** (shipped-order notifications into email and SMS queues).
+- **Sharder** — divides one queue into evenly distributed shards via a sharding function, for **reliability** (a bad deploy affects only ~25% with four shards — staged rollouts) and **even resource distribution** across regions; it spills to healthy shards as they shrink.
+- **Merger** — the opposite of a copier: combines many queues into one (many repos' commits merged into a single build-and-test stream).
+
+The data stream between stages is managed by **publish/subscribe (pub/sub)** infrastructure — topics that publishers write and subscribers read, with reliable storage and delivery (Amazon SQS, Azure EventGrid, or open-source **Kafka** with `--replication-factor` and `--partitions`). See [asynchronous messaging at scale](/distributed-systems/asynchronous-messaging-at-scale/).
+
+## Coordinated batch: join and reduce
+
+Where the previous patterns split and chain, **coordinated** patterns pull parallel outputs back together — the **reduce** half of MapReduce (the map step being a sharded work queue).
+
+- **Join (barrier synchronization)** — holds work until *all* parallel items finish, guaranteeing **no data is missing** before an aggregation phase (enabling whole-set statistics). The cost: it forces all data through the previous stage first, reducing parallelism and adding latency.
+- **Reduce** — does *not* wait; it **optimistically** merges parallel outputs pairwise, each step combining several into one, repeated until a single output remains. Crucially it can **start while map/shard is still running**, finishing the whole computation faster.
+
+<Mermaid code={String.raw`graph TD
+  subgraph Join
+    JA["Item A"] --> BAR["Barrier<br/>wait for all"]
+    JB["Item B"] --> BAR
+    JC["Item C"] --> BAR
+    BAR --> JAGG["Aggregate<br/>complete set"]
+  end
+  subgraph Reduce
+    RA["Item A"] --> R1["Merge"]
+    RB["Item B"] --> R1
+    RC["Item C"] --> R2["Merge"]
+    R1 --> R2
+    R2 --> ROUT["Final output"]
+  end`} />
+
+<Callout type="go" title="💡 Join for completeness, reduce for speed">
+Use a <strong>join</strong> when correctness demands the complete set (e.g. wait for all license-plate blurring before deleting originals, so a failure allows a full rerun). Use <strong>reduce</strong> when you can combine incrementally — counting words across sharded pages, summing populations across counties, or weighting per-town histograms into a national one. Reduce's overlap with the map stage is what makes MapReduce fast.
+</Callout>
+
+The hands-on image-processing pipeline ties it all together: a **multi-worker** plate-detector + blurrer, **sharded** for reliability; a **join** before deleting originals; a **copier** into delete-originals and recognition queues; recognition again **sharded** with a multi-worker group; and a final **reduce** summing everything into the aggregate count.
+
+## See also
+
+- [Serving patterns](/distributed-systems/serving-patterns/) — the long-running counterpart to batch.
+- [Single-node patterns](/distributed-systems/single-node-patterns/) — the ambassador (source) and adapter (multi-worker) reused here.
+- [Asynchronous messaging at scale](/distributed-systems/asynchronous-messaging-at-scale/) — the pub/sub that connects batch stages.

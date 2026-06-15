@@ -1,0 +1,135 @@
+---
+title: "Choreography vs Orchestration"
+category: ms-communication
+kind: topic
+order: 9
+difficulty: "Intermediate"
+status: ready
+intent: "Two ways to coordinate a multi-service business process: a central orchestrator that commands the flow, or choreographed services reacting to broadcast events — and when to choose each."
+book: "Building Microservices, 2nd ed. & Monolith to Microservices (Sam Newman)"
+related:
+  - communication-styles
+  - sagas
+  - conways-law-and-team-topologies
+when_use:
+  - "You are implementing a business process that spans several services."
+  - "You need to decide between centralized control and distributed reaction."
+  - "You want to reason about coupling versus visibility of a workflow."
+when_avoid:
+  - "The process lives entirely within one service."
+  - "You only need point-to-point request-response — see communication styles."
+quiz:
+  - q: "What characterizes an orchestrated process?"
+    options:
+      - text: "A central orchestrator commands the flow via request-response"
+        correct: true
+      - text: "Services react to broadcast events with no central coordinator"
+        correct: false
+      - text: "Every service must share one database"
+        correct: false
+      - text: "Steps run in random order"
+        correct: false
+    explain: "Orchestration uses command-and-control from one service — explicit and easy to follow, but with higher domain coupling."
+  - q: "What is the main downside of orchestration?"
+    options:
+      - text: "Higher coupling and a tendency toward anemic downstream services"
+        correct: true
+      - text: "It cannot handle failures"
+        correct: false
+      - text: "It requires no monitoring"
+        correct: false
+      - text: "It is impossible to debug"
+        correct: false
+    explain: "The orchestrator knows about all the services; 'if logic has a place where it can be centralized, it will become centralized,' leaving collaborators anemic."
+  - q: "What does choreography need to make saga state observable?"
+    options:
+      - text: "A correlation ID propagated through every event, plus a service that projects saga state"
+        correct: true
+      - text: "A central orchestrator"
+        correct: false
+      - text: "A shared database lock"
+        correct: false
+      - text: "Synchronous calls only"
+        correct: false
+    explain: "Because no single service sees the whole flow, a correlation ID and a consumer that builds a view of saga state restore visibility."
+  - q: "What is Newman's team-based rule of thumb?"
+    options:
+      - text: "Orchestration when one team owns the whole process; choreography when multiple teams are involved"
+        correct: true
+      - text: "Always choreograph"
+        correct: false
+      - text: "Always orchestrate"
+        correct: false
+      - text: "Choose based on programming language"
+        correct: false
+    explain: "Single-team ownership makes centralized orchestration manageable; spanning teams favors the looser coupling of choreography."
+takeaway: "Orchestrate (central command) when one team owns the whole process; choreograph (event reactions) across teams for looser coupling — and use a correlation ID to see the state."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+An orchestra has a conductor who cues each section in turn — clear, visible, and centrally controlled. A troupe of dancers performs without a conductor: each dancer reacts to the music and to the others, producing a coordinated whole with no one in charge. Orchestration has a conductor; choreography is the dancers.
+</Callout>
+
+## Coordinating a process across services
+
+Once a business process — say, creating a customer order — spans several services, *something* has to coordinate the steps. There are two styles, and the difference is **who knows about the flow**.
+
+<Mermaid code={String.raw`graph TD
+  subgraph Orchestration
+    O["Order Processor<br/>(orchestrator)"]
+    O -->|"command"| W1["Warehouse"]
+    O -->|"command"| P1["Payment"]
+    O -->|"command"| L1["Loyalty"]
+  end
+  subgraph Choreography
+    OE["Order Placed<br/>event on broker"]
+    OE --> W2["Warehouse reacts"]
+    OE --> P2["Payment reacts"]
+    OE --> L2["Loyalty reacts"]
+  end`} />
+
+## Orchestration — command and control
+
+A central **orchestrator** (e.g., `Order Processor`) defines the order of steps and triggers each one, typically via **request-response**.
+
+- **Pros:** explicit and understandable — the whole process lives in one readable place; easy to see and reason about its state.
+- **Cons:** **higher domain coupling** (the orchestrator must know about every collaborator) and a tendency to make downstream services **anemic** — "if logic has a place where it can be centralized, it will become centralized."
+- **Mitigation:** use *different* services as orchestrators for *different* flows, so no single god-service accretes all the logic. Newman dislikes heavyweight BPM tools; prefer code, with developer-friendly options like Camunda/Zeebe if needed.
+
+## Choreography — react to events
+
+Services react to **events broadcast on a message broker**; no service knows about another.
+
+- **Pros:** **drastically lower coupling**; responsibility is distributed; easy to add a new reactor without touching the publishers.
+- **Cons:** **harder to see the overall process** and to know what state a saga is in.
+- **Solution:** propagate a **correlation ID** through every event, plus a dedicated service that consumes events to **project saga state**, restoring observability.
+
+<Mermaid code={String.raw`graph LR
+  E1["Order Placed<br/>(corr-id: 9f2)"] --> Mon["Saga-state projector"]
+  E2["Payment Taken<br/>(corr-id: 9f2)"] --> Mon
+  E3["Stock Reserved<br/>(corr-id: 9f2)"] --> Mon
+  Mon --> View["Order 9f2:<br/>placed -> paid -> reserved"]`} />
+
+<Callout type="tip" title="💡 You can mix and nest">
+The styles aren't exclusive. You can run an *orchestrated* flow inside the Warehouse boundary that participates in a larger *choreographed* saga; nested sagas exist for complex processes. Match the style to the ownership and complexity of each segment.
+</Callout>
+
+<Callout type="gotcha" title="⚠️ Centralization creeps">
+The pull toward orchestration isn't only a design choice — it's gravitational. Logic naturally drifts to wherever it *can* be centralized, hollowing out collaborators into dumb CRUD wrappers. If you orchestrate, deliberately keep real domain logic in the services and resist the urge to thicken the orchestrator.
+</Callout>
+
+## The rule of thumb
+
+<Callout type="go" title="🔑 Key insight">
+Be relaxed about **orchestration when one team owns the whole process** — central control is manageable and the visibility is worth it. Prefer **choreography across multiple teams**, where looser coupling lets each team evolve independently. This is [Conway's law](/microservices/conways-law-and-team-topologies/) applied to workflow design.
+</Callout>
+
+This choice is the engine room of [sagas](/microservices/sagas/) — the pattern that coordinates a sequence of state changes across services without distributed transactions, in either an orchestrated or choreographed style.
+
+## See also
+
+- [Communication styles](/microservices/communication-styles/) — sync vs async, events vs messages.
+- [Sagas](/microservices/sagas/) — applying these styles to distributed workflows.
+- [Conway's law and Team Topologies](/microservices/conways-law-and-team-topologies/) — why team ownership drives the choice.

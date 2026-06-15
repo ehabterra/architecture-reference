@@ -1,0 +1,124 @@
+---
+title: "Serverless-First Design"
+category: cld-serverless
+kind: topic
+order: 2
+difficulty: "Beginner"
+status: ready
+intent: "Serverless-first means choosing serverless as the best-fit first option — reached through a sequence of X-first disciplines, not as a dogmatic must."
+book: "Serverless Development on AWS (Brisals & Hedger)"
+related:
+  - what-is-serverless
+  - event-driven-serverless-patterns
+  - the-well-architected-lens
+when_use:
+  - "Starting a new enterprise serverless adoption that must scale beyond a few functions"
+  - "You need to break a complex domain into small, single-team-owned microservices"
+  - "You want to avoid a distributed monolith and build cost-awareness in from the start"
+when_avoid:
+  - "Treating serverless as a 'serverless-must' that ignores poor-fit workloads"
+  - "Adopting it without domain, team, API, and event-driven foundations in place"
+  - "Optimizing for technical purity over delivery velocity"
+quiz:
+  - q: "What is the 'ball of serverless mud' (BoSM)?"
+    options:
+      - text: "A tangled distributed monolith that results from scaling serverless without proper scaffolding"
+        correct: true
+      - text: "A function with too many lines of code"
+        correct: false
+      - text: "A monolith that has not yet been migrated"
+        correct: false
+      - text: "A cold-start performance problem"
+        correct: false
+    explain: "Without domain, team, API, and event-driven foundations, teams produce a tightly coupled distributed monolith — the BoSM antipattern."
+  - q: "What does 'serverless-first' actually mean?"
+    options:
+      - text: "Serverless is the best-fit first technology choice — not a mandatory one"
+        correct: true
+      - text: "Every workload must be serverless"
+        correct: false
+      - text: "You must write the serverless layer before anything else"
+        correct: false
+      - text: "Functions come before databases"
+        correct: false
+    explain: "Serverless-first is a default-to-serverless posture that still assesses fit. It is the last in a sequence of X-first disciplines, tied to cloud-first and the Value Flywheel."
+  - q: "Which X-first discipline maps one microservice to exactly one owning team?"
+    options:
+      - text: "Microservices-first"
+        correct: true
+      - text: "Domain-first"
+        correct: false
+      - text: "API-first"
+        correct: false
+      - text: "Event-driven-first"
+        correct: false
+    explain: "Microservices-first holds that one microservice is owned by exactly one stream-aligned team and never shared."
+  - q: "How should serverless talent be developed?"
+    options:
+      - text: "Grow it — provide a fertile environment, passionate pilots, and an enabler/gardener"
+        correct: true
+      - text: "Build it via a fast Hire-Assemble-Develop-Deliver-Disperse flywheel"
+        correct: false
+      - text: "Hire only superstar individuals"
+        correct: false
+      - text: "Assign fixed permanent roles"
+        correct: false
+    explain: "The book rejects the build flywheel in favor of growing talent: a conducive environment, passionate pilot engineers, and a serverless enabler who can 'ride the elevator.'"
+takeaway: "Reach serverless-first through domain, team, API, microservices, and event-driven foundations — and grow your people; don't bolt functions onto a distributed monolith."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+You don't pour a skyscraper's top floor first. Foundations come before the structure: bedrock, footings, frame, then floors. "Serverless-first" is the top floor — it only stands if domain, team, API, microservice, and event-driven foundations were laid first. Skip them and you get a tower of mud.
+</Callout>
+
+## Serverless is a marathon, not a sprint
+
+Adopting serverless at enterprise scale demands a **readiness evaluation** of mindset, people, and processes — not just the ability to write a function. The central danger is the **ball of serverless mud (BoSM)**: a tangled **distributed monolith** that emerges when teams scale serverless without scaffolding. The antidote is a sequence of **first-principles ("X-first") disciplines** that *precede* serverless-first.
+
+## The X-first sequence
+
+<Mermaid code={String.raw`graph LR
+  D["Domain-first<br/>(DDD: subdomains,<br/>bounded contexts)"] --> T["Team-first<br/>(stream-aligned teams)"]
+  T --> A["API-first<br/>(contracts as<br/>first-class)"]
+  A --> M["Microservices-first<br/>(one service,<br/>one team)"]
+  M --> E["Event-driven-first<br/>(async, eventual<br/>consistency)"]
+  E --> S["Serverless-first<br/>(best-fit choice,<br/>cloud-first)"]`} />
+
+- **Domain-first** — rooted in **Domain-Driven Design**: break domains into **subdomains** and **bounded contexts**, speak a **ubiquitous language**, and use the **two-pizza team** ownership rule.
+- **Team-first** — adopt **stream-aligned teams** (from *Team Topologies*). **Enabling teams** empower stream-aligned teams rather than do their work, reducing cognitive load; a **Cloud Center of Excellence (CCoE)** supports them.
+- **API-first** — treat APIs as agreed, first-class **contracts** that protect bounded-context boundaries and enable loose coupling, with **governance** and **discoverability**.
+- **Microservices-first** — one microservice is owned by exactly one team and **never shared**; a bounded context maps one-to-one or one-to-many to microservices.
+- **Event-driven-first** — embrace asynchronous communication and eventual consistency ("the world is asynchronous"); use **EventStorming** to model domain events.
+- **Serverless-first** — the *best-fit first* technology choice (not "serverless-must"), tied to **cloud-first** and the **Value Flywheel Effect**.
+
+<Callout type="gotcha" title="Sufficiently, not maximally">
+"Efficient" is not the same as "fast," and "cost-effective" is not the same as "cheaper like-for-like." Assess workload suitability honestly — **"sufficiently" is often the right yardstick**. Compute-heavy, long-running, or ultra-low-latency workloads may be poor fits. See [what is serverless](/cloud/what-is-serverless/) for the unsuitable-workload list.
+</Callout>
+
+## Demystifying vendor lock-in
+
+Lock-in is just dependence with a high cost of porting — not new and not cloud-specific. Mitigations (none eliminate it) include **open API standards**, **open source**, and **software patterns** like **hexagonal architecture**. Mike Roberts' rule of thumb: if 90% of your function code is unaware it is in Lambda, only ~10% needs recoding to move clouds. The real traps are **mental lock-in** and chasing **technical purity** over velocity — "speed matters in business."
+
+## Grow people; don't build a flywheel
+
+<Callout type="go" title="Key insight">
+Reject the **fast-track build flywheel** (Hire → Assemble → Develop → Deliver → Disperse). Instead **grow** serverless talent like a garden: a **fertile field** (autonomy and ownership), **healthy seeds** (passionate pilot engineers), and a **gardener** — a *serverless enabler* who can "ride the elevator" between strategy and code. "The swiftest way to grow a company is to grow its people."
+</Callout>
+
+Migration follows the **6 Rs** (Rehost, Replatform, Repurchase, Refactor, Retire, Retain). Three serverless approaches: **lift-and-shift** (least favored, a stopgap), **all-at-once rewrite** (serverless-native), and **phased migration** (best for large multi-team orgs — start with non-critical services). Strategies can be mixed.
+
+<Mermaid code={String.raw`graph TD
+  L["Legacy system"] --> Q{"Migration approach"}
+  Q --> LS["Lift-and-shift<br/>(stopgap, least favored)"]
+  Q --> AO["All-at-once rewrite<br/>(serverless-native)"]
+  Q --> PH["Phased migration<br/>(start non-critical)"]
+  PH --> SN["Serverless target"]
+  AO --> SN`} />
+
+## See also
+
+- [What is serverless](/cloud/what-is-serverless/) — the ecosystem and its characteristics.
+- [Event-driven serverless patterns](/cloud/event-driven-serverless-patterns/) — realizing event-driven-first.
+- [The Well-Architected lens](/cloud/the-well-architected-lens/) — the six pillars that guide design.

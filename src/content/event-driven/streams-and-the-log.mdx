@@ -1,0 +1,127 @@
+---
+title: "Streams and the Log"
+category: ed-patterns
+kind: topic
+order: 5
+difficulty: "Intermediate"
+status: ready
+intent: "The durable append-only log as the substrate of event-driven systems — partitions, offsets, retention, compaction, tombstones, and the Kappa architecture."
+book: "Building Event-Driven Microservices; Building an Event-Driven Data Mesh (Adam Bellemare); Flow Architectures (James Urquhart)"
+related:
+  - thinking-in-events
+  - event-processing-topologies
+  - event-sourcing
+when_use:
+  - "You need durable, replayable history that many consumers read independently"
+  - "Parallelism via partitions and data locality on a key matters"
+  - "You want a single mechanism for both historical and real-time data (Kappa)"
+when_avoid:
+  - "The broker caps retention below your replay needs (Kinesis, Event Hubs, Pub/Sub)"
+  - "You only need a fire-and-forget, loss-tolerant notification (ephemeral messaging may suffice)"
+  - "Strict global ordering across all partitions is required (ordering is per-partition only)"
+quiz:
+  - q: "Ordering guarantees in a log-based broker hold…"
+    options:
+      - text: "Within a partition, not across the whole stream"
+        correct: true
+      - text: "Across the entire stream globally"
+        correct: false
+      - text: "Only for keyed events across all partitions"
+        correct: false
+      - text: "Never"
+        correct: false
+    explain: "Strict ordering is guaranteed within a partition. Same-key events land on the same partition via the partitioner, which is the basis of data locality."
+  - q: "Consumer lag is computed as…"
+    options:
+      - text: "The tail (latest) index minus the consumer's current index"
+        correct: true
+      - text: "The number of consumers minus partitions"
+        correct: false
+      - text: "Retention time minus event time"
+        correct: false
+      - text: "Total events divided by partitions"
+        correct: false
+    explain: "Lag = tail index − consumer index. It is the key signal for autoscaling and for waking FaaS functions."
+  - q: "Log compaction…"
+    options:
+      - text: "Retains only the most recent event per key, deleting predecessors and tombstones — trading history for size"
+        correct: true
+      - text: "Compresses every event with gzip"
+        correct: false
+      - text: "Deletes the entire stream after a time cap"
+        correct: false
+      - text: "Removes the newest event per key"
+        correct: false
+    explain: "Compaction keeps current state cheap while discarding history; a tombstone (key with null value) signals deletion and is itself eventually compacted."
+  - q: "The Kappa architecture differs from Lambda in that it…"
+    options:
+      - text: "Uses a single stream for both historical and real-time data, instead of separate batch and stream paths"
+        correct: true
+      - text: "Uses two separate code paths for batch and stream"
+        correct: false
+      - text: "Stores no history"
+        correct: false
+      - text: "Requires no broker"
+        correct: false
+    explain: "Kappa lets consumers set their offset to the beginning and consume forward, building their own state — avoiding Lambda's dual code paths and combinatorial merge problem."
+takeaway: "The durable append-only log is the substrate: partitions give parallelism, offsets give independent replay, compaction keeps state cheap, and Kappa serves history and real-time from one stream."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Think of the log as a ship's logbook: entries are appended in order and never erased, each reader keeps their own bookmark (offset), and anyone can flip back to page one and re-read the whole voyage. The broker is the ship — it just keeps the book safe, replicated, and fast to read.
+</Callout>
+
+## The log is the foundation
+
+Underneath every event-driven system is a **durable append-only log** served by an **event broker** (Kafka is canonical; Pulsar is the other unlimited-retention option). Bellemare lists the minimal storage and serving requirements a broker must meet:
+
+- **Partitioning** — substreams that enable parallel consumption.
+- **Strict ordering** — guaranteed *within* a partition.
+- **Immutability** — events are never modified after they are written.
+- **Indexing (offsets)** — each consumer tracks its own position; **consumer lag = tail index − consumer index**.
+- **Infinite retention** and **replayability** — read the same history any number of times.
+
+This is what separates an event broker from a **message broker**: a message broker hands each message to one consumer and deletes it, so it cannot communicate state to many consumers. The log can.
+
+<Mermaid code={String.raw`graph LR
+  K["Key"] -->|"hash → partition"| PA["Partition 0: e0 e1 e2 ..."]
+  K --> PB["Partition 1: e0 e1 e2 ..."]
+  PA -->|"offset 1"| CA["Consumer instance A"]
+  PB -->|"offset 0"| CB["Consumer instance B"]
+  PA -->|"offset 2 (replay)"| CR["Replay / new consumer"]`} />
+
+## Partitions, keys, and data locality
+
+A **partitioner** deterministically maps an event key to a partition, usually by hashing. Because same-key events always land on the same partition, a consumer that owns that partition holds a *complete account* of every key it sees — this is **data locality**. It lets a service scale to many instances, each owning a subset of partitions, while keeping per-key state coherent. The active instances in a **consumer group** are capped at the partition count, so partition count sets the ceiling on parallelism.
+
+<Callout type="go" title="The key insight">
+Retention is the deal-breaker when choosing a broker. Only **Kafka** and **Pulsar** offer unlimited retention; Kinesis (365 days), Event Hubs Premium (90 days), and Pub/Sub (31 days) cap it — which makes them unsuitable as the durable source of truth.
+</Callout>
+
+## Keeping the log affordable: compaction and tombstones
+
+An append-only log grows forever. Two mechanisms tame it:
+
+- **Compaction** — the broker retains only the most recent event per key, deleting predecessors and tombstones. You trade history for size; current state stays cheap to materialize.
+- **Tombstones** — a keyed event with a `null` value, signaling deletion. The tombstone is itself eventually compacted away.
+
+<Mermaid code={String.raw`graph LR
+  Before["Before: A=1, B=1, A=2, C=1, A=3, B=null"] -->|"compaction"| After["After: A=3, C=1<br/>(B tombstoned away)"]`} />
+
+**Tiered storage** (Kafka KIP-405) transparently offloads old segments to cheap cold storage, giving effectively infinite retention without infinite hot-disk cost.
+
+## Kappa over Lambda
+
+Because one stream can serve *both* historical and real-time needs, Jay Kreps's **Kappa architecture** uses a single stream: a consumer sets its offset to the beginning, consumes forward, and builds its own state store. The **Lambda architecture** instead runs parallel batch and stream paths — and Bellemare rejects it: it forces dual code paths, batch and stream models must evolve in lockstep, results often fail to converge, and merging multiple Lambda products scales *combinatorially* (2 products → 4 relationships, 3 → 8). Kappa, supported by indefinite retention, tiered storage, and compaction, avoids all of it.
+
+<Callout type="gotcha" title="Don't infer lag from the last event time on a compacted stream">
+For a compacted state product, hours or days between events for a key is normal. Inferring "this consumer is behind" from wall-clock gaps will mislead you — **rely on offsets**, not timestamps, to judge how caught-up a consumer is.
+</Callout>
+
+## See also
+
+- [Thinking in events](/event-driven/thinking-in-events/) — entity events and table-stream duality.
+- [Event processing topologies](/event-driven/event-processing-topologies/) — stateless and stateful processing over partitions.
+- [Event sourcing](/event-driven/event-sourcing/) — rebuilding state by replaying the log.

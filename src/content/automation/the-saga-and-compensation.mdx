@@ -1,0 +1,137 @@
+---
+title: "The Saga and Compensation"
+category: auto-modeling
+kind: topic
+order: 6
+difficulty: "Advanced"
+status: ready
+intent: "ACID stops at the service boundary — the saga pattern restores consistency by undoing completed steps with compensating actions instead of rolling back."
+book: "Practical Process Automation (Bernd Ruecker)"
+related:
+  - handling-failures-and-retries
+  - modeling-with-bpmn
+  - integrating-with-services-and-apis
+when_use:
+  - "A business transaction spans multiple services that cannot share one ACID transaction"
+  - "A failed step partway through must be undone to return the system to consistency"
+  - "You need a visible, owned place to model cleanup across long-running steps"
+when_avoid:
+  - "Everything fits in a single local ACID transaction (use the database, not a saga)"
+  - "The business chooses to ignore or apologize for rare, low-impact inconsistencies"
+  - "Compensation would be more complex and risky than a reconciliation batch (weigh it)"
+quiz:
+  - q: "Why can't you use ACID rollback across multiple services?"
+    options:
+      - text: "Distributed components and multiple resources can't join one transaction, and long-running steps can't hold transactions open"
+        correct: true
+      - text: "ACID was deprecated in 2013"
+        correct: false
+      - text: "Services are too fast for transactions"
+        correct: false
+      - text: "Rollback is illegal in distributed systems"
+        correct: false
+    explain: "ACID guarantees hold only within a boundary (one DB or joined connection). Across services, distributed two-phase commit is expensive and brittle, so assume ACID is unavailable once you go remote."
+  - q: "What does compensation do in a saga?"
+    options:
+      - text: "Runs an explicit undo action for each already-completed step to restore consistency"
+        correct: true
+      - text: "Replays the entire process from the start"
+        correct: false
+      - text: "Locks all services until the error clears"
+        correct: false
+      - text: "Discards the process instance silently"
+        correct: false
+    explain: "When you can't roll back, you undo. BPMN compensation events link each task to its undo task; on error the engine runs the necessary compensations."
+  - q: "Why is compensation often not a clean rollback?"
+    options:
+      - text: "Some actions can't be reversed perfectly — a shipped SIM can only be deactivated, maybe with extra steps like informing the customer"
+        correct: true
+      - text: "The engine forgets which tasks ran"
+        correct: false
+      - text: "Compensation always doubles the data"
+        correct: false
+      - text: "Undo tasks must run in random order"
+        correct: false
+    explain: "Real-world undo may differ from the original action and add steps. That semantic gap, plus added model complexity, is the cost of the saga pattern."
+  - q: "What are the three business strategies for handling cross-boundary inconsistency?"
+    options:
+      - text: "Ignore, apologize, and resolve"
+        correct: true
+      - text: "Retry, reboot, and rollback"
+        correct: false
+      - text: "Cache, queue, and shard"
+        correct: false
+      - text: "Lock, wait, and abort"
+        correct: false
+    explain: "Ignore (rare, low impact), apologize (fix when effects surface, often a cost win), or resolve head-on. Saga and the outbox are the instance-level resolve patterns."
+takeaway: "Across services you undo, not roll back: define a compensating action per step and let the saga restore consistency when something fails midway."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+You book a wedding: venue, caterer, band. Two weeks in, the venue cancels. You can't press one magic "undo" — you must individually **cancel the caterer** (perhaps losing a deposit) and **call the band to call it off**. That is a **saga**: there is no global rollback, only a series of explicit, sometimes-imperfect **compensating actions**.
+</Callout>
+
+## Why ACID stops at the boundary
+
+Inside one service, **ACID transactions** (Atomic, Consistent, Isolated, Durable) make consistency easy — write to CRM and billing in one transaction and they commit or roll back together. The instant you cross a service boundary, that guarantee is gone:
+
+- distributed components and **multiple resources** (separate databases, messaging) **can't join one transaction**;
+- **long-running** steps can't hold a transaction open without deadlocks and timeouts;
+- distributed ACID via **two-phase commit (XA)** is expensive, complex, and brittle.
+
+So **assume ACID is impossible** once remote communication is involved. The consequence is **eventual consistency**: intermediary states are immediately visible to the world — a customer exists in CRM but not yet in billing — and you must take measures to return to a consistent state *eventually*.
+
+## The saga: undo instead of roll back
+
+When you cannot roll back, you **undo**. The **saga pattern** (named from a 1980s paper on long-lived transactions) defines, for each task, a **compensating task** that reverses its effect. In [BPMN](/automation/modeling-with-bpmn/), **compensation events** link a task to its undo task; on error the engine runs all the compensations that are needed, in reverse, for the steps that actually completed.
+
+<Mermaid code={String.raw`flowchart LR
+  S(("Start")) --> T1["Create in CRM"]
+  T1 --> T2["Create in billing"]
+  T2 --> T3["Provision SIM"]
+  T3 --> T4["Register on network"]
+  T4 --> E(("Onboarded"))
+  T4 -.->|"fails"| C["Trigger compensation"]
+  C -.->|"undo"| U3["Deactivate SIM<br/>+ inform customer"]
+  U3 -.->|"undo"| U2["Cancel billing account"]
+  U2 -.->|"undo"| U1["Remove from CRM"]`} />
+
+The [workflow engine](/automation/where-workflow-engines-fit/) is a natural home for this: its **durable state** remembers which steps ran, its **scheduling** drives the undo, and its **visibility** shows operators exactly what was compensated and why.
+
+<Callout type="gotcha" title="Undo is rarely a clean mirror image">
+A shipped SIM cannot be un-shipped — it can only be **deactivated**, and you may also have to **inform the customer**. Compensation logic frequently differs from the original action and adds steps, and it complicates the model. Budget for that semantic gap; "compensate" is a business decision, not a free database rollback.
+</Callout>
+
+## Saga vs the outbox — both "resolve" patterns
+
+The saga is one of two instance-level ways to **resolve** inconsistency. The other is the **outbox pattern**: when a service must atomically persist a result *and* publish an event (two resources, no shared transaction), it writes the event into an **outbox table in the same database within the same transaction**, and a separate scheduler later publishes and deletes the row — giving **at-least-once** delivery. A workflow engine can **replace the outbox**: model "do business logic + commit" and "publish event" as two tasks; if the service crashes after the first, the engine resumes at the right task — same at-least-once semantics, no outbox table or scheduler, plus built-in monitoring.
+
+<Callout type="go" title="Saga and outbox are siblings">
+Both restore consistency *per instance* without waiting for a nightly reconciliation batch. The saga **undoes** completed work after a failure; the outbox **guarantees** a side effect eventually happens. An engine's persistence and scheduling implement either one cleanly.
+</Callout>
+
+## When NOT to compensate: ignore and apologize
+
+Resolving is not always the right call. The book frames **three business strategies**:
+
+- **Ignore** — valid when business impact is low and the event is rare. Cheap; the cost is imperfect reports and the occasional campaign hitting a rejected customer.
+- **Apologize** — an extension of ignore: don't prevent inconsistencies, but make it right when effects surface (ignore failed SIM registrations, then on a complaint apologize, send a $10 voucher, and register manually). Often a clear cost/value win, like airline overbooking.
+- **Resolve** — tackle it head-on, via reconciliation batch jobs or instance-level **saga** / **outbox**.
+
+<Mermaid code={String.raw`graph TD
+  I["Cross-boundary inconsistency"] --> Q{"Volume, value, and impact?"}
+  Q -->|"rare and low impact"| IG["Ignore<br/>accept imperfect reports"]
+  Q -->|"surfaces occasionally"| AP["Apologize<br/>make it right when noticed"]
+  Q -->|"high stakes"| RE["Resolve<br/>saga, outbox, or reconciliation"]`} />
+
+<Callout type="tip" title="Make it a business decision">
+Whether to ignore, apologize, or resolve depends on **volume, business value, and impact** — involve business stakeholders, and let BPMN's visibility make the trade-off concrete. Don't reach for a complex saga when an apology is cheaper and rarer to invoke.
+</Callout>
+
+## See also
+
+- [Handling failures and retries](/automation/handling-failures-and-retries/) — idempotency, timeouts, and ambiguous-failure cleanup.
+- [Integrating with services and APIs](/automation/integrating-with-services-and-apis/) — where eventual consistency begins.
+- [Modeling with BPMN](/automation/modeling-with-bpmn/) — compensation events and error events.

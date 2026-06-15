@@ -1,0 +1,118 @@
+---
+title: "SaaS Foundations"
+category: cld-saas
+kind: topic
+order: 7
+difficulty: "Beginner"
+status: ready
+intent: "SaaS is a business model first — a unified, single-version service experience for tenants — and multi-tenancy means collective management, not necessarily shared infrastructure."
+book: "Building Multi-Tenant SaaS Architectures (Tod Golding)"
+related:
+  - tenant-isolation-models
+  - control-plane-vs-application-plane
+  - tenant-onboarding-and-identity
+when_use:
+  - "Defining what 'being SaaS' means for your organization before choosing technology"
+  - "Aligning business and engineering on agility, efficiency, and frictionless onboarding"
+  - "Deciding whether a delivery model is genuinely SaaS or really an MSP"
+when_avoid:
+  - "Treating SaaS as a technology-first endeavor and bolting tenancy on later"
+  - "Allowing per-customer version variation (that is the MSP model, not SaaS)"
+  - "Equating multi-tenant strictly with shared infrastructure"
+quiz:
+  - q: "What is SaaS, fundamentally?"
+    options:
+      - text: "A business and software delivery model emphasizing agility, operational efficiency, and frictionless onboarding"
+        correct: true
+      - text: "A technology stack of shared microservices"
+        correct: false
+      - text: "Any application hosted in the cloud"
+        correct: false
+      - text: "Software delivered per customer with shared operations"
+        correct: false
+    explain: "Golding's thesis is that SaaS is a business model first; the architecture exists to realize agility, efficiency, innovation, onboarding, and growth."
+  - q: "How does Golding redefine 'multi-tenant'?"
+    options:
+      - text: "Any environment that onboards, deploys, manages, and operates tenants through a single unified experience"
+        correct: true
+      - text: "An environment where all infrastructure is shared"
+        correct: false
+      - text: "An environment with more than one customer"
+        correct: false
+      - text: "An environment using a shared database"
+        correct: false
+    explain: "There is no correlation to whether infrastructure is shared — even fully dedicated per-tenant resources are multi-tenant if managed collectively."
+  - q: "What is the litmus test that distinguishes SaaS from an MSP?"
+    options:
+      - text: "All tenants run the same version"
+        correct: true
+      - text: "All tenants share one database"
+        correct: false
+      - text: "Customers are called tenants"
+        correct: false
+      - text: "There is a subscription price"
+        correct: false
+    explain: "Per-customer version variation reintroduces one-off operational pain. SaaS deploys an update once and every tenant gets it."
+  - q: "Why does Golding say the cross-cutting 'surrounding' services should be built front-and-center?"
+    options:
+      - text: "They drive the agility, efficiency, and growth benefits of SaaS"
+        correct: true
+      - text: "They are easier to build first"
+        correct: false
+      - text: "They replace the application logic"
+        correct: false
+      - text: "Regulators require them first"
+        correct: false
+    explain: "Onboarding, identity, billing, metering, metrics, and management are not secondary — they deliver the SaaS payoff even before the application is optimized."
+takeaway: "SaaS is a business model: a unified, same-version service experience for tenants. Multi-tenant means collective management, not necessarily shared infrastructure."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A restaurant's product is the food, but what you actually buy is the *service* — the table, the timing, the experience, the fact that the kitchen is improved tonight and you benefit immediately without reinstalling anything. SaaS is the same shift: you stop shipping a product to install and start running a service everyone consumes together, always on the latest version.
+</Callout>
+
+## SaaS is a business model first
+
+Golding's central, recurring theme is that **SaaS is not a technology-first endeavor**. It is a **business and software delivery model** whose core objectives are **agility, operational efficiency, innovation, frictionless onboarding, and growth**. The architecture exists to realize those goals — not the other way around. His working definition: *"SaaS is a business and software delivery model that enables organizations to offer their solutions in a low-friction, service-centric model that maximizes value for customers and providers."*
+
+This is a shift from the **traditional installed model** — sales-driven, tolerant of per-customer variations and separate versions, pushing vendors toward slow quarterly releases. That model erodes margins and undermines agility as the install base grows.
+
+## Customers become tenants
+
+In the unified model, customers are reframed as **tenants** — temporary occupants who consume only the resources they need. The **apartment-complex analogy** captures it: the building is shared infrastructure; tenants come and go, drawing on shared resources. The biggest payoff is **operational efficiency** and **economies of scale**, plus the ability to deploy an update once so *all* tenants get it immediately.
+
+<Callout type="go" title="The litmus test: same version">
+The single clearest test of SaaS is that **all tenants run the same version**. Deploy once, everyone benefits. The moment you maintain per-customer versions, you have slipped into the **Managed Service Provider (MSP)** model — valid and sometimes a stepping stone, but *not* SaaS, because version variation reintroduces one-off operational pain.
+</Callout>
+
+## Redefining multi-tenancy
+
+Historically "multi-tenant" meant *shared infrastructure*. Golding rejects this. Through a spectrum of examples — fully shared microservices, mixed (shared compute with per-tenant databases, or vice versa), and fully dedicated per-tenant infrastructure — he shows real SaaS blends shared and dedicated resources.
+
+<Mermaid code={String.raw`graph LR
+  SH["Fully shared<br/>(shared microservices)"] --> MX["Mixed<br/>(shared compute,<br/>per-tenant databases)"]
+  MX --> DE["Fully dedicated<br/>(per-tenant infrastructure)"]
+  SH -. all multi-tenant if managed collectively .-> DE`} /> He therefore **redefines multi-tenant** as *any environment that onboards, deploys, manages, and operates tenants through a single unified experience*, with **no correlation to whether infrastructure is shared**. He even abandons the term "single-tenant" — a fully dedicated environment is still multi-tenant if managed collectively.
+
+<Mermaid code={String.raw`graph TD
+  TM["Traditional installed model<br/>(per-customer versions)"] --> Q1{"Same version<br/>for all tenants?"}
+  Q1 -- No --> MSP["MSP model<br/>(not SaaS)"]
+  Q1 -- Yes --> Q2{"Managed through one<br/>unified experience?"}
+  Q2 -- Yes --> SAAS["SaaS / multi-tenant<br/>(shared OR dedicated infra)"]
+  Q2 -- No --> NS["Not SaaS"]`} />
+
+## Build the surrounding services first
+
+<Callout type="gotcha" title="Don't treat the plumbing as secondary">
+The cross-cutting **"surrounding" services** — onboarding, identity, billing, metering, metrics, analytics, deployment, management — are *not* secondary. They drive the agility, efficiency, and growth benefits of SaaS and should be built **front-and-center**, even before the application architecture is optimized. Building the app first and bolting tenancy on later is the cardinal mistake.
+</Callout>
+
+These services form the **control plane** — explored in [control plane vs. application plane](/cloud/control-plane-vs-application-plane/) — which acts as a "forcing function" injecting tenancy from day one. SaaS reshapes every role: product owners must value onboarding and time-to-value; engineers, QA, sales, and support all shift to a **service-centric mindset**. The book is framed as "a foundation, not a bible."
+
+## See also
+
+- [Control plane vs. application plane](/cloud/control-plane-vs-application-plane/) — the two halves of every SaaS architecture.
+- [Tenant isolation models](/cloud/tenant-isolation-models/) — silo, pool, and bridge.
+- [Tenant onboarding and identity](/cloud/tenant-onboarding-and-identity/) — where to start building.

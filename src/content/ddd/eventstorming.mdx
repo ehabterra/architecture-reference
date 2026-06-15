@@ -1,0 +1,136 @@
+---
+title: "EventStorming"
+category: ddd-application
+kind: topic
+order: 12
+difficulty: "Intermediate"
+status: ready
+intent: "A low-tech collaborative workshop that models a business process as a timeline of domain events — building shared knowledge and a ubiquitous language fast."
+book: "Learning Domain-Driven Design (Vlad Khononov)"
+related:
+  - ubiquitous-language
+  - bounded-contexts
+  - design-heuristics-and-evolution
+when_use:
+  - "To build a ubiquitous language and align mental models across a diverse group."
+  - "To model a complex business process or explore new requirements collaboratively."
+  - "To recover lost domain knowledge from a legacy system, or to onboard people."
+when_avoid:
+  - "When the business process is simple or obvious — the workshop's overhead isn't worth it."
+  - "Don't expect a polished model on the first pass; the value is the conversation."
+quiz:
+  - q: "What is EventStorming's primary benefit?"
+    options:
+      - text: "Knowledge sharing and mental-model alignment among participants"
+        correct: true
+      - text: "Producing a finished UML diagram"
+        correct: false
+      - text: "Generating production code"
+        correct: false
+      - text: "Replacing the need for domain experts"
+        correct: false
+    explain: "The model and the ubiquitous-language head start are bonuses; the primary value is the knowledge sharing and alignment that happens during the session."
+  - q: "How are domain events written on the sticky notes?"
+    options:
+      - text: "Past tense on orange notes (e.g., 'Order shipped')"
+        correct: true
+      - text: "Imperative on blue notes"
+        correct: false
+      - text: "As questions on pink notes"
+        correct: false
+      - text: "As nouns on yellow notes"
+        correct: false
+    explain: "Domain events are something interesting that already happened, written in past tense on orange notes; commands are imperative on light-blue notes placed before the events."
+  - q: "What does a 'pivotal event' indicate?"
+    options:
+      - text: "A change in context or phase, marked with a vertical bar — hinting at bounded-context boundaries"
+        correct: true
+      - text: "A bug in the process"
+        correct: false
+      - text: "An external system"
+        correct: false
+      - text: "A read model"
+        correct: false
+    explain: "Pivotal events mark a significant context/phase change (e.g., 'order shipped') with a vertical bar and hint at where bounded contexts might be drawn."
+  - q: "By the end of a session, every command should be triggered by...?"
+    options:
+      - text: "An actor, an automation policy, or an external system"
+        correct: true
+      - text: "Only an actor"
+        correct: false
+      - text: "Only a policy"
+        correct: false
+      - text: "A database trigger"
+        correct: false
+    explain: "Steps 5-8 ensure every command traces to an actor (yellow), an automation policy (purple), or an external system (pink)."
+takeaway: "Model a process as a past-tense event timeline with sticky notes, layering commands, actors, policies, and aggregates — the conversation is the real product."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Imagine the whole team standing at a long wall, building a comic strip of how the business actually works — panel by panel, in sticky notes. Disagreements about what happens next surface instantly, and by the end everyone shares the same story. That's EventStorming.
+</Callout>
+
+## A low-tech modeling workshop
+
+**EventStorming** (created by Alberto Brandolini) is a collaborative workshop where a diverse group brainstorms and rapidly models a business process as a series of **domain events** on a timeline, progressively enriching it with commands, actors, policies, read models, external systems, aggregates, and bounded contexts. Its primary value is the **knowledge sharing and ubiquitous-language formation** during the session — the model is a bonus. The process is guidance, not hard rules.
+
+Invite anyone related to the domain (engineers, domain experts, product owners, testers, UI/UX, support) — more diversity means more knowledge. Keep groups to ~10 in person (5 online), take the chairs out so people participate, and never let supplies be a bottleneck. A typical session runs 2–4 hours.
+
+## The ten steps
+
+<Mermaid code={String.raw`graph TD
+  S1["1. Unstructured exploration<br/>domain events (orange, past tense)"] --> S2["2. Timelines<br/>order events, happy path first"]
+  S2 --> S3["3. Pain points (pink diamond)"]
+  S3 --> S4["4. Pivotal events (vertical bar)"]
+  S4 --> S5["5. Commands (blue) + actors (yellow)"]
+  S5 --> S6["6. Automation policies (purple)"]
+  S6 --> S7["7. Read models (green)"]
+  S7 --> S8["8. External systems (pink)"]
+  S8 --> S9["9. Aggregates (large yellow)"]
+  S9 --> S10["10. Bounded contexts (group aggregates)"]`} />
+
+1. **Unstructured exploration** — Brainstorm domain events (orange, past tense); no ordering yet.
+2. **Timelines** — Order events; start with the happy path, then alternatives; fix duplicates and gaps.
+3. **Pain points** — Mark bottlenecks, manual steps, and missing knowledge (rotated pink diamonds) throughout.
+4. **Pivotal events** — Mark context/phase changes with a vertical bar; these hint at bounded-context boundaries.
+5. **Commands** — Add imperative commands (light blue) before events; attach actors (small yellow) where obvious.
+6. **Policies** — Add automation policies (purple) connecting an event to an auto-triggered command, with decision criteria ("only for VIP customers").
+7. **Read models** — Add green notes for the view an actor uses to decide.
+8. **External systems** — Add pink external-system notes (input or output).
+9. **Aggregates** — Organize related commands and events into aggregates (large yellow), commands on the left, events on the right.
+10. **Bounded contexts** — Group related aggregates into candidate boundaries.
+
+<Callout type="go" title="Every command needs a trigger">
+By the end, **every command should be triggered by an actor, an automation policy, or an external system**. If a command has no trigger, you've found a gap in the model — exactly the kind of "white spot" the workshop exists to surface.
+</Callout>
+
+<Callout type="gotcha" title="Pink does double duty">
+The color scheme is conventional, and **pink** means *both* pain points (diamond) *and* external systems — build a visible legend with real sticky notes as you introduce each element so nobody gets confused. Orange = events (past tense), light blue = commands (imperative), small yellow = actors, large yellow = aggregates, purple = policies, green = read models, vertical bar = pivotal events.
+</Callout>
+
+## When to run one
+
+<Callout type="tip" title="Best learned by doing">
+Use EventStorming to build a [ubiquitous language](/ddd/ubiquitous-language/), model a process, explore new requirements, recover lost domain knowledge from a legacy system, improve a process, or onboard people. *Don't* use it when the process is simple or obvious. Watch the group's energy, draw in quiet participants, and run a "big-picture-first" pass (steps 1–4 across a wide domain) before dedicated per-process sessions. The resulting model can even be a blueprint for an [event-sourced domain model](/ddd/event-sourcing/).
+</Callout>
+
+The elements connect in a consistent "grammar" — reading it left to right is how you sanity-check the model:
+
+<Mermaid code={String.raw`graph LR
+  Actor["Actor (yellow)"] --> Cmd["Command (blue)"]
+  Policy["Policy (purple)"] -.-> Cmd
+  Ext["External system (pink)"] -.-> Cmd
+  Cmd --> Agg["Aggregate (large yellow)"]
+  Agg --> Ev["Event (orange, past tense)"]
+  Ev --> RM["Read model (green)"]
+  Ev -.->|"triggers"| Policy`} />
+
+The advice for the whole DDD journey distills to one line: *"Always watch your ubiquitous language, and when in doubt, do EventStorming."*
+
+## See also
+
+- [Ubiquitous language](/ddd/ubiquitous-language/) — what EventStorming builds fastest.
+- [Bounded contexts](/ddd/bounded-contexts/) — pivotal events and aggregate groupings reveal them.
+- [Design heuristics and evolution](/ddd/design-heuristics-and-evolution/) — using the workshop to recover knowledge when evolving a design.

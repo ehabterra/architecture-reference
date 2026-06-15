@@ -1,0 +1,132 @@
+---
+title: "Migration Patterns: Branch by Abstraction & Parallel Run"
+category: ms-decomposition
+kind: topic
+order: 7
+difficulty: "Advanced"
+status: ready
+intent: "Beyond the strangler fig — branch by abstraction for functionality deep inside the monolith, parallel run to verify a risky replacement, plus decorating collaborator and change data capture."
+book: "Monolith to Microservices (Sam Newman)"
+related:
+  - the-strangler-fig-pattern
+  - decomposing-the-database
+  - deployment-and-progressive-delivery
+when_use:
+  - "The functionality is deep inside the monolith with no perimeter call to intercept."
+  - "You want to verify a new implementation against the old before trusting it."
+  - "You need to react to something happening inside a monolith you can't easily change."
+when_avoid:
+  - "An inbound call exists to intercept — prefer the strangler fig."
+  - "The change is low-risk — a full parallel run is overkill."
+quiz:
+  - q: "When should you use branch by abstraction instead of the strangler fig?"
+    options:
+      - text: "When the functionality is deep inside the monolith with no perimeter call to redirect"
+        correct: true
+      - text: "When the monolith exposes a clean HTTP API"
+        correct: false
+      - text: "When you cannot change the monolith's code"
+        correct: false
+      - text: "When you want zero code changes"
+        correct: false
+    explain: "Branch by abstraction changes code in place: create an abstraction, add a new implementation calling the new service, switch via a feature toggle. It assumes you CAN change the monolith."
+  - q: "What does a parallel run do?"
+    options:
+      - text: "Calls both old and new implementations on the same requests and compares results"
+        correct: true
+      - text: "Runs the new service for half the users"
+        correct: false
+      - text: "Deploys two versions and load-balances between them"
+        correct: false
+      - text: "Runs tests in two environments simultaneously"
+        correct: false
+    explain: "Both implementations run on the same input; only one (usually the old) is the source of truth until verification shows the new can be trusted."
+  - q: "How do parallel run, canary, and dark launching differ?"
+    options:
+      - text: "Canary sends a subset of users to the new code; dark launching deploys/tests invisibly; parallel run compares both on the same requests"
+        correct: true
+      - text: "They are three names for the same thing"
+        correct: false
+      - text: "Only canary is a real technique"
+        correct: false
+      - text: "Dark launching means deleting the old code first"
+        correct: false
+    explain: "All fall under progressive delivery; a parallel run implements dark launching, while canary exposes real users to a subset."
+  - q: "Which change-data-capture implementation does Newman consider neatest?"
+    options:
+      - text: "Transaction log pollers"
+        correct: true
+      - text: "Database triggers"
+        correct: false
+      - text: "Batch delta copiers"
+        correct: false
+      - text: "Manual exports"
+        correct: false
+    explain: "Log pollers read committed transactions from the DB log, run outside the database (even off a replica), and can publish to a broker; triggers are 'a slippery slope' to use sparingly."
+takeaway: "When there's no call to intercept, branch by abstraction; to de-risk a replacement, run old and new in parallel and compare — and prefer log-based CDC over triggers."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Replacing a plane's engine mid-flight isn't possible, but you *can* mount the new engine, run it idling alongside the old one, and compare thrust readings on every leg before you ever rely on it. Branch by abstraction adds a switch between the old and new engine inside the wiring; a parallel run keeps both spinning and checks they agree before you commit.
+</Callout>
+
+## When the strangler fig won't reach
+
+The [strangler fig](/microservices/the-strangler-fig-pattern/) needs an inbound call to intercept. For functionality **deep inside** the monolith — with no perimeter call and (ideally) without long-lived branches that oppose continuous integration — use **branch by abstraction**, where old and new implementations coexist in the same codebase.
+
+### Branch by Abstraction — five steps
+
+<Mermaid code={String.raw`graph TD
+  S1["1. Create an abstraction<br/>(extract interface / seam)"] --> S2["2. Use the abstraction<br/>clients call it — no behaviour change"]
+  S2 --> S3["3. New implementation<br/>calls the new service (dormant, returns Not Implemented)"]
+  S3 --> S4["4. Switch implementation<br/>via a feature toggle in config"]
+  S4 --> S5["5. Clean up<br/>remove old implementation & flag"]`} />
+
+1. **Create an abstraction** for the functionality (IDE Extract Interface, or extract a Michael Feathers **seam**).
+2. **Use the abstraction** — refactor clients to call it, with no functional change.
+3. **Create a new implementation** that calls the new service — dormant, can return *Not Implemented*; deploy to prod untested-in-situ. This phase can last *months* (Jez Humble migrated GoCD's persistence iBatis→Hibernate over months while shipping twice weekly).
+4. **Switch implementation** via an easily-toggled **feature flag**.
+5. **Clean up** — remove the old implementation and the flag (keep the abstraction if it improved the code).
+
+A **Verify Branch by Abstraction** variant calls the new implementation and automatically falls back to the old on failure. Newman calls this pattern "better than long-lived branches in nearly all circumstances."
+
+## Parallel Run — verify before you trust
+
+For **high-risk** changes, run both implementations on the same requests and compare; only one is the source of truth (usually the old) until verification builds confidence — checking functional equivalence *and* nonfunctional behaviour (latency, timeouts, acceptable failure rate).
+
+<Mermaid code={String.raw`graph TD
+  Req["Same request"] --> Old["Old implementation<br/>(source of truth)"]
+  Req --> New["New implementation<br/>(verified, not trusted yet)"]
+  Old --> Resp["Response to user"]
+  Old --> Cmp["Compare results"]
+  New --> Cmp
+  Cmp --> Diff["Log discrepancies for review"]`} />
+
+- **Credit-derivative pricing:** a bank duplicated pricing events to both systems, ran a daily **batch reconciliation** with experts, found bugs in *both* the new and the existing system, switched after a month, and kept the old system for auditing.
+- **GitHub Scientist** is a library (with ports) for code-level parallel runs.
+- Use a **Spy** to stub side-effecting code (so an email isn't sent twice) while still observing the real remote call's latency and failures.
+
+<Callout type="tip" title="💡 Three flavours of progressive delivery">
+**Canary** sends a *subset of users* to the new functionality. **Dark launching** deploys and tests *invisibly* to users — a parallel run implements dark launching. All three fall under **progressive delivery** (term coined by James Governor). See [deployment and progressive delivery](/microservices/deployment-and-progressive-delivery/).
+</Callout>
+
+## Two more patterns for hard cases
+
+- **Decorating Collaborator** — trigger new behaviour off something happening *inside* the monolith without changing it: a proxy lets the call proceed, then, *based on the result*, calls out to a new service (e.g., detect a successful order and call the Loyalty service to add points). Works best when the needed info is in the inbound request or the monolith's response; otherwise it must call back into the monolith (extra load, near-circular dependency).
+- **Change Data Capture (CDC)** — react to a *datastore change* when you can neither intercept at the perimeter nor change the code. Implementations: **database triggers** ("a slippery slope" — use very sparingly), **transaction log pollers** (the neatest — read committed transactions from the DB log, even off a replica, publish to a broker), and **batch delta copiers** (hard to detect what changed). Inherently couples you to the monolith's datastore, so keep its use minimal.
+
+<Callout type="gotcha" title="⚠️ Don't build a smart pipe">
+It's tempting to put routing and transformation logic into a shared proxy or a content-based router. That logic accumulates and the shared pipe becomes a contention point and a hidden monolith. "Keep the pipes dumb, the endpoints smart" — push logic into the services. Likewise, never change behaviour during a migration: rollback assumes old and new are equivalent.
+</Callout>
+
+<Callout type="go" title="🔑 Key insight">
+Most migrations mix patterns. Reach for the strangler fig first; branch by abstraction for deep functionality; parallel run for high-risk replacements; decorating collaborator and CDC when you can't change the monolith. Incrementalism — small, reversible steps that you only call "done" once in production and used — is the through-line.
+</Callout>
+
+## See also
+
+- [The strangler fig pattern](/microservices/the-strangler-fig-pattern/) — the first-choice migration pattern.
+- [Decomposing the database](/microservices/decomposing-the-database/) — the data side of migration.
+- [Deployment and progressive delivery](/microservices/deployment-and-progressive-delivery/) — canary, blue-green, and separating deploy from release.

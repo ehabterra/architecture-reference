@@ -1,0 +1,125 @@
+---
+title: "Measuring and Governing Characteristics"
+category: fnd-characteristics
+kind: topic
+order: 7
+difficulty: "Intermediate"
+status: ready
+intent: "How to turn vague -ilities into objective measures, and how to govern them over time with fitness functions so the architecture doesn't decay."
+book: "Fundamentals of Software Architecture; Building Evolutionary Architectures"
+related:
+  - architecture-characteristics
+  - identifying-architecture-characteristics
+  - fitness-functions
+when_use:
+  - "When a characteristic is too vague to act on and needs an objective definition"
+  - "When you need automated governance to stop modularity or performance from degrading"
+  - "When unpacking a composite characteristic like agility into measurable parts"
+when_avoid:
+  - "When imposing a measure on developers without explaining its purpose"
+  - "When you treat a single average (e.g. response time) as the whole picture"
+quiz:
+  - q: "Why is measuring 'average response time' alone misleading?"
+    options:
+      - text: "Averages hide outliers — you must also measure maximums and the long tail"
+        correct: true
+      - text: "Averages are always wrong"
+        correct: false
+      - text: "Response time is not measurable"
+        correct: false
+      - text: "Only percentiles below the median matter"
+        correct: false
+    explain: "Operational measures should include maximums and tail percentiles, because outliers — not the mean — are what users feel."
+  - q: "What is an architecture fitness function?"
+    options:
+      - text: "Any mechanism that provides an objective integrity assessment of some architecture characteristic"
+        correct: true
+      - text: "A genetic algorithm that designs the system"
+        correct: false
+      - text: "A unit test for domain logic"
+        correct: false
+      - text: "A diagram standard"
+        correct: false
+    explain: "Borrowed from evolutionary computing, a fitness function is an objective integrity check for a characteristic — implemented via metrics, tests, monitors, or chaos engineering."
+  - q: "Cyclomatic complexity measures what, and what threshold is commonly cited?"
+    options:
+      - text: "Code complexity via decision points; under 10 is the common threshold (the authors prefer under 5)"
+        correct: true
+      - text: "Lines of code; under 100"
+        correct: false
+      - text: "Test coverage; over 80 percent"
+        correct: false
+      - text: "Coupling; under 3"
+        correct: false
+    explain: "CC = E − N + 2P counts decision points; under 10 is industry-acceptable and the authors prefer under 5."
+  - q: "Why must architects explain a fitness function before imposing it?"
+    options:
+      - text: "So developers see governance as a useful constraint, not an ivory-tower burden"
+        correct: true
+      - text: "Because the tool requires a licence"
+        correct: false
+      - text: "Because fitness functions are optional"
+        correct: false
+      - text: "Because developers cannot read tests"
+        correct: false
+    explain: "Collaboration ensures buy-in; imposing checks without explanation breeds resentment and the ivory-tower anti-pattern."
+takeaway: "Give every characteristic an objective definition, unpack composites, then govern with fitness functions wired into CI — they protect the important-but-not-urgent."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="✈️ Analogy">
+Pilots and surgeons use checklists not because they're incompetent but because details slip during repetitive expert work. Governing characteristics works the same way: you encode the checks into the system's substrate so the right things can't quietly fall through the cracks, run after run.
+</Callout>
+
+## Three problems with measuring
+
+Characteristics resist measurement because they (1) **aren't physics** (how do you design for "agility"?), (2) have **wildly varying definitions** (even "performance" differs by department), and (3) are **too composite** (agility decomposes into modularity, deployability, and testability). The fix is **objective, organization-wide definitions** that build a ubiquitous language and unpack composites into measurable parts.
+
+<Mermaid code={String.raw`graph TD
+  A["Agility<br/>(too composite to measure)"] --> M["Modularity<br/>(LCOM, coupling)"]
+  A --> D["Deployability<br/>(success rate, duration)"]
+  A --> T["Testability<br/>(coverage + assertion quality)"]`} />
+
+## Three kinds of measure
+
+<Mermaid code={String.raw`graph TD
+  M["Make characteristics<br/>measurable"] --> O["Operational<br/>e.g. response time max + tail,<br/>K-weight budgets"]
+  M --> S["Structural<br/>e.g. cyclomatic complexity,<br/>coupling metrics"]
+  M --> P["Process<br/>e.g. test coverage,<br/>deployment success rate"]`} />
+
+- **Operational** — for performance, don't measure only the average (outliers hide there); measure **maximums** and the long tail too. Use **performance budgets** per page (a ~500 ms first-render target, **K-weight** byte budgets driven by network physics) and metrics like *first contentful paint*.
+- **Structural** — no single code-quality metric exists, but **cyclomatic complexity** (McCabe) measures complexity from decision points: `CC = E − N + 2P`. Under 10 is the common threshold; the authors prefer under 5. Also use afferent/efferent coupling, abstractness, instability, and distance from the main sequence (see [modularity and metrics](/foundations/modularity-and-metrics/)).
+- **Process** — agility decomposes into testability (code coverage — but 100% coverage with weak assertions is meaningless) and deployability (success/failure rate, duration, bugs raised).
+
+## Governance with fitness functions
+
+*Governance* (from the Greek *kubernan*, "to steer") is a core architect responsibility: ensuring decisions and quality are respected. Modularity is "important but not urgent," so it needs **automated governance**.
+
+An **architecture fitness function** is "any mechanism that provides an objective integrity assessment of some architecture characteristic(s)." Borrowed from evolutionary computing, it is not a new framework but a new perspective on existing tools — metrics, monitors, unit tests, and chaos engineering — wired into CI.
+
+```text
+# pseudo fitness function in the build
+assert jdepend.containsCycles() == false   # no package cycles
+assert distanceFromMainSequence(pkg) < 0.2 # stay near the ideal line
+```
+
+Concrete tools: **JDepend** catches cyclic dependencies before they become a Big Ball of Mud; **ArchUnit** (Java) and **NetArchTest** (.NET) codify layer-access rules as unit tests (`whereLayer("Persistence").mayOnlyBeAccessedByLayers("Service")`); Netflix's **Simian Army** (Conformity, Security, and Janitor Monkeys) enforces rules in production and seeded **chaos engineering**.
+
+<Callout type="gotcha" title="⚠️ Code reviews catch it too late">
+An IDE's auto-import silently creates cyclic dependencies; a code review notices only after the damage is done. A fitness function in the pipeline catches it the moment it appears — that's the difference between governance and good intentions.
+</Callout>
+
+<Callout type="tip" title="Explain before you impose">
+Architects must ensure developers understand a fitness function's *purpose* before adding it, so governance feels like a useful constraint rather than an ivory-tower mandate. Post results in a visible space; maintain them collaboratively.
+</Callout>
+
+<Callout type="go" title="💡 Key insight">
+A metric becomes a fitness function only when you attach an *objective measure*, an *alert*, and *fast continuous feedback*. Without those three, it's just a number nobody acts on.
+</Callout>
+
+## See also
+
+- [Architecture characteristics](/foundations/architecture-characteristics/) — what you are measuring.
+- [Fitness functions](/foundations/fitness-functions/) — the governance mechanism in depth.
+- [Modularity and metrics](/foundations/modularity-and-metrics/) — the structural measures.

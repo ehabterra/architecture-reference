@@ -1,0 +1,137 @@
+---
+title: "Orchestration vs Choreography"
+category: auto-foundations
+kind: topic
+order: 2
+difficulty: "Beginner"
+status: ready
+intent: "Orchestration is command-driven, choreography is event-driven — and the real architecture choice is made link by link, based on who owns the outcome."
+book: "Practical Process Automation (Bernd Ruecker)"
+related:
+  - why-long-running-processes-are-hard
+  - where-workflow-engines-fit
+  - integrating-with-services-and-apis
+when_use:
+  - "Deciding, per communication link, whether a sender commands or a receiver reacts"
+  - "An end-to-end flow needs a clear owner accountable for the outcome and its SLA"
+  - "Event chains have grown into an implicit process nobody can see or change safely"
+when_avoid:
+  - "Treating 'orchestration' as a synonym for 'centralized god service' (it is not)"
+  - "Forcing everything to be an event because a broker is fashionable"
+  - "Assuming choreography is automatically more decoupled — every link couples something"
+quiz:
+  - q: "What is the precise difference between orchestration and choreography?"
+    options:
+      - text: "Orchestration is command-driven communication; choreography is event-driven communication"
+        correct: true
+      - text: "Orchestration is synchronous; choreography is asynchronous"
+        correct: false
+      - text: "Orchestration is centralized; choreography is decentralized"
+        correct: false
+      - text: "Orchestration uses REST; choreography uses Kafka"
+        correct: false
+    explain: "The distinction is semantic, not protocol- or topology-based. A component sending a command orchestrates; components reacting to events choreograph. Both can run over REST or messaging, locally or distributed."
+  - q: "What is the litmus test for whether a message is an event or a command?"
+    options:
+      - text: "If the emitter is fine with it being ignored, it's an event; if the emitter needs something to happen, it's a command"
+        correct: true
+      - text: "If it is sent over a topic, it's an event"
+        correct: false
+      - text: "If it has a payload, it's a command"
+        correct: false
+      - text: "If it is persisted, it's an event"
+        correct: false
+    explain: "An event is a fact about the past that the emitter doesn't care who consumes; a command expresses intent the recipient cannot simply ignore."
+  - q: "With events versus commands, which way does the domain coupling point?"
+    options:
+      - text: "With events the receiver is coupled to the sender; with commands the sender is coupled to the receiver"
+        correct: true
+      - text: "Both always couple the sender"
+        correct: false
+      - text: "Events remove all coupling"
+        correct: false
+      - text: "Commands remove all coupling"
+        correct: false
+    explain: "Every link couples two services; you only choose which side carries the unavoidable domain coupling. That is the core of the link-by-link decision."
+  - q: "What is the main risk of implementing a business process as an event chain?"
+    options:
+      - text: "The process becomes implicit — no owner, no end-to-end visibility, and high cost to change the sequence"
+        correct: true
+      - text: "Events are too slow to deliver"
+        correct: false
+      - text: "Kafka cannot store events"
+        correct: false
+      - text: "Events cannot carry business data"
+        correct: false
+    explain: "An event chain scatters a logical flow across independent subscriptions. Reordering steps may force several services to change and deploy together — a distributed monolith with no single place to understand the process."
+takeaway: "Decide events vs commands per link by who owns the outcome — events couple the receiver, commands couple the sender; both are needed."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Tweeting "I'm hungry" is an **event**: a broadcast fact you're happy for the world to ignore. Emailing a specific restaurant to order dinner is a **command**: clear intent aimed at one recipient who cannot pretend it never arrived. Same person, same hunger — completely different communication semantics. Distributed systems make the same choice on every link.
+</Callout>
+
+## Two precise definitions
+
+Ruecker insists on tight definitions to cut through the fog:
+
+- **Orchestration = command-driven communication.** A component coordinates others by sending **commands**. A command is a message where A wants B to *do something*; B cannot simply ignore it (it may reject or acknowledge). Crucially, orchestration is *not* limited to workflow engines — **any** component sending a command is orchestrating.
+- **Choreography = event-driven communication.** Components react to **events**. An event is something that *happened* — a fact about the past. The defining trait: the emitter does not know who reacts or why, and does not care.
+
+A common source of confusion is mixing up **semantics** with **transport**. A *message* is just the envelope; "event" and "command" describe the *meaning* of the payload. A command can travel asynchronously over a queue; an event can travel over a REST feed. So "commands are synchronous" and "Kafka can't do commands" are both myths — a command can be written as a Kafka record.
+
+## The choice is per link, not global
+
+<Mermaid code={String.raw`flowchart LR
+  subgraph Choreography["Choreography (events)"]
+    CO["Checkout"] -->|"order placed (event)"| PAY["Payment"]
+    PAY -->|"payment received (event)"| INV["Inventory"]
+  end
+  subgraph Orchestration["Orchestration (commands)"]
+    OF["Order fulfillment<br/>(owns the outcome)"] -->|"retrieve payment (command)"| P2["Payment"]
+    OF -->|"fetch goods (command)"| I2["Inventory"]
+  end`} />
+
+Calling a whole system "choreographed" is usually a meaningless oversimplification — good architectures **mix both** and decide on each individual link. The deciding question is **direction of dependency**: every communication couples two services, and you only choose which side carries the unavoidable **domain coupling**. With **events**, the receiver depends on the sender; with **commands**, the sender depends on the receiver.
+
+Map responsibility first:
+
+- If the **sender cares** that something happens (a legally required welcome letter must go out) → **command**.
+- If the sender does *not* care but a **receiver owns the outcome** (a loyalty service enrols new customers off an event) → **event**.
+
+The more general and reusable a downstream component is — a payment service used by many callers — the more it should expose a **command API**, so it need not change every time a new caller appears.
+
+<Mermaid code={String.raw`graph TD
+  L["A communication link"] --> Q{"Does the sender care it happens?"}
+  Q -->|"yes, needs the outcome"| CMD["Send a command<br/>sender coupled to receiver"]
+  Q -->|"no, receiver owns it"| EVT["Emit an event<br/>receiver coupled to sender"]
+  CMD --> O["Orchestration"]
+  EVT --> C["Choreography"]`} />
+
+## The event-chain trap
+
+<Callout type="gotcha" title="Event chains hide the process">
+Wiring checkout → payment → inventory purely through event subscriptions *implements* a business process, but the subscriptions aren't really independent: you need payment before shipping. There is **no place to understand or control the sequence** and **no owner** of end-to-end fulfilment or its SLA. Reorder two steps and three teams must change and coordinate a deployment — a **distributed monolith**.
+</Callout>
+
+The fix is to give the process a **home**: a dedicated *order fulfillment* service that may subscribe to an "order placed" event but then **commands** payment and inventory in the order it controls. Now one team owns the outcome, the sequence lives in one place, and you gain end-to-end [visibility](/automation/visibility-and-organizational-adoption/).
+
+<Callout type="go" title="Debunking 'choreography is more decoupled'">
+Take a realistic change — add a "criminal check" — and count the services that must change. Often it's the *same* number in both styles, because every link couples something. Choreography merely moves the coupling to the receiver; orchestration additionally gives you a single place for visibility and control.
+</Callout>
+
+## Workflow engines serve both
+
+A [workflow engine](/automation/where-workflow-engines-fit/) is not "the orchestration tool" only. It can **subscribe to events**, **wait with timeouts** (wait for two events within a time frame, act if one never arrives), *and* **issue commands** — all inside one model. And "orchestration" need not be central: use **local** or **distributed** orchestration, with the engine living inside the service that owns the process.
+
+<Callout type="tip" title="Watch for commands in disguise">
+A "Customer Needs To Be Sent A Notification Event" that exactly one service must act on is a command wearing an event costume. Name it "Send Notification" and model it as a command — clarity beats dogma.
+</Callout>
+
+## See also
+
+- [Why long-running processes are hard](/automation/why-long-running-processes-are-hard/) — state, time, and failure across boundaries.
+- [Where workflow engines fit](/automation/where-workflow-engines-fit/) — running engines decentrally without a central spider.
+- [Integrating with services and APIs](/automation/integrating-with-services-and-apis/) — sync vs async, correlation, and idempotency.

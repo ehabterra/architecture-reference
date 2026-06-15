@@ -1,0 +1,130 @@
+---
+title: "Data Products"
+category: ed-datamesh
+kind: topic
+order: 11
+difficulty: "Advanced"
+status: ready
+intent: "Treating data as a first-class product — its makeup (code, infrastructure, ports), the three alignment types, multimodal access, and the medallion quality model."
+book: "Building an Event-Driven Data Mesh (Adam Bellemare)"
+related:
+  - data-mesh-principles
+  - schemas-and-evolution
+  - event-notification-vs-state-transfer
+when_use:
+  - "Important business data should be reliably reusable across many domains"
+  - "You want both operational (low-latency) and analytical (batch) consumers from one source"
+  - "Ownership, SLAs, quality tiers, and discoverability need to be explicit"
+when_avoid:
+  - "Data has exactly one private consumer and no reuse value"
+  - "You would add a new access mode with no clear ROI (each mode multiplies governance cost)"
+  - "Multiple would-be owners — a product needs exactly one owner"
+quiz:
+  - q: "A data product is composed of…"
+    options:
+      - text: "The data, the code that builds it, the infrastructure that stores it, and the ports/modes by which it's accessed"
+        correct: true
+      - text: "Just a database table"
+        correct: false
+      - text: "Just an event stream"
+        correct: false
+      - text: "A schema and nothing else"
+        correct: false
+    explain: "Like a microservice, a data product bundles data, code, infrastructure, and access ports under single ownership with SLAs and a release cycle."
+  - q: "The three alignment types of data products are…"
+    options:
+      - text: "Source-aligned, aggregate-aligned, and consumer-aligned"
+        correct: true
+      - text: "Bronze, silver, and gold"
+        correct: false
+      - text: "Push, pull, and hybrid"
+        correct: false
+      - text: "Internal, external, and global"
+        correct: false
+    explain: "They trade off owner vs. consumer responsibility: source-aligned is general-purpose near the source; aggregate-aligned applies business logic; consumer-aligned is customized for one domain."
+  - q: "The medallion quality model (bronze/silver/gold) is…"
+    options:
+      - text: "Separate from alignment — a Tier 1 gold product can be built from Tier 1 bronze data"
+        correct: true
+      - text: "The same thing as the three alignment types"
+        correct: false
+      - text: "A network topology"
+        correct: false
+      - text: "A schema format"
+        correct: false
+    explain: "Quality (bronze raw → gold authoritative) is independent of alignment; the normal path is bronze → gold, and a product can't promise stronger guarantees than its dependencies."
+  - q: "Why are event-driven data products a strong selling point for operational systems?"
+    options:
+      - text: "A service can read a state event in milliseconds — impossible with hourly batch — getting real-time behavior 'for the price of one data product'"
+        correct: true
+      - text: "They are cheaper to store"
+        correct: false
+      - text: "They never need schemas"
+        correct: false
+      - text: "They eliminate ownership"
+        correct: false
+    explain: "Data mesh was conceived for analytics, but event streams serve operational use 'off-label' at low latency, which drives internal buy-in."
+takeaway: "A data product bundles data, code, infrastructure, and access ports under one owner — choose its alignment (source/aggregate/consumer) and quality tier deliberately, and prefer push streams."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A data product is a packaged consumer good, not a raw ingredient left on a loading dock. It has a label (schema), a manufacturer who stands behind it (owner with SLAs), a shelf where you can find it (catalog), and different package sizes for different shoppers (modes). You don't reverse-engineer the recipe by breaking into the factory — you buy the product off the shelf.
+</Callout>
+
+## What a data product is
+
+In data mesh, the second principle elevates data to a **first-class product**. Crucially, a data product is **not just data** — it is:
+
+- the **data** itself,
+- the **code** that builds it,
+- the **infrastructure** that stores and serves it, and
+- the **ports/modes** by which it is accessed.
+
+Like a microservice, it carries single **ownership**, **SLAs**, quality guarantees, a release cycle, and clean, standardized access. Its **schema together with the stream API forms the contract** — captured in the book's equation `Event stream API + event schema == REST API + json schema`.
+
+## Four key factors
+
+- **Immutable and time-stamped** — queries yield consistent, reproducible results over time and across consumers; changes are published as new incremental events.
+- **Multimodal** — the same product can be served as an event stream, as daily Parquet files in cloud storage, and behind a REST API. Operational systems need the low latency of **streams**; streams can be aggregated down into batch files, making them the overarching medium.
+- **Push vs. pull** — pull (REST/SQL/files) is familiar but high-latency and requires polling; **push** (event streams) notifies subscribers with low latency and is required for real-time operational use. "Like begets like": the access patterns you choose ripple across the organization.
+- **Three alignment types** — see below.
+
+<Callout type="go" title="The key insight">
+Data mesh was conceived for analytics, but **event-driven data products serve operational systems** as a powerful "off-label" use: a payments service can read a sales **state event** in milliseconds — impossible with hourly batch. Teams get real-time event-driven services "for the price of one data product," which is the strongest argument for internal buy-in.
+</Callout>
+
+## The three alignment types
+
+Alignment captures how much business logic the owner has applied, trading off owner vs. consumer responsibility.
+
+<Mermaid code={String.raw`graph LR
+  SRC["Operational source"] --> SA["Source-aligned<br/>general-purpose, e.g. a sales event"]
+  SA --> AA["Aggregate-aligned<br/>owner applies logic, e.g. daily sales totals"]
+  AA --> CA["Consumer-aligned<br/>customized for one domain, e.g. ad-targeting prediction"]
+  SA -.->|"more owner reuse"| NOTE1["lower per-consumer effort upstream"]
+  CA -.->|"more consumer specificity"| NOTE2["joins several domains"]`} />
+
+- **Source-aligned** — general-purpose, close to the operational source (a sales event). Resource-constrained popular domains should prioritize these.
+- **Aggregate-aligned** — the owner applies business logic or aggregation, often mixing in other products (daily sales totals). Popular consumer-side aggregations tend to migrate upstream into formal aggregate-aligned products.
+- **Consumer-aligned** — highly customized for one domain, frequently joining several domains' products (an ad-targeting prediction event).
+
+## Quality: the medallion model
+
+Quality is tracked **separately from alignment** via the **medallion** model: **bronze** (raw, source-coupled), **silver** (structured, sanitized, denormalized — ~99.99% pass), and **gold** (authoritative, rigorously tested — ~99.9999% pass).
+
+<Mermaid code={String.raw`graph LR
+  B["Bronze<br/>raw, source-coupled"] --> S["Silver<br/>sanitized ~99.99%"]
+  S --> G["Gold<br/>authoritative ~99.9999%"]
+  Note["Quality is orthogonal to alignment:<br/>a gold product can build on bronze data"] -.-> B`} /> The normal path is **bronze → gold**, and a product **can't promise stronger guarantees than its dependencies** — though a Tier 1 *gold* product can legitimately be built from Tier 1 *bronze* data. Mandatory metadata at registration also includes **domain and owner** (a named individual) and a **tiered SLA** (Tier 1 business-critical / 24h on-call down to Tier 4 next-business-day).
+
+<Callout type="gotcha" title="Each new mode multiplies cost — and needs one owner">
+Streams are the core mode; every additional mode (files, REST) multiplies governance and self-service complexity, so add one only when ROI justifies it. And whether something is a *separate product* or *another mode of one product* turns on **ownership**: multiple modes require a single owner guaranteeing consistency across them.
+</Callout>
+
+## See also
+
+- [Data mesh principles](/event-driven/data-mesh-principles/) — the four principles this elaborates.
+- [Schemas and evolution](/event-driven/schemas-and-evolution/) — the contract a product exposes.
+- [Event notification vs. state transfer](/event-driven/event-notification-vs-state-transfer/) — state events as the product payload.

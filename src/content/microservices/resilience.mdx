@@ -1,0 +1,128 @@
+---
+title: "Resilience: Timeouts, Retries, Circuit Breakers, Bulkheads"
+category: ms-operations
+kind: topic
+order: 15
+difficulty: "Advanced"
+status: ready
+intent: "Stability patterns for distributed systems — timeouts, retries, bulkheads, circuit breakers, and idempotency — plus the four aspects of resilience and why it's ultimately a people property."
+book: "Building Microservices, 2nd ed. (Sam Newman); Enabling Microservice Success (Sarah Wells)"
+related:
+  - observability
+  - handling-data-consistency
+  - communication-styles
+when_use:
+  - "You make synchronous out-of-process calls that could fail or slow down."
+  - "You want to limit the blast radius of a failing dependency."
+  - "You are building robustness deliberately, not assuming it."
+when_avoid:
+  - "The interaction is fully asynchronous and already temporally decoupled."
+  - "You need the consistency model rather than failure handling — see data consistency."
+quiz:
+  - q: "Which stability pattern does Newman call the most important?"
+    options:
+      - text: "Bulkheads — separate connection pools per downstream, enabling load shedding"
+        correct: true
+      - text: "Retries"
+        correct: false
+      - text: "Caching"
+        correct: false
+      - text: "Vertical scaling"
+        correct: false
+    explain: "Bulkheads isolate failures so one slow downstream can't exhaust a shared pool and take down everything (the AdvertCorp 'turnip' service)."
+  - q: "What does a circuit breaker do?"
+    options:
+      - text: "Fails fast after a failure threshold, instead of letting calls pile up and back-pressure"
+        correct: true
+      - text: "Retries indefinitely until success"
+        correct: false
+      - text: "Encrypts traffic between services"
+        correct: false
+      - text: "Caches responses"
+        correct: false
+    explain: "Newman mandates circuit breakers for all synchronous downstream calls; in a distributed system, latency kills."
+  - q: "What are David Woods's four aspects of resilience?"
+    options:
+      - text: "Robustness, rebound, graceful extensibility, sustained adaptability"
+        correct: true
+      - text: "Speed, cost, quality, scope"
+        correct: false
+      - text: "Logs, metrics, traces, alerts"
+        correct: false
+      - text: "Timeouts, retries, bulkheads, circuit breakers"
+        correct: false
+    explain: "Robustness absorbs expected perturbation, rebound recovers after trauma, graceful extensibility handles the unexpected, and sustained adaptability keeps adapting over time."
+  - q: "What is chaos engineering really about?"
+    options:
+      - text: "Experimenting on the whole system — including people — to build confidence it withstands turbulent conditions in production"
+        correct: true
+      - text: "Randomly breaking things with no plan"
+        correct: false
+      - text: "A type of load test"
+        correct: false
+      - text: "Deleting backups to test recovery"
+        correct: false
+    explain: "It targets the whole sociotechnical system (Game Days, Netflix's Simian Army), not just the software."
+takeaway: "Build robustness deliberately: timeouts on every out-of-process call, bounded retries, bulkheads (the key pattern), mandatory circuit breakers, and idempotency — resilience is ultimately about people."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A ship survives a hull breach because watertight **bulkheads** keep one flooded compartment from sinking the whole vessel. Electrical **circuit breakers** trip before a fault burns the house down. Distributed systems borrow both: isolate failures into compartments, and cut off a failing dependency fast — because the alternative is the whole system going down together.
+</Callout>
+
+## Resilience is bigger than software
+
+Drawing on David Woods, Newman defines **four aspects** of resilience:
+
+<Mermaid code={String.raw`graph TD
+  R["Resilience"]
+  R --> RO["Robustness<br/>absorb EXPECTED perturbation"]
+  R --> RB["Rebound<br/>recover after trauma (tested backups, playbook)"]
+  R --> GE["Graceful extensibility<br/>handle the UNEXPECTED"]
+  R --> SA["Sustained adaptability<br/>keep adapting — learning culture"]`} />
+
+Microservices mainly help with **robustness** (and that's what adds complexity); the other three depend on flatter organizations, skilled people, tested backups, and a blame-free learning culture. **Failure is everywhere** — a statistical certainty at scale — and how much resiliency you need is defined by users via cross-functional requirements (response-time percentiles under load, availability, durability), enshrined as SLOs. **Degrading functionality is a business decision** made per interface and per dependency.
+
+## The stability patterns
+
+Framed by the **AdvertCorp** case — a slow "turnip" service exhausted a shared connection pool and took down the whole site, because "in a distributed system, latency kills":
+
+- **Timeouts** — put one on *every* out-of-process call, with an overall operation budget. (Wells: a few multiples of p99, *not* the library default of 10s or none.)
+- **Retries** — for transient failures only, **within the budget**. Use exponential backoff with **jitter**, and only retry idempotent requests on 5xx.
+- **Bulkheads** — separate connection pools per downstream. **The most important pattern**; it enables **load shedding** so one sick dependency can't drown the rest.
+- **Circuit breakers** — fail fast after a threshold instead of letting calls pile up and back-pressure. Newman **mandates them for all synchronous downstream calls**.
+
+<Mermaid code={String.raw`stateDiagram-v2
+  [*] --> Closed
+  Closed --> Open: failures exceed threshold
+  Open --> HalfOpen: after cool-down timer
+  HalfOpen --> Closed: trial call succeeds
+  HalfOpen --> Open: trial call fails`} />
+- **Isolation & redundancy** — run more than one instance across availability zones.
+- **Idempotency** — make the underlying business operation safely replayable; "HTTP gives you nothing for free" (see [data consistency](/microservices/handling-data-consistency/)).
+
+<Callout type="gotcha" title="⚠️ A slow service is worse than a broken one">
+Wells: a *broken* dependency fails fast; a *slow* one ties up threads and triggers thundering-herd retries that take down healthy services too. The "small blast radius" only holds if the rest of the system keeps working. Default timeouts (often 10 seconds or infinite) are how one slow service silently consumes your whole thread pool.
+</Callout>
+
+## Building resilient systems
+
+Beyond per-call patterns: **redundancy** across AZs, fast startup and **graceful shutdown** (12-factor disposability), **rate-limiting / load shedding** (return 503s), **fallback behaviour** (serve most-popular instead of personalized), **caching** (even short caching helps for breaking news — but test cache clearing), and **going asynchronous** to remove temporal coupling.
+
+The **CAP theorem** applies: in a partition you choose **AP** (eventual consistency) or **CP** (sacrifice availability); mix per capability. Beware **shared physical fate** behind "virtual" hosts, and remember provider SLAs cap *their* liability, not *your* losses.
+
+<Callout type="tip" title="💡 Validate resilience — don't assume it">
+**Chaos engineering** experiments on the *whole* system (including people) to build confidence it withstands turbulent conditions in production: **Game Days** (Google's DiRT), Netflix's **Simian Army** (Chaos Monkey/Gorilla). Also test backups and **failovers** regularly — "a failover process that isn't tested will be found to have stopped working when you need it" — and reason about **one failure at a time**, watching for systems less independent than you assumed.
+</Callout>
+
+<Callout type="go" title="🔑 Key insight">
+Resilience is ultimately a property of the *people* building and running the system. Patterns help, but blameless post-mortems and a **just culture** matter more — the Telstra case shows blaming individuals creates fear and destroys learning. "If robustness relies on humans never making mistakes, you're in for a rocky ride."
+</Callout>
+
+## See also
+
+- [Observability](/microservices/observability/) — how you detect failures and tune timeouts.
+- [Handling data consistency](/microservices/handling-data-consistency/) — idempotency and the CAP theorem.
+- [Communication styles](/microservices/communication-styles/) — async decoupling as a resilience strategy.

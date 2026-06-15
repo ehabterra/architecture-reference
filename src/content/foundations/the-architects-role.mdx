@@ -1,0 +1,126 @@
+---
+title: "The Architect's Role"
+category: fnd-thinking
+kind: topic
+order: 3
+difficulty: "Beginner"
+status: ready
+intent: "The eight expectations of an architect, why breadth beats depth, and why roughly half the job is people skills."
+book: "Fundamentals of Software Architecture; Head First Software Architecture"
+related:
+  - architecture-vs-design
+  - thinking-in-trade-offs
+  - architecture-decision-records
+when_use:
+  - "When defining what an architect is accountable for on a team"
+  - "When transitioning from senior developer into an architecture role"
+  - "When deciding how to keep technically sharp without becoming a bottleneck"
+when_avoid:
+  - "When you expect a single universal job description — the role is context-dependent and still expanding"
+  - "When you want to justify never coding again"
+quiz:
+  - q: "Why should architects favour technical breadth over depth?"
+    options:
+      - text: "Knowing the trade-offs of many solutions beats deep expertise in one, and depth decays as it becomes maintenance burden"
+        correct: true
+      - text: "Depth is impossible to acquire"
+        correct: false
+      - text: "Breadth is easier to fake"
+        correct: false
+      - text: "Developers have no depth"
+        correct: false
+    explain: "In the knowledge pyramid, architects value the top and middle; breadth is how far the middle penetrates the bottom. Knowing five caching options' trade-offs beats mastering one."
+  - q: "What is the 'bottleneck trap'?"
+    options:
+      - text: "An architect owns critical-path or framework code and blocks the team's progress"
+        correct: true
+      - text: "Too many meetings on the calendar"
+        correct: false
+      - text: "A slow build pipeline"
+        correct: false
+      - text: "An overloaded database connection pool"
+        correct: false
+    explain: "Architects should delegate critical-path code and code business functionality a few iterations out, so they stay hands-on without blocking the team."
+  - q: "Which best captures the 'Frozen Caveman' anti-pattern?"
+    options:
+      - text: "An architect who reverts to a pet irrational concern for every architecture"
+        correct: true
+      - text: "An architect who refuses to use modern tools"
+        correct: false
+      - text: "An architect who never attends meetings"
+        correct: false
+      - text: "A developer who hoards knowledge"
+        correct: false
+    explain: "The Frozen Caveman keeps raising the same irrational risk ('but what if we lose Italy?'); distinguish genuine from perceived technical risk."
+  - q: "Roughly how much of being an effective architect is people and leadership skill?"
+    options:
+      - text: "About half"
+        correct: true
+      - text: "None — it is purely technical"
+        correct: false
+      - text: "About 10 percent"
+        correct: false
+      - text: "100 percent"
+        correct: false
+    explain: "Fundamentals stresses leadership is at least half the job — 'it's always a people problem' (Weinberg)."
+takeaway: "Guide rather than specify, favour breadth over depth, stay hands-on without becoming the bottleneck, and treat people skills as half the job."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🚁 Analogy">
+An architect is less like a lone genius drawing blueprints and more like a helicopter pilot — a control for each hand and foot, every input affecting the others, constantly balancing technical breadth, trade-offs, business drivers, and the team. You are steering, not building every part.
+</Callout>
+
+## The eight expectations
+
+*Fundamentals of Software Architecture* lists eight expectations that hold regardless of your title:
+
+1. **Make architecture decisions** — *guide* technology choices rather than *specify* them (say "use a reactive frontend framework," not "use React"); mandate a specific technology only when a characteristic demands it.
+2. **Continually analyse the architecture** — watch for **structural decay**; ask whether a three-year-old architecture is still viable (its *vitality*).
+3. **Keep current with trends** — your decisions are long-lasting and hard to reverse.
+4. **Ensure compliance with decisions** — verify teams actually follow the rules and principles.
+5. **Have diverse exposure and experience** — favour **breadth over depth**.
+6. **Have business domain knowledge** — to communicate with stakeholders and earn credibility.
+7. **Possess interpersonal skills** — leadership is at least half the job.
+8. **Understand and navigate politics** — almost every decision will be challenged.
+
+## Breadth over depth: the knowledge pyramid
+
+All knowledge splits into *what you know*, *what you know you don't know*, and *what you don't know you don't know*. Developers build a tall, narrow pyramid of expertise — but *what you know* is also *what you must maintain*, and it decays. Architects value the **top and middle**; **technical breadth** is how far that middle penetrates the unknown. Knowing that five caching products exist and their trade-offs beats being the world expert on one.
+
+<Mermaid code={String.raw`graph TD
+  K["What you know<br/>(must maintain · decays)"] --> Dev["Developer values depth here"]
+  KU["What you know<br/>you don't know"] --> Arch["Architect values breadth here"]
+  U["What you don't know<br/>you don't know"] --> Arch
+  Arch --> B["Breadth = how far the middle<br/>reaches into the unknown"]`} />
+
+Two dysfunctions threaten breadth: spreading **too thin** (expert in nothing) and **stale expertise** (mistaking outdated knowledge for current). The **20-minute rule** — learn something new every morning before email — keeps breadth fresh.
+
+## Stay hands-on without becoming a bottleneck
+
+Every architect should still code, but avoid the **bottleneck trap** of owning critical-path or framework code. Tactics: delegate the critical path and instead build business functionality one to three iterations out; write frequent **proofs-of-concept** (production-quality — they often become reference architecture); tackle technical-debt stories; build automation, CLI tools, and fitness functions; and do frequent **code reviews**.
+
+<Mermaid code={String.raw`graph TD
+  A["Architect's coding time"] --> X["Critical-path / framework code"]
+  A --> Y["Business features 1-3 iterations out"]
+  X -->|"AVOID — creates a"| B["Bottleneck<br/>(team blocked on you)"]
+  Y -->|"PREFER — stays hands-on"| H["Hands-on, not in the way"]`} />
+
+<Callout type="gotcha" title="⚠️ Two personality anti-patterns">
+The **Control Freak** sets boundaries too tight (bans libraries, dictates class design) and steals the art of programming. The **Armchair Architect** sets them too loose, hasn't coded recently, and draws diagrams too high-level to use. Aim for the **just-right** boundary that matches the team's familiarity, size, experience, project complexity, and duration.
+</Callout>
+
+## People skills are half the job
+
+"No matter what the problem is, it's a people problem" (Weinberg). The **4 C's** — Communication, Collaboration, Clarity, Conciseness — are the antidote to *accidental complexity* (a problem we made hard) versus *essential complexity* (a genuinely hard problem). Lead by example, not by title; provide justification rather than dictating; and let developers arrive at the solution themselves.
+
+<Callout type="go" title="💡 Key insight">
+Guide, don't specify. The architect's leverage comes from setting constraints and explaining *why* — captured in [architecture decision records](/foundations/architecture-decision-records/) — not from making every technical choice personally.
+</Callout>
+
+## See also
+
+- [Architecture vs design](/foundations/architecture-vs-design/) — who owns which decision.
+- [Thinking in trade-offs](/foundations/thinking-in-trade-offs/) — the core analytical skill.
+- [Architecture decision records](/foundations/architecture-decision-records/) — capturing the why.

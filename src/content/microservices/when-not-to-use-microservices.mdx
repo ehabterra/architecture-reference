@@ -1,0 +1,134 @@
+---
+title: "When Not to Use Microservices"
+category: ms-foundations
+kind: topic
+order: 3
+difficulty: "Beginner"
+status: ready
+intent: "Microservices are a bad fit for unclear domains, true startups, and customer-installed software — and the biggest reason not to adopt is simply not having a good reason."
+book: "Monolith to Microservices (Sam Newman); Are Microservices Right for You? — Enabling Microservice Success (Sarah Wells)"
+related:
+  - what-are-microservices
+  - benefits-and-costs
+  - modeling-service-boundaries
+when_use:
+  - "You are deciding whether microservices fit your context at all."
+  - "You want to challenge a 'because everyone else does it' adoption."
+  - "You need to consider cheaper alternatives before committing."
+when_avoid:
+  - "You have already established a clear, business-aligned reason and the conditions for success."
+  - "You are mid-migration and need pattern guidance instead."
+quiz:
+  - q: "What does Newman call the single biggest reason NOT to adopt microservices?"
+    options:
+      - text: "Not having a good reason — no clear, business-aligned outcome"
+        correct: true
+      - text: "Lack of Kubernetes expertise"
+        correct: false
+      - text: "Using a dynamically typed language"
+        correct: false
+      - text: "Having fewer than ten developers"
+        correct: false
+    explain: "Microservices are a means, not an end; without a clear outcome you can't decide what to split first or judge whether it's working."
+  - q: "Why are microservices usually a poor fit for a true startup?"
+    options:
+      - text: "The domain is unstable and shifting, so boundaries get drawn in the wrong place"
+        correct: true
+      - text: "Startups cannot afford cloud hosting"
+        correct: false
+      - text: "Investors forbid distributed systems"
+        correct: false
+      - text: "Startups never need to scale"
+        correct: false
+    explain: "Microservices suit scale-ups with product/market fit; getting boundaries wrong in an unfamiliar, fast-changing domain is expensive. Famous 'microservice startups' adopted them later."
+  - q: "Why is customer-installed/managed software a bad fit?"
+    options:
+      - text: "It pushes distributed-systems operational complexity onto customers who can't handle it"
+        correct: true
+      - text: "It cannot be written in a compiled language"
+        correct: false
+      - text: "Customers refuse to pay for multiple services"
+        correct: false
+      - text: "It is impossible to package containers"
+        correct: false
+    explain: "Customer software targets well-defined platforms in familiar packaging; expecting customers to operate a distributed system is unrealistic."
+  - q: "What is the recommended cheaper alternative to consider first for many goals?"
+    options:
+      - text: "A modular monolith with module ownership and self-service provisioning"
+        correct: true
+      - text: "A bigger mainframe"
+        correct: false
+      - text: "Rewriting in a faster language only"
+        correct: false
+      - text: "Outsourcing all development"
+        correct: false
+    explain: "A modular monolith delivers much of the loose-coupling benefit with far less operational complexity and is an equally valid loosely-coupled option per Accelerate."
+takeaway: "Don't adopt microservices without a clear business reason — and for unclear domains, true startups, and customer-installed software, prefer a modular monolith first."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+You wouldn't break ground on a twelve-building campus before you knew how many people you'll hire or what departments you'll have. You'd rent one flexible floor, learn the shape of the organization, then build. Splitting a system into services before you understand the domain is pouring concrete on guesses.
+</Callout>
+
+## Microservices are not the goal
+
+"You don't 'win' by having microservices." They are a means to an outcome your current architecture can't deliver. Newman asks every organization three questions:
+
+1. **What are you hoping to achieve?** (an outcome expressed as an end-user/business benefit)
+2. **Have you considered alternatives?** (a more boring technique often suffices)
+3. **How will you know if the transition is working?** (quantitative *and* qualitative measures)
+
+Two failure mindsets to name out loud: the **cargo cult** ("if microservices are good for Netflix, they're good for us") and the **sunk-cost / Concorde fallacy** (proceeding because you're already invested).
+
+## The bad-fit contexts
+
+<Mermaid code={String.raw`graph TD
+  Q{"Do you have a clear<br/>business reason?"}
+  Q -->|No| STOP["Stop — biggest reason NOT to adopt"]
+  Q -->|Yes| D{"Is the domain<br/>well understood?"}
+  D -->|No| MONO["Start with a monolith;<br/>learn boundaries first"]
+  D -->|Yes| S{"Startup still<br/>seeking product/market fit?"}
+  S -->|Yes| MONO
+  S -->|No| C{"Customer-installed<br/>& managed software?"}
+  C -->|Yes| MONO
+  C -->|No| GO["Microservices may fit —<br/>adopt incrementally"]`} />
+
+- **Unclear domain** — getting boundaries wrong is expensive. ThoughtWorks' **SnapCI** split too early on a misunderstood domain, merged the services *back* into a monolith, and re-split successfully a year later. Resolve domain understanding first — a strong reason to start with a monolith.
+- **Startups** — microservices suit **scale-ups** (product/market fit found), not true startups still hunting for fit amid huge domain shifts and limited funding. Brownfield is far easier to decompose than greenfield.
+- **Customer-installed and managed software** — pushes operational complexity onto customers who target well-defined platforms and familiar packaging.
+- **Not having a good reason** — the biggest one. "Doing microservices just because everyone else is doing it is a terrible idea."
+
+## Try the cheaper alternative first
+
+For almost every benefit there is an easier, non-microservice route Newman urges you to try first:
+
+- **Team autonomy / more developers** → a **modular monolith** with per-module ownership and self-service provisioning.
+- **Reduce time to market** → a **path-to-production modeling exercise** first; the bottleneck is often elsewhere (one bank: 6 weeks to deploy but 40+ weeks from idea to start).
+- **Scale for load** → vertical scaling, horizontal scaling of the monolith behind a load balancer, or a technology that handles load better (none help if the *database* is the bottleneck).
+- **Robustness** → multiple monolith copies across failure planes and more reliable infrastructure; investigate that many outages are manual error.
+
+<Mermaid code={String.raw`graph LR
+  G1["Goal: team autonomy"] --> A1["Modular monolith + module ownership"]
+  G2["Goal: faster delivery"] --> A2["Path-to-production modeling"]
+  G3["Goal: scale for load"] --> A3["Vertical / horizontal monolith scaling"]
+  G4["Goal: robustness"] --> A4["Multiple monolith copies"]`} />
+
+<Callout type="gotcha" title="⚠️ Conditions, not just reasons">
+Wells stresses that a good reason is *not enough* — you also need the conditions: domain understanding, products-not-projects funding, leadership support (the change takes years and real money), teams that *want* autonomy, processes that enable it (CABs mostly slow you down), and technical maturity (spin up a service in minutes with an automated pipeline). Missing conditions mean "more complexity and no better outcomes."
+</Callout>
+
+## Separate the driver from the secondary benefits
+
+Trying to change everything at once — scale *and* autonomy *and* a new language — creates confusing priorities and "locks in" microservices even when scaling the monolith would have sufficed. Use a **sliders exercise** to articulate relative priorities, and classify decisions as **reversible** (decide fast, delegate) vs **irreversible** (decide slowly). The vast majority of migration decisions are reversible; the cheapest place to think is the whiteboard.
+
+<Callout type="go" title="🔑 Key insight">
+Default to a monolith (Gall's Law: complex systems evolve from simple ones that worked). Extract services only as the domain clarifies and a concrete outcome demands it — and remember the improvements you make first (automation, modular boundaries, observability) deliver value even if you never adopt microservices.
+</Callout>
+
+## See also
+
+- [What are microservices?](/microservices/what-are-microservices/) — including why the monolith is a valid default.
+- [Benefits and costs](/microservices/benefits-and-costs/) — the ledger you weigh before deciding.
+- [Modeling service boundaries](/microservices/modeling-service-boundaries/) — what "understanding the domain first" actually means.

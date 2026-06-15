@@ -1,0 +1,128 @@
+---
+title: "Tenant Onboarding and Identity"
+category: cld-saas
+kind: topic
+order: 10
+difficulty: "Intermediate"
+status: ready
+intent: "Start with onboarding and identity: a fully automated front door that binds every user to a tenant and carries tenant context downstream as a JWT."
+book: "Building Multi-Tenant SaaS Architectures (Tod Golding)"
+related:
+  - control-plane-vs-application-plane
+  - saas-foundations
+  - tenant-isolation-models
+when_use:
+  - "Deciding where to begin a greenfield or migrating SaaS build"
+  - "Designing a frictionless, fully automated onboarding flow"
+  - "Binding user identity to tenant identity and conveying tenant context"
+when_avoid:
+  - "Building the application first and bolting tenancy on later"
+  - "Requiring a service to call an external tenant-mapping service to resolve context at runtime"
+  - "Putting volatile access-control attributes into JWT custom claims"
+quiz:
+  - q: "Where should a greenfield or migrating SaaS team start?"
+    options:
+      - text: "Onboarding, identity, and the control plane — putting tenancy front and center"
+        correct: true
+      - text: "The application's core business features"
+        correct: false
+      - text: "The billing integration"
+        correct: false
+      - text: "The data partitioning scheme"
+        correct: false
+    explain: "Starting here puts tenancy front and center and avoids the trap of building the app first and bolting tenancy on later."
+  - q: "What is the SaaS identity?"
+    options:
+      - text: "A binding of a user identity to a tenant identity, conveying tenant context through all layers"
+        correct: true
+      - text: "A shared admin login for the provider"
+        correct: false
+      - text: "The tenant's billing account"
+        correct: false
+      - text: "An IP-based access rule"
+        correct: false
+    explain: "Every authenticated user must be authenticated in the context of a tenant; tenant attributes are added as custom claims to the JWT."
+  - q: "Why should you never require a service to call an external Tenant Mapping service at runtime to resolve context?"
+    options:
+      - text: "It becomes a point of scale and failure (a bottleneck)"
+        correct: true
+      - text: "It is impossible to implement"
+        correct: false
+      - text: "It violates OAuth"
+        correct: false
+      - text: "JWTs cannot carry claims"
+        correct: false
+    explain: "That is why critical tenant attributes live in the JWT — resolving context per request via an external lookup creates a bottleneck."
+  - q: "Is tenant authentication the same as tenant isolation?"
+    options:
+      - text: "No — isolation is a separate layer built atop tenant context"
+        correct: true
+      - text: "Yes, authentication enforces isolation"
+        correct: false
+      - text: "Only in pooled models"
+        correct: false
+      - text: "Only for federated identity"
+        correct: false
+    explain: "Authentication establishes who the user is and their tenant; isolation is a distinct mechanism that scopes resource access by that tenant context."
+takeaway: "Start with onboarding + identity: fully automate the front door, bind every user to a tenant, and carry tenant context in the JWT — authentication is not isolation."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Checking into a hotel chain is onboarding: one smooth process issues your key card, registers your stay, sets up billing, and that card silently carries your identity to every door, the gym, and the restaurant. You never re-prove who you are. A great SaaS onboarding is that key card — issued once, automatically, and it carries tenant context everywhere you go.
+</Callout>
+
+## Where do you start? Onboarding and identity
+
+For both greenfield and migrating teams, the answer to "where do you start?" is **onboarding, identity, and the control plane**. This puts tenancy "front and center" from day one and avoids the trap of building the application first and bolting tenancy on later. Onboarding is *part of your service*, not a bolt-on — it shapes first impressions and **time to value**, and it is where deployment, identity, routing, and tiering strategies are put into action. The bar is identical for self-service (B2C) and internal (B2B): fully automated, repeatable, low-friction, with **no one-off configuration**.
+
+## The baseline environment
+
+Before onboarding any tenant, teams provision a **baseline environment** via DevOps automation: foundational networking (VPC, AZs, subnets), the **control plane** itself, **pooled resources** shared by all tenants, the **system admin identity**, and the **system admin console** — a purpose-built single pane of glass (monitor onboarding status, activate/deactivate tenants, manage policies, view metrics). System admin identities are kept entirely separate from tenant identities.
+
+## The onboarding flow
+
+<Mermaid code={String.raw`graph TD
+  RQ["Receive onboarding request"] --> CT["Create tenant<br/>(GUID, active=false)"]
+  CT --> PR["Provision tenant resources<br/>(full silo vs. minimal pool)"]
+  PR --> BI["Add to billing"]
+  BI --> CU["Create tenant admin user"]
+  CU --> AC["Set active=true on full success"]
+  CT -. tracks .-> ST["States: TENANT_CREATED,<br/>BILLING_INITIALIZED,<br/>TENANT_ACTIVATED"]`} />
+
+A single **Onboarding service** orchestrates the flow, tracking granular **states**. The provisioning step is potentially the heaviest — SaaS "blurs the DevOps boundaries" by running provisioning *at runtime*. **Tier-based onboarding** applies per-resource tier policies (premium → full silo, basic → pool, mixed mode per-resource), with a bias toward **pre-provisioning pooled resources** at baseline. **Track onboarded resources** so later deployments find every per-tenant deployment, and **handle failures** with fault tolerance (e.g., async billing via a queue with retries).
+
+## SaaS identity
+
+<Callout type="go" title="Every user is authenticated in a tenant's context">
+Authentication must produce a **SaaS identity** — a binding of a **user identity** to a **tenant identity** that conveys tenant context through all layers. Golding focuses on **OAuth/OIDC**: authentication returns **JWTs** carrying **claims**; tenant attributes (tenant ID, role, tier) are added as **custom claims**, and the enriched token cascades downstream as a **bearer token**.
+</Callout>
+
+<Mermaid code={String.raw`graph LR
+  U["User identity"] --> AUTH["OAuth / OIDC authentication"]
+  T["Tenant identity"] --> AUTH
+  AUTH --> JWT["JWT with custom claims<br/>(tenant ID, role, tier)"]
+  JWT --> RT["Routing"]
+  JWT --> LG["Logging and metrics"]
+  JWT --> DA["Data access"]`} />
+
+Guidance for getting identity right:
+
+- Configure the IdP with custom attributes *before* onboarding and populate them per user.
+- Use custom claims **judiciously** — don't put volatile app access-control attributes there.
+- Support **federated identity** (customer-hosted IdPs), often via an authentication manager that stitches tenant context into third-party tokens (e.g., Amazon Cognito User Pools — pool-per-tenant or a shared pool with groups).
+
+<Callout type="gotcha" title="Never resolve tenant context via a runtime lookup">
+**Never require a service to call an external Tenant Mapping service to resolve tenant context** — it becomes a **point of scale and failure**. This is precisely why critical attributes live in the JWT. And remember: **tenant authentication is not tenant isolation** — isolation is a separate layer built atop tenant context (see [tenant isolation models](/cloud/tenant-isolation-models/)).
+</Callout>
+
+## Front-door access and routing
+
+Tenants "enter the front door" via a **tenant domain** (subdomain-per-tenant, or vanity domains supporting white-labeling, resolved through a Tenant Mapping layer) or a **single shared domain** (common in B2C, where tenant resolution uses the user's email domain or a lookup table). Beware the **Man in the Middle Challenge**: injecting tenant-mapping indirection before the IdP conflicts with the elegant classic auth flow and adds a point of scale and failure. Routing then maps authenticated tenants to resources per request — and the more siloed constructs you introduce, the more you must weigh scalability against cost.
+
+## See also
+
+- [Control plane vs. application plane](/cloud/control-plane-vs-application-plane/) — onboarding and identity are control-plane services.
+- [SaaS foundations](/cloud/saas-foundations/) — why these surrounding services come first.
+- [Tenant isolation models](/cloud/tenant-isolation-models/) — what consumes the tenant context.

@@ -1,0 +1,127 @@
+---
+title: "Tiering, Metering, and Noisy Neighbors"
+category: cld-saas
+kind: topic
+order: 11
+difficulty: "Advanced"
+status: ready
+intent: "Tiers turn multi-tenant levers — deployment, throughput, isolation — into priced value boundaries, while metering and throttling tame the noisy-neighbor problem."
+book: "Building Multi-Tenant SaaS Architectures (Tod Golding)"
+related:
+  - tenant-isolation-models
+  - control-plane-vs-application-plane
+  - tenant-onboarding-and-identity
+when_use:
+  - "Segmenting a solution into value levels to reach new segments and fuel growth"
+  - "Protecting shared resources from a single tenant overwhelming the system"
+  - "Approximating per-tenant cost and margin in pooled deployments"
+when_avoid:
+  - "Setting arbitrary price points instead of real points of inflection"
+  - "Offering pure consumption pricing with no tiers (a noisy-neighbor trap)"
+  - "Using feature flags to build per-tenant one-off experiences"
+quiz:
+  - q: "What is the noisy-neighbor problem?"
+    options:
+      - text: "One tenant's heavy load on shared (pooled) resources degrades other tenants' experience"
+        correct: true
+      - text: "Tenants on adjacent IP ranges interfering with each other"
+        correct: false
+      - text: "Logging noise from too many tenants"
+        correct: false
+      - text: "An onboarding race condition"
+        correct: false
+    explain: "Pooled resources are shared, so an outsized tenant can starve others. Throttling, reserved/concurrency limits, and extracting heavy operations address it."
+  - q: "What should tiering seek instead of arbitrary price points?"
+    options:
+      - text: "Points of inflection — real value boundaries"
+        correct: true
+      - text: "The lowest possible prices"
+        correct: false
+      - text: "One price per tenant"
+        correct: false
+      - text: "Equal pricing for all tiers"
+        correct: false
+    explain: "Tiering patterns (consumption-, value-, deployment-focused, free) seek genuine value boundaries that align cost with revenue."
+  - q: "How does metering differ from operational metrics?"
+    options:
+      - text: "Metering data is used for billing; operational metrics measure activity, agility, consumption, and health"
+        correct: true
+      - text: "They are the same thing"
+        correct: false
+      - text: "Metering is only for free tiers"
+        correct: false
+      - text: "Operational metrics are used for billing"
+        correct: false
+    explain: "Metering feeds billing; operational metrics (distinct) include tenant activity, agility/DORA, consumption, cost-per-tenant, and business health."
+  - q: "Why is pure consumption pricing with no tiers a trap?"
+    options:
+      - text: "Unmetered activity drives noisy neighbor and overprovisioning"
+        correct: true
+      - text: "It is illegal in most regions"
+        correct: false
+      - text: "It cannot be billed"
+        correct: false
+      - text: "It requires full-stack silos"
+        correct: false
+    explain: "Consumption-focused tiering uses per-tier consumption policies to align activity with cost; without them, costs can exceed revenue."
+takeaway: "Tier on real points of inflection using deployment, throughput, and isolation levers; meter for billing and per-tenant cost; throttle to tame noisy neighbors."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+An airline sells the same flight as economy, premium, and first class — different space, priority, and guarantees at different prices, all on one plane. And it watches that one passenger reclining into everyone's legroom. SaaS tiering is selling differentiated value on shared infrastructure; noisy-neighbor control is the seatbelt sign that keeps one tenant from ruining the cabin for the rest.
+</Callout>
+
+## Tiering turns levers into value
+
+A **tiered experience** segregates a solution into value levels at different price points, letting a business reach new segments and fuel growth. The familiar multi-tenant levers — **deployment, throughput, isolation, noisy neighbor** — are the "knobs and dials." Tiers should seek **points of inflection** (real value boundaries) rather than arbitrary price points.
+
+<Mermaid code={String.raw`graph TD
+  TI["Tiering patterns"] --> CF["Consumption-focused<br/>(per-tier consumption policies)"]
+  TI --> VF["Value-focused<br/>(features, SLAs via flags/RBAC)"]
+  TI --> DF["Deployment-focused<br/>(pooled basic, siloed premium)"]
+  TI --> FR["Free tier<br/>(acquisition channel)"]
+  TI --> CO["Composite / build-your-own"]`} />
+
+- **Consumption-focused** — align activity with consumption via per-tier **consumption policies** so cost doesn't exceed revenue.
+- **Value-focused** — features, capabilities, and performance SLAs (often via RBAC or feature flags).
+- **Deployment-focused** — isolation isn't all-or-nothing: basic (all pooled), advanced (a specific siloed service), premium (full-stack silo, limited in number) — see [tenant isolation models](/cloud/tenant-isolation-models/).
+- **Free tiers** — a customer-acquisition channel balanced against incremental cost; plan the journey to paid tiers.
+
+<Callout type="gotcha" title="The pure-consumption trap">
+A purely consumption-priced model with **no tiers** is a trap: unmetered activity drives **noisy neighbor** and **overprovisioning**. Even without formal tiering, introduce controls that prevent any single tenant from overwhelming the system.
+</Callout>
+
+## Implementing tiering across the layers
+
+Tiering spans the stack: **API tiering** (usage plans per tier with requests/sec, burst, and daily quotas, selected via a custom authorizer that picks the API key by tier — so clients need no key knowledge); **compute tiering** (Lambda **concurrency** per tier; Kubernetes namespaces + resource quotas); **storage tiering** (constrain read/write per tier for pooled, separate data for siloed; identify which *families of data* truly need siloing); and **deployment-model tiering** (siloed services for premium, pooled for basic). **Tier management** belongs in the **control plane**, synced with billing. Consider a **phased tiering model** — a soft-boundary notification before a hard limit.
+
+## Taming noisy neighbors
+
+In pooled (shared) resources, one tenant's heavy load can degrade everyone's experience — the **noisy-neighbor problem**. Defenses:
+
+- **Extract heavy operations** into separate, independently scaling services (a catalog service's `uploadThumbnail()` becomes a Thumbnail service; an Order service spins off a Tax service).
+- **Throttling and quotas** as part of a global performance/availability strategy, with constraints made clear to tenants.
+- **Reserved/per-tier concurrency** (in serverless, reserved concurrency caps concurrent instances per function — a multi-tenant lever tied to SLAs).
+- **Bulkhead patterns** so one tenant's failures don't cascade.
+
+<Mermaid code={String.raw`graph TD
+  NN["Noisy neighbor on pooled resource"] --> EX["Extract heavy operations<br/>into separate services"]
+  NN --> TH["Throttling and quotas"]
+  NN --> RC["Reserved / per-tier concurrency"]
+  NN --> BH["Bulkhead patterns"]`} />
+
+## Metering and per-tenant cost
+
+<Callout type="go" title="Metering ≠ operational metrics">
+**Metering** data feeds **billing**; it is distinct from the broader **operational metrics** that reveal whether the SaaS payoff is being achieved. The operational families are: **tenant activity** (onboarding, time to value), **agility** (availability, deployment frequency, MTTD/MTTR — overlapping DORA), **consumption** (per-tenant usage, hard for pooled resources — captured via a layered approach at API, microservice, and infrastructure levels), **cost-per-tenant** (combining consumption with billing to reveal **margins**), and **business health** (MRR, churn, CAC, CLTV, and the CLTV/CAC ratio).
+</Callout>
+
+Cost-per-tenant is an *approximation*, not accounting — but it surfaces uncomfortable truths (in the book's ecommerce example, basic-tier tenants cost the most while generating the least revenue). Operations is "the engine at the core," and SaaS is a **metrics-driven universe**: instrument everything, build **tenant-aware** views (off-the-shelf tools rarely include tenant/tier context), and validate strategies by **chaos-testing with a realistic mix of tenant personas** — e.g., heavy basic-tier load to detect noisy-neighbor effects on premium tenants. Use feature flags only as a **global, group/tier-level** mechanism, never to build per-tenant one-offs (a "slippery slope" toward an unmanageable maze).
+
+## See also
+
+- [Tenant isolation models](/cloud/tenant-isolation-models/) — the deployment lever behind deployment-focused tiering.
+- [Control plane vs. application plane](/cloud/control-plane-vs-application-plane/) — where tier management lives.
+- [Tenant onboarding and identity](/cloud/tenant-onboarding-and-identity/) — tier policies applied at onboarding.

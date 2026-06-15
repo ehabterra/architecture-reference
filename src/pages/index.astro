@@ -1,0 +1,179 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+// Each track: collection + presentation metadata for the hub.
+const TRACKS = [
+  {
+    base: '/foundations', coll: 'foundations', name: 'Foundations', icon: '🏛️', cat: 'fnd-thinking',
+    desc: 'What architecture really is — thinking like an architect, the architecture characteristics that drive every decision, components and modularity, and evolutionary architecture.',
+    stat: 'architect mindset → fitness functions',
+  },
+  {
+    base: '/styles', coll: 'styles', name: 'Architecture Styles', icon: '🧭', cat: 'sty-distributed',
+    desc: 'The named shapes a system can take — layered, pipeline, microkernel, service-based, event-driven, space-based and microservices — scored against the characteristics they optimize.',
+    stat: 'monolithic → distributed styles',
+  },
+  {
+    base: '/ddd', coll: 'ddd', name: 'Domain-Driven Design', icon: '🗺️', cat: 'ddd-strategic',
+    desc: 'Modeling software around the business — ubiquitous language, bounded contexts and context maps, then aggregates, value objects, domain events, event sourcing and CQRS.',
+    stat: 'strategic → tactical design',
+  },
+  {
+    base: '/microservices', coll: 'microservices', name: 'Microservices', icon: '🧩', cat: 'ms-foundations',
+    desc: 'Independently deployable services — the trade-offs, decomposing a monolith safely, communication and sagas, building and operating at scale, and the team topologies behind them.',
+    stat: 'decomposition → operations',
+  },
+  {
+    base: '/event-driven', coll: 'event-driven', name: 'Event-Driven', icon: '⚡', cat: 'ed-patterns',
+    desc: 'Systems that react to events — event-first design, notification vs state transfer, event sourcing, streams and logs, and events as the integration fabric of a data mesh.',
+    stat: 'events → data mesh',
+  },
+  {
+    base: '/distributed-systems', coll: 'distributed-systems', name: 'Distributed Systems', icon: '🌐', cat: 'ds-foundations',
+    desc: 'Building across many machines — the fallacies of distributed computing, consistency and CAP, scaling with caching, replication and partitioning, and reusable system patterns.',
+    stat: 'fallacies → scaling patterns',
+  },
+  {
+    base: '/apis', coll: 'apis', name: 'APIs & Communication', icon: '🔌', cat: 'api-design',
+    desc: 'The contracts between systems — REST, gRPC and GraphQL, hypermedia and idempotency, gateways and security, evolution without breaking clients, and async messaging.',
+    stat: 'design → management → messaging',
+  },
+  {
+    base: '/cloud', coll: 'cloud', name: 'Cloud & SaaS', icon: '☁️', cat: 'cld-serverless',
+    desc: 'Architecting on the cloud and selling software as a service — serverless-first design with functions and events, and multi-tenant SaaS: isolation, control planes, tiering and metering.',
+    stat: 'serverless → multi-tenant SaaS',
+  },
+  {
+    base: '/automation', coll: 'automation', name: 'Process Automation', icon: '⚙️', cat: 'auto-modeling',
+    desc: 'Coordinating long-running business processes across services — why they’re hard, modeling them with BPMN and executable workflows, orchestration vs choreography, and operating them.',
+    stat: 'modeling → orchestration',
+  },
+  {
+    base: '/strategy', coll: 'strategy', name: "The Architect's Path", icon: '🛗', cat: 'path-elevator',
+    desc: 'The architect as a person and strategist — the architect elevator between business and tech, patterns for technology strategy, and systems thinking for complex organizations.',
+    stat: 'the elevator → strategy → systems thinking',
+  },
+];
+
+const loaded = await Promise.all(
+  TRACKS.map(async (t) => ({ ...t, entries: await getCollection(t.coll as any) })),
+);
+const count = (entries: any[]) => entries.filter((e) => e.data.kind !== 'pattern').length;
+
+// unified progress across every page in the reference
+const allSlugs = loaded.flatMap((t) => t.entries.map((e: any) => e.id)).join(',');
+
+// Ordered per-track manifest (same order the Pager uses) — for the resume card.
+const resumeManifest = loaded.map((t) => ({
+  base: t.base,
+  name: t.name,
+  pages: [...t.entries]
+    .sort((a: any, b: any) => a.data.order - b.data.order)
+    .map((e: any) => ({ id: e.id, title: e.data.title, ...(e.data.quiz?.length ? { q: 1 } : {}) })),
+}));
+const totalPages = loaded.reduce((n, t) => n + count(t.entries), 0);
+---
+<BaseLayout>
+  <header class="dp-hero">
+    <p class="dp-hero__eyebrow" data-i18n="home.eyebrow">A visual software-architecture reference</p>
+    <h1>The Architecture Reference</h1>
+    <p class="dp-hero__lede" data-i18n-html="home.lede">
+      Learn to design systems that last — from architecture <strong>foundations</strong> and <strong>styles</strong>
+      to domain-driven design, microservices, event-driven and distributed systems, APIs, cloud &amp; SaaS,
+      process automation and the architect’s craft. Clear diagrams, explicit trade-offs, quizzes, and progress
+      that sticks — distilled from 20+ landmark architecture books. Pick a track and start.
+    </p>
+  </header>
+
+  <section class="dp-resume" data-dp-resume hidden>
+    <div class="dp-resume__info">
+      <p class="dp-resume__kicker" data-i18n="home.resumeKicker">Continue where you left off</p>
+      <h2 class="dp-resume__title" data-dp-resume-title></h2>
+      <p class="dp-resume__meta">
+        <span data-dp-resume-track></span> · <span data-dp-resume-count></span>
+        <span data-i18n="home.learnedSuffix">learned</span>
+      </p>
+    </div>
+    <div class="dp-resume__actions">
+      <a class="dp-btn dp-btn--primary" data-dp-resume-link><span data-i18n="home.resume">Resume</span> →</a>
+      <a class="dp-btn dp-btn--ghost" data-dp-resume-next hidden>
+        <span data-i18n="home.nextUp">Next up</span>: <span data-dp-resume-next-title></span>
+      </a>
+    </div>
+  </section>
+  <section class="dp-resume dp-resume--review" data-dp-review-card hidden>
+    <div class="dp-resume__info">
+      <p class="dp-resume__kicker" data-i18n="home.reviewKicker">Daily review</p>
+      <h2 class="dp-resume__title">
+        <span data-dp-review-count>0</span> <span data-i18n="home.reviewDue">pages due for a quick recall</span>
+      </h2>
+      <p class="dp-resume__meta" data-i18n="home.reviewNote">A few minutes of answering from memory is what makes it stick for good.</p>
+    </div>
+    <div class="dp-resume__actions">
+      <a class="dp-btn dp-btn--primary" href="/review/"><span data-i18n="home.reviewStart">Start review</span> →</a>
+    </div>
+  </section>
+  <script type="application/json" id="dp-resume-manifest" set:html={JSON.stringify(resumeManifest).replace(/</g, '\\u003c')}></script>
+
+  <div class="dp-overall">
+    <div class="dp-overall__top">
+      <strong data-i18n="home.progressTitle">Your overall progress</strong>
+      <button class="dp-btn dp-btn--ghost dp-btn--sm" data-dp-reset data-i18n="home.reset">Reset</button>
+    </div>
+    <div class="dp-progress" data-dp-progress data-slugs={allSlugs}>
+      <div class="dp-progress__track"><div class="dp-progress__fill"></div></div>
+      <span class="dp-progress__label"></span>
+    </div>
+    <p class="dp-kicker" style="margin:.7rem 0 0;" data-i18n="home.progressNote">
+      Tracked across every track — mark any page “learned” and this fills up. Saved in your browser.
+    </p>
+  </div>
+
+  <h2 class="dp-section-head" style="border:0;margin-top:2.4rem;" data-i18n="home.pickTrack">Pick a track</h2>
+  <div class="dp-topics">
+    {loaded.map((t) => (
+      <a class="dp-topic" data-cat={t.cat} href={`${t.base}/`}>
+        <div class="dp-topic__icon">{t.icon}</div>
+        <h3 data-i18n={`track.${t.coll}.name`}>{t.name}</h3>
+        <p data-i18n={`track.${t.coll}.desc`}>{t.desc}</p>
+        <span class="dp-topic__stat">{count(t.entries)} <span data-i18n={`track.${t.coll}.stat`}>topics · {t.stat}</span></span>
+        <span class="dp-topic__go" data-i18n="home.enter">Enter →</span>
+      </a>
+    ))}
+  </div>
+
+  <section data-dp-toplikes hidden>
+    <h2 class="dp-section-head" style="border:0;margin-top:2.6rem;" data-i18n="home.topLikes">Most liked pages</h2>
+    <div class="dp-toplikes" data-dp-toplikes-grid></div>
+  </section>
+
+  <section data-dp-mylikes hidden>
+    <h2 class="dp-section-head" style="border:0;margin-top:2.6rem;" data-i18n="home.myLikes">My liked pages</h2>
+    <div class="dp-toplikes" data-dp-mylikes-grid></div>
+  </section>
+
+  <h2 class="dp-section-head" style="border:0;margin-top:2.8rem;" data-i18n="home.how">How it works</h2>
+  <div class="dp-features">
+    <div class="dp-feature">
+      <div class="dp-feature__icon">📊</div>
+      <h3 data-i18n="home.f1.t">See it, then read it</h3>
+      <p data-i18n="home.f1.d">Mermaid diagrams make the structure and the flows obvious before you read a line of prose.</p>
+    </div>
+    <div class="dp-feature">
+      <div class="dp-feature__icon">⚖️</div>
+      <h3 data-i18n="home.f2.t">Trade-offs, not dogma</h3>
+      <p data-i18n="home.f2.d">Every page is explicit about when to reach for an idea and when to avoid it — there are no best practices, only trade-offs.</p>
+    </div>
+    <div class="dp-feature">
+      <div class="dp-feature__icon">💡</div>
+      <h3 data-i18n="home.f3.t">One thing to remember</h3>
+      <p data-i18n="home.f3.d">Every lesson ends with a single, flashcard-worthy takeaway — the one sentence to keep if you forget the rest.</p>
+    </div>
+    <div class="dp-feature">
+      <div class="dp-feature__icon">🧠</div>
+      <h3 data-i18n="home.f4.t">Made to remember</h3>
+      <p data-i18n="home.f4.d">A quiz on every page plus spaced-repetition review turn passive reading into a journey you finish.</p>
+    </div>
+  </div>
+</BaseLayout>

@@ -1,0 +1,123 @@
+---
+title: "Testing Microservices"
+category: ms-operations
+kind: topic
+order: 13
+difficulty: "Intermediate"
+status: ready
+intent: "The test pyramid in a distributed world — why end-to-end tests turn brittle, why consumer-driven contract tests replace them, and how to test safely in production."
+book: "Building Microservices, 2nd ed. (Sam Newman); Enabling Microservice Success (Sarah Wells)"
+related:
+  - deployment-and-progressive-delivery
+  - observability
+  - communication-styles
+when_use:
+  - "You are designing a test strategy across many services."
+  - "Your end-to-end tests have become slow and flaky."
+  - "You want to catch breaking contract changes before production."
+when_avoid:
+  - "You have a single deployable where end-to-end tests are cheap and stable."
+  - "You need deployment mechanics rather than test design."
+quiz:
+  - q: "What shape should your tests follow (Mike Cohn)?"
+    options:
+      - text: "A pyramid — many fast unit tests, fewer service tests, very few end-to-end tests"
+        correct: true
+      - text: "A snow cone — mostly end-to-end tests"
+        correct: false
+      - text: "An even split across all levels"
+        correct: false
+      - text: "Only end-to-end tests for confidence"
+        correct: false
+    explain: "Aim for roughly an order of magnitude more tests at each lower level; the inverted 'test snow cone' is the anti-pattern."
+  - q: "Why do end-to-end tests degrade in a microservice architecture?"
+    options:
+      - text: "They are flaky, slow, ownerless, and undermine independent testability"
+        correct: true
+      - text: "They are always wrong"
+        correct: false
+      - text: "They cannot use real services"
+        correct: false
+      - text: "They run too fast to be useful"
+        correct: false
+    explain: "Flakiness causes normalization of deviance; the 'metaversion' trap and lack of independent testability undermine independent deployability."
+  - q: "What do consumer-driven contracts (CDCs) do?"
+    options:
+      - text: "Let a consumer describe expected behavior, run against the producer in isolation to catch breaking changes early"
+        correct: true
+      - text: "Replace all unit tests"
+        correct: false
+      - text: "Test the UI end-to-end"
+        correct: false
+      - text: "Require deploying every service together"
+        correct: false
+    explain: "CDCs run at the same scope/speed as service tests, catch breaking changes before production, and are 'an explicit reminder of Conway's law'; Pact is the tool."
+  - q: "What does optimizing MTTR over MTBF imply?"
+    options:
+      - text: "Sometimes it's better to recover fast than to prevent every failure"
+        correct: true
+      - text: "Never fix bugs"
+        correct: false
+      - text: "Failures don't matter"
+        correct: false
+      - text: "Avoid all production testing"
+        correct: false
+    explain: "Mean time to repair can be a better thing to optimize than mean time between failures, enabling safe testing in production."
+takeaway: "Follow the test pyramid, replace brittle end-to-end tests with consumer-driven contract tests at team boundaries, and test safely in production by optimizing MTTR."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Testing each car part on a bench (brakes, engine, lights) is fast, precise, and tells you exactly what failed. Test-driving the whole assembled car on a track tells you it works overall — but a single flat tyre stalls the whole test and you can't tell which subsystem caused the wobble. The more you lean on the full track test, the slower and vaguer your feedback. Favour bench tests; use the track sparingly.
+</Callout>
+
+## The pyramid, not the snow cone
+
+Newman uses Marick's testing quadrant and **Mike Cohn's test pyramid** — **unit**, **service**, **end-to-end** (he renames "UI" to end-to-end). Going *up* the pyramid increases scope and confidence but lengthens feedback, harms localization, and breeds brittleness. Aim for roughly an order of magnitude more tests at each lower level, and avoid the inverted **test snow cone**.
+
+<Mermaid code={String.raw`graph TD
+  E["End-to-end tests<br/>few — slow, broad, brittle"] --> S["Service tests<br/>more — stub collaborators"]
+  S --> U["Unit tests<br/>many — fast, precise"]
+  C["Consumer-driven contract tests<br/>(service-test scope/speed)"] -.->|"replace E2E at team boundaries"| E`} />
+
+- **Unit tests** — many, fast, no dependencies.
+- **Service tests** — spin up the whole service and test over its real interface, stubbing collaborators (Newman prefers **stubs** over mocks; recommends **mountebank**). Wells's rule: **don't mock the data store you own** — the service is its code *plus* its store.
+
+## Why end-to-end tests rot
+
+End-to-end tests are "tricky to do well." They are **flaky and brittle** (the enemy — they cause **normalization of deviance**; remove unfixable ones), often **ownerless**, **slow**, prone to the **great pile-up**, trapped in the **metaversion** problem ("now you have 2.1.0 problems"), and they undermine **independent testability** — and therefore independent deployability. Wells is blunter: "full stack in a box" is an anti-pattern that breeds a **distributed monolith**; the *FT* deleted its brittle acceptance tests in favour of a black-box production test exploiting publish idempotency.
+
+## The better alternative: consumer-driven contracts
+
+**Contract tests and consumer-driven contracts (CDCs)** let a *consumer* describe its expected behaviour and run that against the producer **in isolation** — same scope and speed as a service test — catching breaking changes before production. **Pact** is the tool, and CDCs are "an explicit reminder of Conway's law."
+
+<Mermaid code={String.raw`graph LR
+  Con["Consumer team"] -->|"defines expectations"| Pact["Contract (Pact file)"]
+  Pact -->|"run against"| Prod["Producer in isolation"]
+  Prod -->|"passes"| OK["Safe to deploy"]
+  Prod -->|"breaks contract"| Fail["Build fails before prod"]`} /> Practitioners at scale **remove end-to-end tests over time**, treating them as temporary training wheels. Wells: contract tests are most valuable at **team boundaries**, combined with Postel's Law (be liberal in what you accept).
+
+<Callout type="tip" title="💡 Shrink the scope of multi-service tests">
+Keep any test that touches several services *inside the team that owns those services*. A test that requires coordinating across teams is a smell — it couples your release to theirs. Contract tests give you the cross-team confidence without the cross-team deployment.
+</Callout>
+
+## Testing in production
+
+Staging is never production-like, customers surprise you, and you can't test every variation (Majors' "Canadian iPad on iOS 9 on degraded hardware"). So test in production *safely*: ping/liveness checks, smoke tests, canaries, and **synthetic transactions** — leveraging deployment/release separation and avoiding side effects.
+
+<Callout type="gotcha" title="⚠️ Synthetic transactions with real side effects">
+Injecting fake user behaviour caught a GitHub rate-limiting issue at one firm — but a company once accidentally had **200 washing machines** delivered to head office because its synthetic "purchase" wasn't stubbed at the side-effecting step. Use a **Spy**, prefix synthetic traffic with correlation IDs so it's excluded from notifications, and never let test transactions trigger real-world effects.
+</Callout>
+
+Often **optimizing mean time to repair (MTTR) beats optimizing mean time between failures (MTBF)** — recovering fast can be worth more than preventing every failure. Cross-functional requirements (performance, robustness) follow the pyramid too: run performance tests regularly *and actually look at the results* against SLO-derived targets, and write robustness tests (e.g., circuit-breaker behaviour under injected failure).
+
+<Callout type="go" title="🔑 Key insight">
+The biggest required change is mindset and organization: a separate pre-release QA phase is an anti-pattern you can't afford at many-releases-a-day. Quality is a whole-team responsibility, with tests written by the developers who write the code.
+</Callout>
+
+## See also
+
+- [Deployment and progressive delivery](/microservices/deployment-and-progressive-delivery/) — canary and parallel run as testing in production.
+- [Observability](/microservices/observability/) — how you tell whether production is healthy.
+- [Communication styles](/microservices/communication-styles/) — the contracts that CDCs protect.

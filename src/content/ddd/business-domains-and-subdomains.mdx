@@ -1,0 +1,141 @@
+---
+title: "Business Domains and Subdomains"
+category: ddd-strategic
+kind: guide
+order: 1
+difficulty: "Start here"
+status: ready
+intent: "Decompose what a company does into core, supporting, and generic subdomains — the analysis that drives every later design decision."
+book: "Learning Domain-Driven Design (Vlad Khononov)"
+related:
+  - ubiquitous-language
+  - bounded-contexts
+  - design-heuristics-and-evolution
+when_use:
+  - "Starting a project and deciding where to spend your best engineers and which parts to buy or outsource."
+  - "Justifying build-vs-buy choices to stakeholders with a strategic rationale."
+  - "Sanity-checking that the implementation effort on a component matches its business value."
+  - "Distilling a coarse-grained department into the finer subdomains hiding inside it."
+  - "Re-assessing a component when the pain of changing it suggests its type has shifted."
+when_avoid:
+  - "When you have not yet talked to domain experts — subdomain types come from business strategy, not a guess."
+  - "As a one-time, frozen classification — subdomains migrate between types as the business changes."
+  - "Drilling endlessly into generic or supporting subdomains that reveal no design-relevant insight."
+  - "Classifying at the wrong granularity — judge the type at the level relevant to the software, not the business slogan."
+quiz:
+  - q: "Which subdomain type provides competitive advantage and should be built in-house?"
+    options:
+      - text: "Core subdomain"
+        correct: true
+      - text: "Generic subdomain"
+        correct: false
+      - text: "Supporting subdomain"
+        correct: false
+      - text: "Interchange subdomain"
+        correct: false
+    explain: "Core subdomains are what a company does differently from competitors; they are complex, volatile, and must be built in-house with your best talent — never bought or outsourced."
+  - q: "Authentication and encryption are best treated as which type?"
+    options:
+      - text: "Generic — complex but already solved, so buy or adopt"
+        correct: true
+      - text: "Core — they protect the business"
+        correct: false
+      - text: "Supporting — they are simple CRUD"
+        correct: false
+      - text: "They are not subdomains at all"
+        correct: false
+    explain: "Generic subdomains are hard but solved the same way by everyone; battle-tested off-the-shelf implementations exist and give no competitive edge."
+  - q: "What is the rule of thumb for a subdomain's natural boundary?"
+    options:
+      - text: "A coherent set of interrelated use cases over the same actor, entities, and data"
+        correct: true
+      - text: "One database table per subdomain"
+        correct: false
+      - text: "One developer per subdomain"
+        correct: false
+      - text: "The org chart, always"
+        correct: false
+    explain: "A subdomain is technically a set of interrelated, coherent use cases involving the same actor and a closely related set of data — that tells you when to stop distilling."
+  - q: "A supposed 'supporting' subdomain that suddenly needs complex rules and changes constantly is probably..."
+    options:
+      - text: "A core subdomain in disguise — reassess its type"
+        correct: true
+      - text: "Fine as-is; complexity is normal"
+        correct: false
+      - text: "A generic subdomain to buy"
+        correct: false
+      - text: "Over-tested"
+        correct: false
+    explain: "Growing complexity and volatility in a 'simple' subdomain is the classic symptom of a supporting-to-core transition; the pain of change is the diagnostic signal."
+  - q: "Which is a genuine example of a generic-to-core subdomain transition?"
+    options:
+      - text: "Amazon building AWS in-house to outperform off-the-shelf infrastructure"
+        correct: true
+      - text: "A competitive feature becoming a buyable commodity"
+        correct: false
+      - text: "An over-complex core being simplified because it never made money"
+        correct: false
+      - text: "Adopting an open-source logging framework"
+        correct: false
+    explain: "Generic-to-core happens when a company builds in-house to outperform a commodity solution and turns it into an advantage — Amazon's infrastructure becoming AWS is the archetype."
+takeaway: "Find your core subdomains — what you do differently — and pour engineering there; buy generic, build-but-cut-corners on supporting."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A coffee chain sells coffee — but it also leases real estate, hires staff, runs payroll, and pays taxes. Only some of those make it *better than the chain across the street*. Domain analysis is figuring out which activities are your secret recipe and which are the same plumbing everyone has.
+</Callout>
+
+## Domain and subdomains
+
+A **business domain** is a company's main area of activity — the service it provides to clients (FedEx → courier delivery; Starbucks → coffee). A company can span several domains (Amazon: retail and cloud) and change them over time (Nokia: wood → rubber → telecom → mobile).
+
+A **subdomain** is a fine-grained area of business activity. No single subdomain makes a profitable company, but together they form the domain and are all necessary to compete. The central move of strategic DDD is to classify each subdomain into one of three types, because the type dictates how you should build it.
+
+<Mermaid code={String.raw`graph TD
+  D["Business Domain"] --> Core["Core subdomain<br/>differentiator"]
+  D --> Sup["Supporting subdomain<br/>necessary, no edge"]
+  D --> Gen["Generic subdomain<br/>solved by everyone"]
+  Core --> C1["High complexity + volatility<br/>Build in-house, best talent"]
+  Sup --> S1["Simple CRUD / ETL<br/>Build but cut corners / outsource"]
+  Gen --> G1["Already solved<br/>Buy or adopt off-the-shelf"]`} />
+
+## The three types
+
+- **Core subdomain** — What the company does *differently* from competitors to gain an advantage: invention, optimization, know-how, or IP. Complex, highly volatile (work is never done), and the source of profit. It need not be technical (a jeweler's designs). Build it in-house with your best engineers; never buy or outsource it. These are the *interesting* problems.
+- **Generic subdomain** — Something all companies do the same way (authentication, encryption, accounting). Complicated but **already solved** — battle-tested products exist. No competitive edge, so buy off-the-shelf or adopt open source. These are the *solved* problems.
+- **Supporting subdomain** — Supports the business but provides no advantage. Simple logic: CRUD data entry and ETL. Low barriers to entry, so build it in-house (no ready-made option fits) but cut corners with rapid frameworks; good work for junior talent or outsourcing. These are the *obvious* problems.
+
+| Type | Advantage | Complexity | Volatility | Implementation |
+|---|---|---|---|---|
+| Core | Yes | High | High | In-house |
+| Generic | No | High | Low | Buy / adopt |
+| Supporting | No | Low | Low | In-house / outsource |
+
+<Callout type="tip" title="Distinguishing the types">
+Core vs supporting? Ask: *"could this be a side business someone would pay for?"* → core. Supporting vs generic? Ask: *"would it be simpler and cheaper to hack my own than to integrate an external one?"* → supporting. Evaluate the **complexity of the business logic** you must model: CRUD-like ⇒ supporting; intricate rules and invariants ⇒ core.
+</Callout>
+
+## Distilling subdomains
+
+Coarse-grained departments (org units) are a starting point, but drill into their inner workings to find finer subdomains of different types. A "customer service" department might contain a help desk and phone system (generic), shift management (supporting), and an incident-routing algorithm (core).
+
+<Mermaid code={String.raw`graph TD
+  CS["Customer Service dept<br/>(coarse org unit)"] --> HD["Help desk + phones<br/>(generic — buy)"]
+  CS --> SM["Shift management<br/>(supporting — build cheap)"]
+  CS --> IR["Incident-routing algorithm<br/>(core — best talent)"]`} /> Distill **core** subdomains aggressively — they are the most important, volatile, and complex. Relax distillation for supporting and generic ones once it reveals no design-relevant insight. Stop when a subdomain is a coherent set of use cases over the same data.
+
+<Callout type="gotcha" title="Tactical patterns are not the strategy">
+Building a full, sophisticated domain model for a *supporting* subdomain — or worse, outsourcing a *core* one — wastes effort and surrenders advantage. The whole point of classification is to match implementation rigor to business value. See [design heuristics and evolution](/ddd/design-heuristics-and-evolution/).
+</Callout>
+
+## Domain experts
+
+**Domain experts** are the subject-matter authorities on the business — the people who came up with the requirements or who use the software. The domain knowledge belongs to them; engineers do not become experts but must understand them and use their terminology. They are the origin of all domain knowledge and the single biggest predictor of project success — which is why the next step is building a shared language with them.
+
+## See also
+
+- [Ubiquitous language](/ddd/ubiquitous-language/) — the shared language you build with domain experts.
+- [Bounded contexts](/ddd/bounded-contexts/) — subdomains are discovered; contexts are designed.
+- [Design heuristics and evolution](/ddd/design-heuristics-and-evolution/) — how subdomain type drives every later decision.

@@ -1,0 +1,132 @@
+---
+title: "The Architect's Many Roles"
+category: path-elevator
+kind: topic
+order: 2
+difficulty: "Beginner"
+status: ready
+intent: "No single archetype defines a good architect — the master planner, gardener, guide, and glue are all partial truths, and seniority rests on three legs: skill, impact, and leadership."
+book: "The Software Architect Elevator (Gregor Hohpe)"
+related:
+  - the-architect-elevator
+  - architecting-for-change-and-options
+  - communicating-with-the-organization
+when_use:
+  - "When defining or hiring for an architect role and tempted to write a 'superhero' job description."
+  - "When deciding whether to govern top-down or cultivate change by influence."
+  - "When assessing your own growth as an architect across skill, impact, and leadership."
+when_avoid:
+  - "When a problem genuinely needs a single decisive owner rather than a connector or gardener."
+  - "When 'top-down governance with weed killer' is being used to crush healthy local evolution."
+  - "When you would use the architect title as 'engineered deception' and forget your technical roots."
+quiz:
+  - q: "Which role model does Hohpe warn is seductive but dangerous?"
+    options:
+      - text: "The all-knowing 'Master Planner' (the Matrix Architect) who controls every decision"
+        correct: true
+      - text: "The Gardener who prunes and balances an evolving ecosystem"
+        correct: false
+      - text: "The Guide who leads by influence"
+        correct: false
+      - text: "The Superglue who holds the parts together"
+        correct: false
+    explain: "The master planner fails because humans decide only on facts known to them, and in a large enterprise the top architect relies on presentations distorted as they pass through the floors."
+  - q: "What are the three legs an architect's seniority stands on?"
+    options:
+      - text: "Skill, Impact, and Leadership"
+        correct: true
+      - text: "Coding, Diagramming, and Presenting"
+        correct: false
+      - text: "Authority, Budget, and Headcount"
+        correct: false
+      - text: "Speed, Quality, and Cost"
+        correct: false
+    explain: "Like a three-legged stool, removing any one leaves the architect unbalanced: skill without impact is a perpetual student; impact without leadership plateaus; leadership without prior impact becomes an ivory tower."
+  - q: "What does 'architecture without architects' (the Guide role) emphasize?"
+    options:
+      - text: "Leading by influence and steering toward what matters, while staying hands-on enough to earn respect"
+        correct: true
+      - text: "Removing architects from projects entirely"
+        correct: false
+      - text: "Letting developers decide everything with no coordination"
+        correct: false
+      - text: "Automating architecture decisions with tools"
+        correct: false
+    explain: "The Guide is a tour guide who knows the terrain, tells a good story, gently steers away from risk, and rides along rather than just handing over a map."
+  - q: "Why does Hohpe say architects should 'scale horizontally, not vertically'?"
+    options:
+      - text: "Ten well-mentored junior architects generate more impact than one ever-smarter senior architect, who is a single point of failure"
+        correct: true
+      - text: "Horizontal scaling is cheaper than vertical scaling for servers"
+        correct: false
+      - text: "Senior architects should avoid learning new skills"
+        correct: false
+      - text: "Mentoring is a distraction from real architecture work"
+        correct: false
+    explain: "Getting smarter alone makes you a bottleneck; multiplying capability through mentoring spreads impact and feeds the virtuous cycle of skill, impact, and leadership."
+takeaway: "Be part gardener, guide, and glue — and grow on three legs: skill, impact, and leadership. Scale by mentoring, not by becoming a smarter bottleneck."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🎬 Analogy">
+Famous building architects are recognizable from afar — Meier's white boxes, Gehry's crooked forms, Hadid's fabric-like shapes. Every chief IT architect likewise has a personal style. There is no single mold; "architect" (Greek *architekton*) means **master builder** — someone who builds, not merely someone who draws pictures.
+</Callout>
+
+Hohpe uses movie characters to argue that **no single archetype defines a good architect.** Most carry several personas at once, switching as the situation demands.
+
+## Four personas, four lessons
+
+<Mermaid code={String.raw`graph TD
+  A["The Architect"]
+  A --> MP["Master Planner<br/>(The Matrix)"]
+  A --> G["Gardener<br/>(Edward Scissorhands)"]
+  A --> GU["Guide<br/>(tour guide)"]
+  A --> GL["Superglue<br/>(catalyst / matchmaker)"]
+  MP -.->|"seductive but fails"| W["decides on distorted facts"]
+  G -.->|"prunes, balances"| ECO["living ecosystem"]
+  GU -.->|"leads by influence"| INF["architecture without architects"]
+  GL -.->|"holds it together"| HOLD["architecture + detail + business + people"]`} />
+
+- **The Master Planner (The Matrix).** The all-knowing, all-controlling Architect — seductive but flawed. Humans decide only on the facts known to them, and the top architect's facts are distorted as they pass up the floors. Avoid the fantasy of the supreme decider.
+- **The Gardener (Edward Scissorhands).** Large-scale IT is a garden that evolves on its own — and weeds grow fastest. The architect trims, prunes, and establishes balance, planting for the plants' needs. "Top-down governance with weed killer" usually does more harm than good.
+- **The Guide.** A tour guide who has walked the path many times, tells a good story, steers gently toward what matters and away from risk, and **rides along** instead of just handing over a map. This is Erik Dörnenburg's "architecture without architects" — leadership by influence.
+- **The Superglue.** Job postings ask for superheroes; what enterprises actually need is **superglue** — an architect who holds architecture, technical detail, business needs, and people together, like a catalyst or matchmaker who understands what each part being glued is made of.
+
+<Callout type="go" title="🔑 Key insight">
+Most good architects combine stereotypes: "periodic gluing, gardening, guiding, impressing, and a little bit of all-knowing now and then can make for a pretty good architect."
+</Callout>
+
+## Standing on three legs
+
+Seniority rests on a three-legged stool — remove any leg and it wobbles:
+
+- **Skill** — knowledge *and* the ability to apply it. "Knowledge is like a drawer chest full of tools. Skill is knowing when to open which drawer." Certifications mostly test knowledge.
+- **Impact** — how well that skill benefits the company: added revenue, reduced cost, faster time-to-market, the ability to absorb late requirements. "Architects who don't make an impact don't have a place in a for-profit business."
+- **Leadership** — advancing the practice: mentoring, publishing, speaking, teaching.
+
+<Mermaid code={String.raw`graph TD
+  SK["Skill"] --> SEN["Balanced seniority"]
+  IM["Impact"] --> SEN
+  LE["Leadership"] --> SEN
+  SK -.->|"without impact"| F1["Perpetual student"]
+  IM -.->|"without leadership"| F2["Plateaued architect"]
+  LE -.->|"without prior impact"| F3["Ivory tower"]`} />
+
+<Callout type="gotcha" title="⚠️ A chair can't stand on two legs">
+Each missing leg has a failure mode. **Skill without impact** = the perpetual student. **Impact without leadership** = the plateaued architect who hits a glass ceiling. **Leadership without prior impact** = the ivory-tower resident preaching outdated methods (maximize logic in stored procedures; run nightly batch in a 24/7 world).
+</Callout>
+
+## The virtuous cycle
+
+The three legs feed each other in a cycle that repeats with every technology wave — relational to NoSQL, on-prem to cloud — each loop faster and deeper. First you learn *how*, later *why*. The key move is to **scale horizontally**: ten well-mentored juniors out-deliver one ever-smarter senior, who is otherwise just a single point of failure. Mentoring also sharpens the mentor's own thinking and earns reverse-mentoring on new technology.
+
+<Callout type="tip" title="💡 Architect as destination, not stepping stone">
+Treat "architect" like "software engineer" — a destination role decoupled from seniority. At digital companies the engineering ladder reaches SVP level. The goal is to keep architecting, not to graduate out of it.
+</Callout>
+
+## See also
+
+- [The architect elevator](/strategy/the-architect-elevator/) — the connecting role these personas all serve.
+- [Architecting for change and options](/strategy/architecting-for-change-and-options/) — the rate of change as the real driver of architecture.
+- [Communicating with the organization](/strategy/communicating-with-the-organization/) — selling the vision the gardener and guide depend on.

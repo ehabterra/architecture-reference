@@ -1,0 +1,130 @@
+---
+title: "Ownership and Platform Teams"
+category: ms-organization
+kind: topic
+order: 17
+difficulty: "Intermediate"
+status: ready
+intent: "Strong, active service ownership at scale, and the platform/enabling teams that provide a non-mandatory 'paved road' of self-service tooling — plus governance as guardrails, not gatekeeping."
+book: "Building Microservices, 2nd ed. (Sam Newman); Enabling Microservice Success (Sarah Wells)"
+related:
+  - conways-law-and-team-topologies
+  - deployment-and-progressive-delivery
+  - observability
+when_use:
+  - "You are deciding who owns each service as the estate grows."
+  - "You want to provide self-service tooling without mandating it."
+  - "You need governance that reduces risk without slowing teams down."
+when_avoid:
+  - "You have a single team practicing collective ownership of one codebase."
+  - "You need boundary-finding or org-type design — see Conway's law."
+quiz:
+  - q: "Which ownership model does Newman recommend at the organizational level for microservices?"
+    options:
+      - text: "Strong ownership — one team owns a service; outsiders ask or send pull requests"
+        correct: true
+      - text: "Collective ownership — anyone changes anything"
+        correct: false
+      - text: "No ownership"
+        correct: false
+      - text: "Ownership by a central architecture board"
+        correct: false
+    explain: "Strong ownership optimizes for autonomy and minimizes coordination; collective ownership at scale needs heavy consistency and undermines the benefits (within a team, collective ownership is fine)."
+  - q: "What is the 'paved road'?"
+    options:
+      - text: "The easiest, well-supported default path — provided, not enforced"
+        correct: true
+      - text: "A mandatory framework every team must use"
+        correct: false
+      - text: "A list of banned technologies"
+        correct: false
+      - text: "A deployment pipeline owned by a CAB"
+        correct: false
+    explain: "The paved road makes the right thing the easy thing via self-service tooling, exemplars, and templates — without being mandated; optionality gives valuable signals when teams go off-road."
+  - q: "How should governance be framed (Wells)?"
+    options:
+      - text: "As guardrails and insight that reduce technical risk, not gatekeeping"
+        correct: true
+      - text: "As approval bodies that sign off every change"
+        correct: false
+      - text: "As a way to standardize on one technology forever"
+        correct: false
+      - text: "As something only the architecture team does"
+        correct: false
+    explain: "Accelerate found external approval bodies LOWER performance; bake guardrails into tooling, automate compliance checks, and trust-but-verify."
+  - q: "What does 'active' ownership add to 'strong' ownership?"
+    options:
+      - text: "The team feels accountable and keeps dependencies upgraded, alerts monitored, and vulnerabilities patched"
+        correct: true
+      - text: "The team can refuse all external requests"
+        correct: false
+      - text: "The team owns the database directly"
+        correct: false
+      - text: "Nothing — they are the same"
+        correct: false
+    explain: "Any code in production needs work even after active development ends — Log4Shell and Equifax show the cost of inactive or unknown ownership."
+takeaway: "Use strong, active ownership (one accountable team per service) and an optional paved road of self-service tooling, with governance as guardrails baked into the tools — never gatekeeping."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A city paves good roads, posts clear signs, and sets safe speed limits — then lets drivers choose their own routes. It doesn't approve every journey in advance. A platform team does the same: build the easy, well-lit path most teams will happily take, put guardrails where mistakes are costly, and leave teams free to go off-road when they have a real reason (and the responsibility that comes with it).
+</Callout>
+
+## Ownership at scale
+
+Newman distinguishes three ownership models (Fowler): **strong** (one team owns a service; outsiders ask or send pull requests), **weak** (owners exist but anyone changes, talk first), and **collective** (anyone changes anything). His guidance:
+
+- **Within a team:** collective ownership.
+- **At the organizational level:** **strong ownership** — it optimizes for autonomy and minimizes coordination, ideally extending to **full life-cycle ownership** ("you build it, you run it").
+
+<Mermaid code={String.raw`graph TD
+  Strong["Strong<br/>one team owns; outsiders ask / send PRs"] -->|"recommended at org scale"| Best["Autonomy, low coordination"]
+  Weak["Weak<br/>owners exist; anyone edits after a chat"] --> Mid["Needs discipline"]
+  Coll["Collective<br/>anyone changes anything"] -->|"fine within a team"| Team["OK small"]
+  Coll -->|"100+ devs"| Mud["Colander / distributed monolith"]`} />
+
+**Collective ownership becomes disastrous at scale.** A fintech that grew from ~40 to 100+ developers with no assigned responsibilities produced a tangled distributed monolith — a "colander architecture" where people "punch a new hole" whenever they like. Strong code ownership is almost universal in orgs with 100+ developers.
+
+Wells adds the **active** dimension: strong ownership says *who decides*; active ownership means the team *feels accountable* and keeps dependencies upgraded, alerts monitored, and vulnerabilities patched — because any code in production needs work even after active development ends.
+
+<Callout type="gotcha" title="⚠️ Know your estate, or pay the Equifax price">
+**Log4Shell:** the *FT* responded fast because **Biz Ops** (a graph linking systems, teams, people, repos) let them query Java systems and owners *before* scanners updated. **Equifax:** an unpatched Struts vulnerability — ~160M people, $700M, and the CEO/CIO/CSO fired — because no one knew the estate or owned the fix. Ownership must be at the **team** level, not "Claire built it." Beware orphaned and feature-complete services drifting into no ownership.
+</Callout>
+
+## Platform and enabling teams
+
+<Mermaid code={String.raw`graph TD
+  ST["Stream-aligned teams<br/>focus on business value"]
+  PT["Platform / engineering enablement<br/>self-service tooling"]
+  ET["Enabling teams<br/>internal consultancy"]
+  PT -->|"paved road: CI, pipelines,<br/>observability, IaC"| ST
+  ET -->|"facilitate, teach"| ST
+  PT -->|"X-as-a-service<br/>(reduce extrinsic load)"| ST`} />
+
+Autonomous teams make locally optimal tech choices that, multiplied, leave the org with an unsupportable mess. **Engineering enablement** applies software skills and product thinking to infrastructure so stream-aligned teams can focus on business value. Wells prefers "engineering enablement" over "platform engineering" — the goal is **reducing cognitive load**, which may not require a full platform. Build the **Thinnest Viable Platform**, build for the **majority** ("villagers," not explorers), and treat the **platform as a product** (talk to customers, iterate from an MVP, market it — "a poster near the kettle works very well").
+
+## The paved road
+
+The **paved road** is a non-mandatory set of well-integrated default tools that abstract complexity and are fully supported. The eight principles: **optional**, **provides value**, **self-service** (automate everything repetitive), **owned and supported**, **easy to use** (great docs; avoid "just"/"simply"), **guides people to do the right thing** (safe defaults), and **composable and extendable** ("simple things simple, complex things possible").
+
+Optionality matters: it forces the platform to build something people *want* and gives valuable signals when teams go off-road. Going off-road carries expectations across **quality** (comply with guardrails), **responsibilities** (you support what you build, including out-of-hours), and **outcomes**.
+
+<Callout type="tip" title="💡 Make the right thing the easy thing">
+Newman frames governance and the paved road (per COBIT) as a *group activity* that makes it easy to do the right thing — via **exemplars** (real running services), a **tailored microservice template** (e.g., Spring Boot with core libraries — but not a morale-destroying mandated framework; beware shared-code coupling), and the road at scale (Netflix on the JVM, Monzo on Go; sidecars and service meshes to offload common behaviour).
+</Callout>
+
+## Governance as guardrails, not gatekeeping
+
+Wells reframes **governance as reducing technical risk** — define what "good" looks like, make sure people know it, provide ways to self-correct. Engineers rarely *deliberately* miss expectations; they're usually unaware, so governance is mostly communication, reporting, and tooling. **Accelerate** found external approval bodies *lower* performance while peer review raises it; the *FT* removed its weekly CAB and *automated* change logging. Prefer **guardrails baked into the tools**, **automate compliance** ("is every team actually complying?"), and **trust but verify** (alert on root-account logins rather than pre-approve). Their lightweight **Tech Governance Group** circulates a 2–3 page proposal that is *endorsed* (silence = endorsement), closely matching the Architecture Advice Process.
+
+<Callout type="go" title="🔑 Key insight">
+The whole game is large organizations built from small, autonomous teams. Strong, active ownership gives each team clear accountability; a non-mandatory paved road and guardrail-based governance give them the freedom to move fast *and* keep the estate supportable. "We used Kubernetes because we wanted to change our organization."
+</Callout>
+
+## See also
+
+- [Conway's law and Team Topologies](/microservices/conways-law-and-team-topologies/) — the team types that own and pave.
+- [Deployment and progressive delivery](/microservices/deployment-and-progressive-delivery/) — what the paved road automates.
+- [Observability](/microservices/observability/) — the operability scoring that backs active ownership.

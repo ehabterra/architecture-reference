@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "architecture-reference",
+  "main": "./dist/_worker.js/index.js",
+  "compatibility_date": "2025-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./dist"
+  },
+  // Likes live in D1. Locally this runs against Miniflare's SQLite
+  // (.wrangler/state) — any id works. Before the first production deploy run
+  // `wrangler d1 create architecture-reference` and paste the real database_id here.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "architecture-reference",
+      "database_id": "83dfc61d-6eed-4926-9ee0-ff2b5ea5fa52"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

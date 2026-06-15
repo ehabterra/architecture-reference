@@ -1,0 +1,134 @@
+---
+title: "What Is Technology Strategy?"
+category: path-strategy
+kind: topic
+order: 5
+difficulty: "Beginner"
+status: ready
+intent: "Strategy is the art of creating power — technologists win funding by speaking the language of business, using proven patterns to analyze, create, and communicate a fundable course of action."
+book: "Technology Strategy Patterns (Eben Hewitt)"
+related:
+  - analyzing-strategy
+  - creating-strategy
+  - communicating-strategy
+when_use:
+  - "When you need to turn a technical vision into a request leaders will fund."
+  - "When you must 'speak the language of the business' but were never taught what that language is."
+  - "When framing a multi-year, org-wide direction that spans world, industry, company, and department scopes."
+when_avoid:
+  - "For a tiny project (e.g., a database upgrade) that needs only a handful of patterns, not the full catalog."
+  - "When you have no real ask — a strategy is in essence a request to spend someone else's money."
+  - "When you would present a 'shopping list of shiny objects' rather than a coherent course of action."
+quiz:
+  - q: "What is the essence of any technology strategy, per Hewitt?"
+    options:
+      - text: "A request to spend millions of dollars of someone else's money"
+        correct: true
+      - text: "A technical architecture diagram"
+        correct: false
+      - text: "A list of approved vendors"
+        correct: false
+      - text: "A multi-year project plan"
+        correct: false
+    explain: "Everything in the book ultimately serves the Strategy Deck and the Ask Deck, because a strategy is fundamentally a fundable request — 'it's how you get funded'."
+  - q: "What are the three Vitruvian requirements of any architecture Hewitt borrows?"
+    options:
+      - text: "Firmitas (solid), Utilitas (useful), Venustas (beautiful)"
+        correct: true
+      - text: "Speed, Cost, Quality"
+        correct: false
+      - text: "People, Process, Technology"
+        correct: false
+      - text: "Analysis, Creation, Communication"
+        correct: false
+    explain: "Vitruvius held that architecture must be firm (solid, not inflexible), useful (fit to purpose), and beautiful (harmonious proportion); the architect must also be educated across many fields."
+  - q: "What are the three logical groupings of the 39 patterns?"
+    options:
+      - text: "Analysis, Creation, and Communication"
+        correct: true
+      - text: "World, Industry, and Company"
+        correct: false
+      - text: "Build, Buy, and Partner"
+        correct: false
+      - text: "Strategy, Culture, and Execution"
+        correct: false
+    explain: "The book mirrors its three parts: Analysis (critical-thinking metapatterns), Creation (building the substance), and Communication (decks and rhetoric to win approval)."
+  - q: "Which trio must align for a strategy to succeed (Drucker's warning included)?"
+    options:
+      - text: "Strategy, Culture, and Execution — because 'culture eats strategy for breakfast'"
+        correct: true
+      - text: "Cost, Schedule, and Scope"
+        correct: false
+      - text: "Logos, Ethos, and Pathos"
+        correct: false
+      - text: "Position, Velocity, and Potential"
+        correct: false
+    explain: "All three forces — strategy, culture, and execution — must align; a brilliant strategy fails if the culture won't carry it or the org can't execute it."
+takeaway: "A technology strategy is a fundable request to spend others' money — speak the language of business and use patterns to analyze, create, and communicate it."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🐟 Analogy">
+David Foster Wallace's parable: two young fish swim past an older one who says, "Morning, boys, how's the water?" One turns to the other: "What the hell is water?" Technologists live inside business so completely that they can't see it. Technology strategy is learning to see the water — a hammer doesn't exist to be a hammer; technology exists to build a business.
+</Callout>
+
+Eben Hewitt's thesis is blunt: technologists are endlessly told to "speak the language of the business," but no one teaches them what that language is. *Technology Strategy Patterns* is meant to be the **Rosetta Stone** — a catalog of **39 patterns**, borrowed from McKinsey, BCG, Bain, and Harvard Business School, that lets an architect produce a strategy leaders will fund. The recurring maxim, via Lawrence Freedman: **"strategy is the art of creating power."**
+
+## The architect and the strategist
+
+Hewitt fuses two roles that people want most while knowing least about. He grounds the architect in **Vitruvius**, the Roman engineer who held that any architecture must satisfy three requirements:
+
+- **Firmitas** — solid and firm. ("Solid doesn't mean inflexible" — skyscrapers sway on purpose.)
+- **Utilitas** — useful, fit to its purpose.
+- **Venustas** — beautiful, in the sense of harmonious proportion — "rightsize" your work.
+
+The architect's three concerns are to **contain entropy** (standards and conventions), to **specify the "-ilities"** (the nonfunctional requirements: scalability, availability, security, and the rest), and to **determine trade-offs** — because "when you invent the ship, you also invent the shipwreck," and every trade-off ultimately reduces to time and money. Avoid "a shopping list of shiny objects."
+
+<Mermaid code={String.raw`graph TD
+  AR["The architect"]
+  AR --> CE["Contain entropy<br/>standards and conventions"]
+  AR --> IL["Specify the -ilities<br/>scalability, availability, security"]
+  AR --> TO["Determine trade-offs<br/>time and money"]
+  TO -->|"invent the ship,<br/>invent the shipwreck"| RS["Rightsize the work"]`} />
+
+<Callout type="go" title="🔑 Key insight">
+A technology strategy is, in essence, <strong>a request to spend millions of dollars of someone else's money.</strong> Everything in the discipline ultimately serves two artifacts — the <strong>Strategy Deck</strong> and the <strong>Ask Deck</strong> — because that is how the work gets funded.
+</Callout>
+
+## The three groups of patterns
+
+<Mermaid code={String.raw`graph TD
+  S["Technology Strategy<br/>(39 patterns)"]
+  S --> A["Analysis<br/>critical-thinking metapatterns<br/>(MECE, Logic Tree, Hypothesis)"]
+  S --> C["Creation<br/>building the substance<br/>(World → Industry → Company → Department)"]
+  S --> CM["Communication<br/>winning approval<br/>(rhetoric, templates, decks)"]
+  A --> C
+  C --> CM
+  CM --> ASK["Strategy Deck + Ask Deck<br/>(get funded)"]`} />
+
+The patterns cluster into three logical groups that mirror the workflow:
+
+- **Analysis** — foundational metapatterns for critical thinking (MECE, Logic Tree, Hypothesis).
+- **Creation** — 19 patterns arranged in concentric scopes from broadest to narrowest: **World → Industry → Company → Department**.
+- **Communication** — 20 patterns for the rhetoric, templates, and decks that win approval and resources.
+
+You use only the patterns the job needs. A full multi-year org-wide strategy uses all of them; a small database upgrade might use only MECE, a Logic Tree, a Stakeholder Matrix, a RACI, and Principles/Practices/Tools.
+
+## The strategist's role and rhythm
+
+*Strategy* comes from the Greek *strategos*, "the general's art." Jomini's division still holds: "Strategy decides where to act; logistics brings the troops to this point; tactics decides the manner of execution." A working definition: **determine the problems and opportunities and shape a course of action that gives the business the greatest advantage**, balancing goals, methods, and resources.
+
+<Callout type="tip" title="💡 Know the calendar">
+Strategy season typically begins in spring; the deck is presented to executives in late summer, feeding the fall budget season. Knowing this calendar is how you get big items funded — and Hewitt suggests two versions of every Strategy Deck: a detailed, honest one for executives and a shorter public one for teams.
+</Callout>
+
+<Callout type="gotcha" title="⚠️ Culture eats strategy for breakfast">
+Drucker's warning anchors the <strong>Triumvirate: Strategy, Culture, and Execution.</strong> All three must align. The most elegant strategy dies if the culture won't carry it or the organization cannot execute it — so a Strategy Deck is the organizational analogue of an architecture definition document, not a stand-alone artifact.
+</Callout>
+
+## See also
+
+- [Analyzing strategy](/strategy/analyzing-strategy/) — MECE, Logic Trees, hypotheses, and the world-context frameworks.
+- [Creating strategy](/strategy/creating-strategy/) — Porter, Ansoff, BCG, and the concentric creation patterns.
+- [Communicating strategy](/strategy/communicating-strategy/) — Ars Rhetorica, dramatic structure, and the Ask Deck.

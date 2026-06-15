@@ -1,0 +1,124 @@
+---
+title: "CQRS"
+category: ddd-tactical
+kind: topic
+order: 9
+difficulty: "Advanced"
+status: ready
+intent: "Command-Query Responsibility Segregation — one strongly-consistent command model and any number of read-only projections."
+book: "Learning Domain-Driven Design (Vlad Khononov)"
+related:
+  - event-sourcing
+  - business-logic-and-architecture-patterns
+  - domain-events-and-services
+when_use:
+  - "When you need the same data represented in multiple persistent models or database kinds (polyglot persistence)."
+  - "Obligatory for event-sourced domain models, whose event store is poor at querying."
+  - "When you want to add or rebuild read models cheaply and independently."
+when_avoid:
+  - "When a single model serves all needs — CQRS adds eventual consistency and machinery you may not need."
+  - "Don't assume commands may not return data — they can and often should."
+quiz:
+  - q: "In CQRS, which model is strongly consistent?"
+    options:
+      - text: "Only the command execution model — the source of truth"
+        correct: true
+      - text: "All read models"
+        correct: false
+      - text: "Both equally"
+        correct: false
+      - text: "Neither"
+        correct: false
+    explain: "Only the command model is strongly consistent and the source of truth; read models are eventually consistent, read-only, and rebuildable projections."
+  - q: "A common CQRS misconception to reject is...?"
+    options:
+      - text: "That commands may not return data and callers must always read from a read model"
+        correct: true
+      - text: "That read models can be rebuilt"
+        correct: false
+      - text: "That the command model is strongly consistent"
+        correct: false
+      - text: "That you can have many read models"
+        correct: false
+    explain: "A command should tell the caller success or failure and why, and can and often should return data — but that data must come from the strongly-consistent command model."
+  - q: "What does a synchronous projection use to track progress?"
+    options:
+      - text: "A catch-up subscription with checkpoints"
+        correct: true
+      - text: "A message bus only"
+        correct: false
+      - text: "A nightly full rebuild"
+        correct: false
+      - text: "Database triggers"
+        correct: false
+    explain: "A synchronous projection engine queries the command store for records changed after the last checkpoint, updates read models, and stores the new checkpoint — a catch-up subscription."
+  - q: "What is the recommended projection strategy?"
+    options:
+      - text: "Always implement synchronous projection, optionally add asynchronous on top"
+        correct: true
+      - text: "Always use asynchronous projection alone"
+        correct: false
+      - text: "Never use synchronous projection"
+        correct: false
+      - text: "Use database replication instead"
+        correct: false
+    explain: "Asynchronous projections scale but are prone to out-of-order and duplicate messages; always implement the synchronous catch-up projection first, then optionally add async."
+takeaway: "Segregate one strongly-consistent command model from many rebuildable read models; commands may still return data — from the command model."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A library keeps one authoritative catalog of every book it owns (the source of truth) but also prints purpose-built lists: new arrivals, books by genre, a staff-picks shelf. Those lists are read-only views generated from the catalog — wipe them and you can reprint from the catalog at any time. That's CQRS.
+</Callout>
+
+## Multiple models of the same data
+
+**CQRS (Command-Query Responsibility Segregation)** shares ports-and-adapters' principles but represents the system's data in *multiple* persistent models, segregated by responsibility. It solves two problems: working with the same data in several models or database kinds, and overcoming an event-sourced model's limited querying.
+
+<Mermaid code={String.raw`graph TD
+  C["Command"] --> CM["Command execution model<br/>(strongly consistent, source of truth)"]
+  CM --> Store[("OLTP / event store")]
+  Store --> Eng["Projection engine"]
+  Eng --> R1["Read model: SQL view"]
+  Eng --> R2["Read model: search index"]
+  Eng --> R3["Read model: in-memory cache"]
+  Q["Query"] --> R1
+  Q --> R2`} />
+
+- **Command execution model** — The single model for state-modifying operations; the *only* strongly consistent model and the source of truth. It supports reading strongly-consistent state and optimistic concurrency.
+- **Read models / projections** — As many read-only models as needed: a precached projection in a durable DB, a flat file, or an in-memory cache. They are **wipeable and regenerable**, and **no operation modifies them directly** — they're like materialized views.
+- **Polyglot persistence** — Use multiple models and database kinds because no single one serves all needs.
+
+## Projecting the read models
+
+- **Synchronous projection (catch-up subscription)** — The engine (1) queries the command store for records changed after the last **checkpoint**, (2) updates read models, (3) stores the new checkpoint. Correctness rule: checkpoint queries must return consistent results — no later record may appear with a value below an already-returned checkpoint. Big advantage: adding or rebuilding a projection is trivial — reset the checkpoint to 0.
+- **Asynchronous projection** — The command model publishes committed changes to a message bus; projection engines subscribe. It scales well but is prone to out-of-order and duplicate messages, which can corrupt read models.
+
+<Mermaid code={String.raw`graph LR
+  Eng["Projection engine"] -->|"1. read changes<br/>after checkpoint"| Store[("Command store")]
+  Eng -->|"2. update"| RM["Read model"]
+  Eng -->|"3. save new checkpoint"| CP["Checkpoint"]
+  CP -.->|"reset to 0 = rebuild"| Eng`} />
+
+<Callout type="go" title="Recommended strategy">
+**Always implement synchronous projection first, then optionally add asynchronous on top.** The synchronous catch-up subscription is correct and rebuildable; async buys scale but inherits the hazards of unordered, duplicated messages.
+</Callout>
+
+<Callout type="gotcha" title="Commands can return data">
+A persistent CQRS myth says commands may not return data, forcing callers to always poll a read model. Reject it: a command should tell the caller **success or failure and why**, and **can and often should return data** — but that data must come from the *strongly-consistent command model*, not an eventually-consistent read model.
+</Callout>
+
+## When to use it
+
+CQRS fits apps that need the same data in multiple models or databases, and it is **obligatory for event-sourced domain models** — the event store is built for appending and replaying, not querying, so projections give you the queryable views. As a heuristic, derive the architecture from the business-logic pattern: event-sourced → CQRS; but CQRS benefits *any* pattern that needs data in multiple persistent models.
+
+<Callout type="tip" title="Read models are disposable">
+Because read models are pure projections of the source of truth, treat them as cache: you can change a read model's schema by deleting it and replaying. This is what makes adding new query shapes cheap, long after the system has shipped.
+</Callout>
+
+## See also
+
+- [Event sourcing](/ddd/event-sourcing/) — the pattern CQRS most often accompanies.
+- [Business logic and architecture patterns](/ddd/business-logic-and-architecture-patterns/) — how CQRS relates to layered and ports-and-adapters.
+- [Domain events and services](/ddd/domain-events-and-services/) — the events async projections consume.

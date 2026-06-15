@@ -1,0 +1,139 @@
+---
+title: "Sagas: Distributed Workflows Without Distributed Transactions"
+category: ms-communication
+kind: topic
+order: 10
+difficulty: "Advanced"
+status: ready
+intent: "Coordinate multiple state changes across services without long-held locks by modeling a process as a sequence of local transactions, with compensating actions for rollback."
+book: "Building Microservices, 2nd ed. & Monolith to Microservices (Sam Newman)"
+related:
+  - choreography-vs-orchestration
+  - handling-data-consistency
+  - decomposing-the-database
+when_use:
+  - "A business process must update state across several services."
+  - "You need to avoid distributed transactions / two-phase commit."
+  - "You can model the process as discrete, independently executable steps."
+when_avoid:
+  - "The state and its logic can stay in one service (just use a local ACID transaction)."
+  - "You need true ACID atomicity across services — that isn't what a saga gives."
+quiz:
+  - q: "What is a saga?"
+    options:
+      - text: "An algorithm coordinating multiple state changes as a sequence of local ACID transactions, without long-held locks"
+        correct: true
+      - text: "A distributed transaction using two-phase commit"
+        correct: false
+      - text: "A shared database lock across services"
+        correct: false
+      - text: "A caching strategy"
+        correct: false
+    explain: "A saga breaks a long-lived transaction into shorter sub-transactions, each a local ACID change; it gives no saga-level atomicity but enough info to reason about state."
+  - q: "What is backward recovery in a saga?"
+    options:
+      - text: "Compensating actions — semantic rollbacks, since you can't always undo a real-world effect"
+        correct: true
+      - text: "Retrying from the point of failure"
+        correct: false
+      - text: "Rolling back a database with a transaction log"
+        correct: false
+      - text: "Restoring from a backup"
+        correct: false
+    explain: "Backward recovery undoes prior steps via compensating actions (e.g., you can't unsend an email, so send a cancellation)."
+  - q: "Why reorder saga steps to put likely-to-fail steps earlier?"
+    options:
+      - text: "To reduce the number of rollbacks / compensations needed"
+        correct: true
+      - text: "To make the saga run faster"
+        correct: false
+      - text: "To avoid using a message broker"
+        correct: false
+      - text: "To guarantee ACID atomicity"
+        correct: false
+    explain: "Awarding loyalty points only at dispatch means you never have to roll them back — fail early, before irreversible or expensive steps."
+  - q: "What do sagas handle, and what do they NOT?"
+    options:
+      - text: "They handle business failures, not technical ones"
+        correct: true
+      - text: "They handle technical failures, not business ones"
+        correct: false
+      - text: "They handle both equally"
+        correct: false
+      - text: "They handle neither"
+        correct: false
+    explain: "Sagas model the business process and its compensations; technical failures (timeouts, crashes) are handled by resilience patterns and retries."
+takeaway: "Model cross-service processes as sagas — a sequence of local transactions with compensating actions — reorder to fail early, and choose orchestration (one team) or choreography (many)."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Booking a holiday across separate flight, hotel, and car-hire companies, none of which can hold a shared lock, you book each in turn. If the car-hire fails, you don't get a magic universal undo — you *cancel* the hotel and flight (compensating actions). That sequence of "do, and undo if needed" steps is a saga.
+</Callout>
+
+## Why not just use a transaction?
+
+When you split a database, you lose **atomicity** for any operation that spanned the boundary. The tempting fix — a **distributed transaction via two-phase commit (2PC)** — is one Newman strongly advises against: its commit phase isn't simultaneous (isolation is lost), it's effectively distributed locking (deadlock-prone), it has many failure modes needing manual unpicking, and it adds heavy latency. Pat Helland: "When flying an airplane that needs all of its engines to work, adding an engine reduces the availability of the airplane."
+
+The first alternative is **don't split the data**. If you must, use a **saga**.
+
+## What a saga is
+
+A saga coordinates multiple state changes *without* long-held locks by modeling a process as a sequence of **discrete, independently executable steps, each a local ACID transaction**. Originated by Garcia-Molina & Salem for **long-lived transactions**, it gives **no** ACID atomicity at the saga level — only per-step — but enough information to reason about which state the process is in. A bonus: it forces you to model the business process *explicitly*.
+
+## Two failure modes
+
+<Mermaid code={String.raw`graph TD
+  A["Step 1: Take payment"] --> B["Step 2: Reserve stock"]
+  B --> C["Step 3: Dispatch order"]
+  C -->|"success"| D["Step 4: Award loyalty points"]
+  C -->|"fails"| F["Forward recovery:<br/>retry dispatch"]
+  B -->|"fails"| BR["Backward recovery:<br/>refund payment (compensate)"]`} />
+
+- **Backward recovery** — undo prior work with **compensating actions**. These are *semantic* rollbacks: the transactions really happened, so you can't unsend an email — you send a cancellation email instead.
+- **Forward recovery** — retry from the point of failure (needs persisted state).
+
+A real process **mixes both**. Two design moves:
+
+- **Reorder steps to reduce rollbacks** — put likely-to-fail steps earlier; award loyalty points only at **dispatch**, so you never roll them back.
+- **Mix fail-backward and fail-forward** — once money is taken and items packaged, *retry* dispatch rather than roll the whole order back; escalate to a human if needed.
+
+<Callout type="gotcha" title="⚠️ Sagas handle business failures, not technical ones">
+A saga reasons about the *business* process — payment taken, stock reserved, order dispatched. It does **not** replace [resilience patterns](/microservices/resilience/) for technical failures (timeouts, crashes, lost messages). You still need retries, idempotency, and dead letter queues underneath the saga.
+</Callout>
+
+## Implementing a saga
+
+The two implementation styles map directly onto [choreography vs orchestration](/microservices/choreography-vs-orchestration/):
+
+- **Orchestrated saga** — a central **orchestrator** defines step order and triggers compensations via request-response. Good visibility; downsides are more coupling and **anemic** services. Mitigate by using different orchestrators for different flows.
+- **Choreographed saga** — services react to **events** on a broker; much less coupled, but harder to see the overall process. Add a **correlation ID** to every event plus a service that projects saga state.
+
+<Mermaid code={String.raw`graph TD
+  subgraph Orch["Orchestrated saga"]
+    Orc["Saga orchestrator"] -->|"command + compensate"| P1["Payment"]
+    Orc --> St1["Stock"]
+    Orc --> Di1["Dispatch"]
+  end
+  subgraph Chor["Choreographed saga"]
+    Ev["events on broker (corr-id)"] --> P2["Payment reacts"]
+    Ev --> St2["Stock reacts"]
+    Ev --> Di2["Dispatch reacts"]
+  end`} />
+
+You can **mix styles** (an orchestrated flow inside one boundary within a larger choreographed saga).
+
+<Callout type="tip" title="💡 The team-ownership rule again">
+Be relaxed about **orchestration when one team owns the whole saga**; prefer **choreography across multiple teams** for looser coupling and easier distribution of responsibility.
+</Callout>
+
+<Callout type="go" title="🔑 Key insight">
+Sagas make business processes first-class, explicit concepts and sidestep the pain of distributed transactions — at the price of eventual consistency and the need to design compensations. Embrace the trade: reason about state, reorder to fail early, and never reach for 2PC.
+</Callout>
+
+## See also
+
+- [Choreography vs orchestration](/microservices/choreography-vs-orchestration/) — the two ways to implement a saga.
+- [Handling data consistency](/microservices/handling-data-consistency/) — eventual consistency and the CAP theorem.
+- [Decomposing the database](/microservices/decomposing-the-database/) — how you ended up needing sagas in the first place.

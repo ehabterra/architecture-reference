@@ -1,0 +1,130 @@
+---
+title: "Executable Workflow Models"
+category: auto-modeling
+kind: topic
+order: 5
+difficulty: "Intermediate"
+status: ready
+intent: "A model becomes executable by connecting it to glue code — prefer publish/subscribe, treat the model as source code, and plan for versioning from day one."
+book: "Practical Process Automation (Bernd Ruecker)"
+related:
+  - modeling-with-bpmn
+  - where-workflow-engines-fit
+  - integrating-with-services-and-apis
+when_use:
+  - "Wiring service tasks to real connectivity, data handling, and decisions"
+  - "Choosing between pub/sub, referenced code, and prebuilt connectors"
+  - "Evolving a deployed definition while instances are still running"
+when_avoid:
+  - "Letting analysts own and overwrite the executable artifact's technical attributes"
+  - "Testing the engine itself instead of your model, config, and glue code"
+  - "Forgetting that a model change may require glue-code and data-version changes"
+quiz:
+  - q: "Which method of connecting model to code does the book prefer for modern engines?"
+    options:
+      - text: "Publish/subscribe — glue code subscribes to a task type and the engine acts as broker"
+        correct: true
+      - text: "Referencing a class the engine executes in its own thread and transaction"
+        correct: false
+      - text: "Prebuilt vendor connectors configured in the model"
+        correct: false
+      - text: "Embedding the business logic directly in the BPMN XML"
+        correct: false
+    explain: "Pub/sub lets you decide if and when to execute, scale glue code independently, and control timeouts in your own code — and works in almost any language via long polling."
+  - q: "What happens to running instances when you deploy a new version of a definition?"
+    options:
+      - text: "Active instances finish in their started version; new instances run the new version (and you may migrate)"
+        correct: true
+      - text: "All instances are immediately deleted"
+        correct: false
+      - text: "All instances jump to the new version automatically"
+        correct: false
+      - text: "Deployment is blocked until every instance ends"
+        correct: false
+    explain: "Engines run multiple versions in parallel. You choose between keeping versions parallel (legal stability, dev/test) or migrating instances (patches and bug fixes)."
+  - q: "When testing a process, what should you NOT do?"
+    options:
+      - text: "Test the engine itself"
+        correct: true
+      - text: "Mock external systems"
+        correct: false
+      - text: "Assert the model reaches the expected tasks"
+        correct: false
+      - text: "Verify gateway expressions behave as intended"
+        correct: false
+    explain: "Process models are source code and deserve unit tests — but test your model, configuration, glue code, and gateway expressions, mocking externals; don't re-test the engine."
+  - q: "Why must developers own the executable artifact?"
+    options:
+      - text: "So analysts cannot overwrite or remove technical attributes they cannot even see"
+        correct: true
+      - text: "Because analysts are not allowed to read diagrams"
+        correct: false
+      - text: "Because the engine forbids shared editing"
+        correct: false
+      - text: "Because business has no stake in the process"
+        correct: false
+    explain: "Analysts draft the what and why; developers make it executable and must be empowered to adjust it. Ownership of the runnable model stays with developers to protect execution details."
+takeaway: "Connect model to code via pub/sub, treat the model as version-controlled source code, and plan for parallel versions or instance migration."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A blueprint isn't a building. A BPMN diagram describes *what should happen*; the wiring, plumbing, and fittings — the **glue code** — make it actually run. The art of executable modeling is connecting the diagram to real connectivity, data handling, and decisions without burying either side in the other.
+</Callout>
+
+## Three ways to connect model and code
+
+A [BPMN](/automation/modeling-with-bpmn/) model is the skeleton; **glue code** supplies connectivity (REST, messaging), data transformation, and decisions. There are three conceptual ways to wire a service task to that code:
+
+<Mermaid code={String.raw`graph TD
+  M["Service task in model<br/>(logical task type)"] --> PS["1. Publish/subscribe<br/>(preferred)"]
+  M --> RC["2. Referenced code"]
+  M --> PC["3. Prebuilt connector"]
+  PS --> PSd["Glue code subscribes,<br/>does work, completes the job.<br/>Engine is the broker."]
+  RC --> RCd["Engine runs your class<br/>in its thread/transaction.<br/>Simple but coupled."]
+  PC --> PCd["Configure a vendor connector.<br/>Convenient but limited,<br/>proprietary, hard to test."]`} />
+
+- **Publish/subscribe (preferred).** The model declares a **logical task type**; glue code opens a **subscription** and is invoked when an instance reaches that task. The engine itself acts as the **broker** — no separate message broker needed — and a **job** is the unit of work the handler pulls and completes (input mapping → real work → output mapping → complete). Often implemented with efficient **long polling**, so glue code can run in almost any language. Three advantages stand out: **you decide if/when to execute** (close the subscription if the downstream is down and instances simply wait), **independent scaling** (or throttling — e.g., an OCR tool licensed for one parallel job), and **glue code controls timeouts** (long work like video transcoding talks back only when finished).
+- **Referencing code.** The model names a class the engine runs in its own context. Simpler at first, but you are nailed to the engine's environment, lose temporal decoupling, and — the critical downside — failures depend on the engine, its configuration, *and* your code, making them hard to investigate.
+- **Prebuilt connectors.** Configure a vendor connector (e.g., an HTTP connector). Convenient but limited to what the vendor foresaw, often harder to test, and proprietary — best for stitching together serverless functions or RPA bots, not a default.
+
+<Callout type="go" title="Why pub/sub won">
+Early projects loved referenced code for its simplicity. But cloud-native trends and polyglot teams made **pub/sub** the better fit, so modern engines focus on it: it keeps glue code in your stack, in your language, under your control, and decoupled from the engine's lifecycle.
+</Callout>
+
+## The model is source code — test it
+
+A process solution behaves like any normal project: check it into **version control**, build it with your normal **CI/CD** pipeline, and prefer **auto-deploying** the model through the microservice's own deployment path rather than a separate graphical tool. Because the model *is* source code, **unit-test it**: simulate the start, assert the instance reaches each expected task, execute jobs with fake behaviour, complete human tasks with test data, and verify outgoing requests against a mocked external system.
+
+<Callout type="gotcha" title="Don't test the engine">
+Process tests should check *your* model, configuration, glue code, and gateway expressions — not the engine's internals, and not a full integration. **Mock external systems** so a process test stays a fast unit test.
+</Callout>
+
+## Versioning: parallel or migrate
+
+Because processes are long-running, deploying a changed model can't ignore in-flight instances. Engines keep **active instances on their started version** and run **new instances on the new version**. Two strategies:
+
+<Mermaid code={String.raw`graph TD
+  D["Deploy new definition version"] --> Q{"Migrate in-flight instances?"}
+  Q -->|"no"| P["Run versions in parallel<br/>(legal stability, dev and test)"]
+  Q -->|"yes"| M["Migrate instances<br/>(patches and bug fixes)"]
+  P --> PC["Cost: multiple live versions"]
+  M --> MC["Cost: scripted migration in CI/CD"]`} />
+
+- **Run versions in parallel** — deploy without touching running instances. Use when legal requirements demand a stable procedure once started, on dev/test systems, or when migration is too complex for its payoff. Cost: operational complexity of multiple live versions.
+- **Migrate instances** — move existing instances to the new version, possibly scripted into CI/CD. Use for patches and bug fixes, to avoid juggling versions.
+
+<Callout type="tip" title="Version glue code and data too">
+A new model often needs new glue code and new data fields. Make new attributes **optional** so old instance data still deserializes, then either branch on a versioned code path, make the code check whether new attributes are set (migration-safe), or run an **upgrade script** to adjust old instance data.
+</Callout>
+
+## Ownership and the "Model or Code?" line
+
+Analysts draft the **what and why**; developers make models **executable** and discover real-world flaws (an API needs an extra parameter) — so they must be **empowered to adjust the model**, communicating each change with a reason. Ownership of the runnable artifact stays with **developers**, so no one overwrites technical attributes they cannot see. When deciding what goes in the model versus code, default business logic to **code** and promote a step into the model only when it must **wait**, you **discuss it regularly**, or it **crosses a transaction boundary**.
+
+## See also
+
+- [Modeling with BPMN](/automation/modeling-with-bpmn/) — the notation these models are written in.
+- [Integrating with services and APIs](/automation/integrating-with-services-and-apis/) — what the glue code talks to.
+- [Where workflow engines fit](/automation/where-workflow-engines-fit/) — the platform that runs and versions definitions.

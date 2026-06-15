@@ -1,0 +1,127 @@
+---
+title: "Business Logic and Architecture Patterns"
+category: ddd-application
+kind: topic
+order: 10
+difficulty: "Intermediate"
+status: ready
+intent: "The four business-logic patterns (transaction script, active record, domain model, event-sourced) and the architectures that fit them (layered, ports & adapters, CQRS)."
+book: "Learning Domain-Driven Design (Vlad Khononov)"
+related:
+  - entities-and-aggregates
+  - cqrs
+  - design-heuristics-and-evolution
+when_use:
+  - "When choosing how to implement a subdomain's business logic based on its complexity."
+  - "When deciding how to wire business logic to UI, database, and infrastructure."
+  - "When a system needs the same data in multiple persistent models (reach for CQRS)."
+when_avoid:
+  - "Don't use transaction script or active record for a complex core subdomain."
+  - "Don't impose one architecture across a whole bounded context that spans several subdomains."
+  - "Don't over-engineer simple CRUD with a full domain model."
+quiz:
+  - q: "Which business-logic pattern suits simple logic over complicated data structures?"
+    options:
+      - text: "Active record"
+        correct: true
+      - text: "Transaction script"
+        correct: false
+      - text: "Domain model"
+        correct: false
+      - text: "Event-sourced domain model"
+        correct: false
+    explain: "Active record encapsulates a complicated data structure plus its CRUD/persistence; logic is still organized as a transaction script manipulating active records — for simple logic, complex data."
+  - q: "What is the defining responsibility of a transaction script?"
+    options:
+      - text: "Transactional behavior — each operation succeeds entirely or fails entirely"
+        correct: true
+      - text: "Object-oriented inheritance"
+        correct: false
+      - text: "Eventual consistency"
+        correct: false
+      - text: "Encapsulating invariants in aggregates"
+        correct: false
+    explain: "Each procedure handles one request and must either succeed completely or fail completely, never leaving the system in an invalid state — that requirement gives the pattern its name."
+  - q: "Ports & adapters (hexagonal) is the right architecture for...?"
+    options:
+      - text: "The domain model and event-sourced domain model"
+        correct: true
+      - text: "Transaction script only"
+        correct: false
+      - text: "Active record only"
+        correct: false
+      - text: "Pure CRUD apps"
+        correct: false
+    explain: "Ports & adapters inverts dependencies so infrastructure-free business logic sits at the center — a perfect fit for the domain model and event-sourced domain model."
+  - q: "What is an 'implicit distributed transaction'?"
+    options:
+      - text: "Even a single row update is distributed because it also communicates success to the caller, who may retry"
+        correct: true
+      - text: "A transaction across two databases"
+        correct: false
+      - text: "A transaction with no commit"
+        correct: false
+      - text: "A read-only query"
+        correct: false
+    explain: "An UPDATE that increments a counter also reports its result to the caller; if the result is lost the caller retries and increments twice. Fix with idempotency or optimistic concurrency."
+takeaway: "Match the business-logic pattern to subdomain complexity, then derive the architecture: simple → layered, complex → ports & adapters, event-sourced → CQRS."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+You don't buy a freight truck to carry groceries, or a bicycle to move a house. The four business-logic patterns are vehicles of different capacity — and picking one too big or too small for the cargo (the subdomain's complexity) is the most common, most expensive mistake.
+</Callout>
+
+## Four business-logic patterns
+
+Business logic is the reason software exists. Because subdomains differ in complexity, there are four ways to implement it, in increasing power — and every advanced pattern is built on the simplest one.
+
+<Mermaid code={String.raw`graph TD
+  Start["What does the logic look like?"] --> Q1{"Money / audit / deep analysis?"}
+  Q1 -- yes --> ES["Event-sourced domain model"]
+  Q1 -- no --> Q2{"Complex logic, rules, invariants?"}
+  Q2 -- yes --> DM["Domain model"]
+  Q2 -- no --> Q3{"Complicated data structure?"}
+  Q3 -- yes --> AR["Active record"]
+  Q3 -- no --> TS["Transaction script"]`} />
+
+- **Transaction script** — Organizes logic by procedures, each handling one request from the presentation. The non-negotiable requirement is **transactional behavior**: succeed entirely or fail entirely. Use for supporting subdomains, generic-integration adapters, anticorruption layers, and ETL. *Never* for a core subdomain — logic duplicates across transactions into a big ball of mud.
+- **Active record** — An object that wraps a database row, encapsulates data access, and adds simple logic; supports CRUD over complicated data structures. Also (uncharitably) called the *anemic domain model* — a fine tool when logic is simple, harmful only in the wrong context.
+- **Domain model** — An object model of *both* data and behavior for complex logic, built from [value objects](/ddd/value-objects/), [entities and aggregates](/ddd/entities-and-aggregates/), and [domain services](/ddd/domain-events-and-services/). Usually a core subdomain.
+- **Event-sourced domain model** — The domain model with state persisted as a stream of events. See [event sourcing](/ddd/event-sourcing/).
+
+<Callout type="gotcha" title="Transaction script is the easiest pattern to get wrong">
+Three traps cause real data corruption: (1) **no transactional behavior** — multiple updates with no overarching transaction; (2) **distributed transactions** — update a DB then publish to a bus, corrupting state on failure (fix with the outbox); (3) **implicit distributed transactions** — even one `UPDATE ... SET visits = visits + 1` also reports success to the caller, who retries and increments twice. Fix with **idempotency** (pass the absolute new value) or **optimistic concurrency**.
+</Callout>
+
+## Architectural patterns
+
+An **architectural pattern** defines clear boundaries between a codebase's concerns — how business logic wires to input, output, and infrastructure. Choose the architecture to fit the business-logic pattern.
+
+- **Layered architecture** — Horizontal layers: **presentation** (the public interface), **business logic** (active record or domain model), **data access** (persistence). Each depends only on the one beneath. A **service / application layer** façade coordinates orchestration; it's *required* with active record (it implements the transaction script over active records) and unnecessary with a bare transaction script (the script *is* the service layer). Good fit for transaction script and active record; awkward for a domain model.
+- **Ports & adapters (hexagonal / onion / clean)** — Merges presentation and data access into an "infrastructure layer" and applies the **dependency inversion principle**: business logic sits at the center, depending on nothing infrastructural. Business logic defines **ports** (interfaces); infrastructure provides **adapters** (implementations), wired via DI. Perfect for the domain model and event-sourced domain model.
+
+<Mermaid code={String.raw`graph TD
+  subgraph Center["Center — no infrastructure deps"]
+    BL["Domain model<br/>(defines ports)"]
+  end
+  UI["UI adapter"] --> BL
+  DB["DB adapter"] -.implements port.-> BL
+  MQ["Message-bus adapter"] -.implements port.-> BL
+  BL -.->|"port: IRepository"| DB`} />
+- **CQRS** — Adds *multiple* persistent models. Obligatory for event-sourced models; beneficial for any pattern needing data in multiple databases. See [CQRS](/ddd/cqrs/).
+
+<Callout type="go" title="A layer is not a tier">
+A **layer** is a *logical* boundary sharing one lifecycle; a **tier** is a *physical*, independently deployable boundary (browser → reverse proxy → web app → DB server). Don't confuse organizing code with distributing it.
+</Callout>
+
+<Callout type="tip" title="Architecture is per-subdomain, not per-context">
+A bounded context can span several subdomains, so forcing one context-wide architecture causes accidental complexity. Add **vertical** subdomain modules on top of **horizontal** layers — a modular bounded context — and let each subdomain use the pattern that fits it.
+</Callout>
+
+## See also
+
+- [Entities and aggregates](/ddd/entities-and-aggregates/) — the heart of the domain model pattern.
+- [CQRS](/ddd/cqrs/) — the architecture for multiple persistent models.
+- [Design heuristics and evolution](/ddd/design-heuristics-and-evolution/) — the decision tree that picks all of these.

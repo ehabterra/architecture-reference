@@ -1,0 +1,133 @@
+---
+title: "Analyzing Strategy"
+category: path-strategy
+kind: topic
+order: 6
+difficulty: "Intermediate"
+status: ready
+intent: "The analysis metapatterns — MECE, Logic Trees, and Hypothesis — plus the world-context frameworks PESTEL, Scenario Planning, Futures Funnel, and Backcasting that ground a strategy in reality."
+book: "Technology Strategy Patterns (Eben Hewitt)"
+related:
+  - what-is-technology-strategy
+  - creating-strategy
+  - communicating-strategy
+when_use:
+  - "When you need to structure a messy problem into clean, decision-ready lists and trees."
+  - "When forming a fast hypothesis to focus analysis before you have all the data."
+  - "When scanning the broad climate (PESTEL) so the strategy isn't a shopping list of shiny objects."
+when_avoid:
+  - "When a list mixes levels of abstraction or leaves gaps — a non-MECE list misleads."
+  - "When you demand false precision (an exact probability) instead of ranges or High/Medium/Low."
+  - "When chasing only problems; pursue opportunities (gains) too, not just pains."
+quiz:
+  - q: "What does MECE stand for, and why is it the most useful tool in the box?"
+    options:
+      - text: "Mutually Exclusive, Collectively Exhaustive — because strategy is 'a list of lists' and lists are its building blocks"
+        correct: true
+      - text: "Measure, Evaluate, Compare, Execute — because it drives action"
+        correct: false
+      - text: "Most Effective Cost Estimation — because it controls budget"
+        correct: false
+      - text: "Modular, Extensible, Cohesive, Efficient — because it structures systems"
+        correct: false
+    explain: "Mutually exclusive = no overlap; collectively exhaustive = nothing left out. Profit = Revenue − Cost is MECE; North/South/West is not. A good list also makes clear who the audience is and why they care."
+  - q: "What are the two kinds of Logic (Issue) Tree?"
+    options:
+      - text: "Diagnostic (finds the root cause — answers why) and Solution (lists courses of action — answers how)"
+        correct: true
+      - text: "Binary and N-ary"
+        correct: false
+      - text: "Top-down and bottom-up"
+        correct: false
+      - text: "Internal and external"
+        correct: false
+    explain: "The diagnostic tree works backward to the root cause (like the Five Whys / fishbone diagram); the solution tree imagines the ideal end state and regresses toward the present."
+  - q: "What does PESTEL stand for?"
+    options:
+      - text: "Political, Economic, Social, Technological, Environmental, Legal"
+        correct: true
+      - text: "People, Equipment, Systems, Tools, Environment, Logistics"
+        correct: false
+      - text: "Product, Engineering, Sales, Tech, Eng, Legal"
+        correct: false
+      - text: "Process, Effort, Scope, Time, Estimate, Launch"
+        correct: false
+    explain: "Aguilar's PESTEL frames the broad climates affecting a business; it 'tells you the weather so you pack an umbrella' and is itself MECE, but has no method inside it beyond the acronym."
+  - q: "How does Backcasting differ from forecasting?"
+    options:
+      - text: "It states the desired future as if it already happened, then works backward to the people, processes, and tools that got you there"
+        correct: true
+      - text: "It predicts the future from current trends"
+        correct: false
+      - text: "It ignores the future entirely"
+        correct: false
+      - text: "It averages several forecasts together"
+        correct: false
+    explain: "Backcasting creates a concrete 'Beautiful Future' vision, then hypothesizes each necessary prior state (its antecedents), recursing back to the status quo and tagging each with a probability."
+takeaway: "Structure problems with MECE lists and Logic Trees, focus with a hypothesis, and ground the whole thing in the broad climate with PESTEL and Backcasting."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🗂️ Analogy">
+A good filing system makes every document obvious to find and impossible to misplace. Borges mocked the opposite: a "Celestial Emporium" taxonomy of animals that includes "those belonging to the Emperor," "those drawn with a fine camel-hair brush," and "those that from a distance resemble flies." Analysis is the discipline of building lists that aren't absurd.
+</Callout>
+
+Before you create or communicate a strategy, you analyze. Hewitt's analysis layer is a set of **metapatterns** for critical thinking that apply at every scope, plus the **world-context** frameworks that keep a strategy grounded.
+
+## The three metapatterns
+
+<Mermaid code={String.raw`graph TD
+  P["Strategic problem"] --> M["MECE list<br/>(no overlap, no gaps)"]
+  M --> LT["Logic Tree"]
+  LT --> DG["Diagnostic tree<br/>(why → root cause)"]
+  LT --> SL["Solution tree<br/>(how → courses of action)"]
+  M --> H["Hypothesis<br/>(P → Q, a stake in the ground)"]
+  H --> R["Focused analysis"]`} />
+
+- **MECE** ("mee-see," from McKinsey) — **Mutually Exclusive, Collectively Exhaustive.** The most useful tool in the box, because *strategy is "a list of lists."* `Profit = Revenue − Cost` is MECE; `North/South/West` is not. Follow the **Rule of Three**: pick an abstraction level that keeps lists at three or five items, because odd numbers are memorable (*The Good, the Bad, and the Ugly*). Executives have "Executive ADD" — give the MECE summary, not the long list. Present database options as a ranked **Good / Better / Best** (itself MECE), and show your "long math" so the conclusion is trusted.
+- **Logic Tree (Issue Tree)** — a MECE decomposition of a problem. A **diagnostic** tree works backward to the **root cause** (why); a **solution** tree maps courses of action (how). Built like the Five Whys / fishbone diagram. The Jefferson Memorial example: eroding stone → harsh chemicals → pigeons → spiders → midges → lights attracting midges at dusk → solution: turn the lights on one hour later — free and instant.
+- **Hypothesis** — a claim about why something might be true (form *P → Q*) that puts "a stake in the ground" to focus analysis. McKinsey consultants form one within hours. A hypothesis is a list of sub-hypotheses, each based on an **insight**, each based on **data points**.
+
+<Callout type="gotcha" title="⚠️ Problems vs. opportunities">
+Focusing only on problems can, at best, maintain the status quo. Pursue <strong>opportunities</strong> — gains customers don't yet know they want. The iPhone (2007) and the five-colored iMac (1998) addressed gains, not pains.
+</Callout>
+
+## Reasoning under uncertainty
+
+Hewitt's Hypothesis pattern adds discipline drawn from logic and probability:
+
+- Distinguish raw **facts** from interpretive **insights**, and beware **tautologies** ("all bachelors are unmarried" is trivially true).
+- Use **inductive** reasoning carefully (beware Russell's turkey, fed daily until Thanksgiving) and **deductive** reasoning from principles.
+- Estimate probability with **ranges or High/Medium/Low traffic lights**, never **false precision** — the Fed predicted 0 of 144 crises from 2005–2014. Hold several hypotheses at once, think probabilistically, and update often.
+- **Ease and Impact Scoring** plots work on a scatterplot of ease (x) vs. impact (y): top-right green (do first), top-left yellow (second), bottom-right (third), bottom-left red (last).
+
+<Mermaid code={String.raw`graph TD
+  TR["High impact, easy<br/>do first (green)"]
+  TL["High impact, hard<br/>do second (yellow)"]
+  BR["Low impact, easy<br/>do third"]
+  BL["Low impact, hard<br/>do last (red)"]
+  TR --> TL --> BR --> BL`} />
+
+<Callout type="go" title="🔑 Signal and noise">
+Apply the <strong>80/20 (Pareto) rule</strong>: separate <em>signal</em> (what matters) from <em>noise</em> (random patterns mistaken for signal). A few fundamentals get you 80% of the way — make a "good enough" conclusion quickly, then refine.
+</Callout>
+
+## Grounding in the world: four nested patterns
+
+The broadest creation scope feeds four patterns in sequence — **PESTEL → Scenario Planning → Futures Funnel → Backcasting** — so the strategy is grounded, not a shopping list:
+
+- **PESTEL** (Aguilar, 1967) — the broad climates: **Political, Economic, Social, Technological, Environmental, Legal.** It is MECE and precedes resource allocation — "it tells you the weather so you pack an umbrella." Caveat: "as an idea, it's really not much more than the acronym."
+- **Scenario Planning** — an organized way of asking "What if—?", born at RAND in the 1950s. It counters the default "Do Nothing" strategy and its optimism bias.
+- **Futures Funnel** — a single Venn-like slide nesting four sets: **Possible** (widest), **Plausible**, **Probable** (focus here), and **Preferred** (the value judgment — what you *want*).
+- **Backcasting** — the inverse of forecasting: state the **"Beautiful Future"** as if it already happened ("no customer finds a bug before we do"), then work backward through each necessary prior state (its **antecedents**) to the status quo, tagging each with a probability.
+
+<Callout type="tip" title="💡 Sound analysis is iterative and fractal">
+Analysis is self-similar at any scale — applied informally in your head for small problems, formally with evidence for big ones. Always analyze the <em>problem</em> and the <em>solution</em> separately.
+</Callout>
+
+## See also
+
+- [What is technology strategy?](/strategy/what-is-technology-strategy/) — where analysis sits in the larger workflow.
+- [Creating strategy](/strategy/creating-strategy/) — the industry and corporate frameworks that build on this analysis.
+- [Communicating strategy](/strategy/communicating-strategy/) — turning analysis into a fundable narrative.

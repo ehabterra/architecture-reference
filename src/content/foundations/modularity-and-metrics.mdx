@@ -1,0 +1,132 @@
+---
+title: "Modularity and Metrics"
+category: fnd-components
+kind: topic
+order: 11
+difficulty: "Advanced"
+status: ready
+intent: "Why modularity matters even when nobody asks for it, and the cohesion and coupling metrics — LCOM, abstractness, instability, distance from the main sequence — that make it measurable."
+book: "Fundamentals of Software Architecture; Building Evolutionary Architectures"
+related:
+  - components-and-coupling
+  - connascence
+  - measuring-and-governing-characteristics
+when_use:
+  - "When you need objective signals of code-structure health for governance"
+  - "When migrating an architecture and deciding whether a module should be split or shared"
+  - "When justifying refactoring with numbers rather than opinion"
+when_avoid:
+  - "When you treat a metric as a verdict instead of a signal needing interpretation"
+  - "When the module is trivially small and the metric overhead exceeds its value"
+quiz:
+  - q: "What does LCOM (Lack of Cohesion in Methods) help you find?"
+    options:
+      - text: "Classes whose methods cluster around disjoint fields and could be split apart"
+        correct: true
+      - text: "The cyclomatic complexity of a method"
+        correct: false
+      - text: "How many components depend on a class"
+        correct: false
+      - text: "Test coverage gaps"
+        correct: false
+    explain: "High LCOM means methods operate on disjoint field sets — a sign of incidentally coupled classes worth splitting, useful when migrating architectures."
+  - q: "Instability I = Ce / (Ce + Ca). A component with high instability is…"
+    options:
+      - text: "Volatile and brittle — it depends on many others, so it breaks when they change"
+        correct: true
+      - text: "Very stable and safe to depend on"
+        correct: false
+      - text: "Highly abstract"
+        correct: false
+      - text: "Fully tested"
+        correct: false
+    explain: "High efferent coupling drives instability up; such a component delegates to many others and breaks easily when they change."
+  - q: "Distance from the main sequence D = |A + I − 1| identifies which two danger zones?"
+    options:
+      - text: "Zone of uselessness (too abstract) and zone of pain (too concrete/brittle)"
+        correct: true
+      - text: "Zone of speed and zone of cost"
+        correct: false
+      - text: "Hot path and cold path"
+        correct: false
+      - text: "Read zone and write zone"
+        correct: false
+    explain: "Upper-right of the A/I plot is the zone of uselessness; lower-left is the zone of pain. The main sequence is the ideal balanced line."
+  - q: "What is the chief limitation of structural metrics?"
+    options:
+      - text: "They need interpretation and baselines — they can't distinguish essential from accidental complexity"
+        correct: true
+      - text: "They are always wrong"
+        correct: false
+      - text: "They only work in Java"
+        correct: false
+      - text: "They measure the domain, not the structure"
+        correct: false
+    explain: "Metrics like cyclomatic complexity can't tell essential from accidental complexity; honour the Second Law — why over how."
+takeaway: "Modularity is implicit but essential — measure it with cohesion (LCOM) and coupling (abstractness, instability, distance from the main sequence), and treat the numbers as signals, not verdicts."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧹 Analogy">
+A codebase is like a house: leave it alone and it drifts toward disorder — dishes pile up, clutter spreads. Order doesn't happen by itself; it takes deliberate energy. Modularity metrics are your way of measuring the mess before it becomes a Big Ball of Mud, so you know where to spend that energy.
+</Callout>
+
+## Modularity is implicit but essential
+
+**Modularity** — the logical grouping of related code into modules — is an *implicit* architecture characteristic. It rarely appears as a stated requirement, yet without it software tends toward entropy. Resisting that decay requires deliberate energy and, crucially, **measurement**. The three lenses are cohesion, coupling, and [connascence](/foundations/connascence/).
+
+## Cohesion and LCOM
+
+**Cohesion** measures how related the parts of a module are. A cohesive module is one whose parts belong together — Constantine's rule: "attempting to divide a cohesive module would only result in increased coupling and decreased readability." Cohesion types run best to worst: **functional**, sequential, communicational, procedural, temporal, logical, and **coincidental** (worst).
+
+**LCOM (Lack of Cohesion in Methods)** — the Chidamber & Kemerer metric — is "the sum of sets of methods not shared via sharing fields." High LCOM means methods cluster around disjoint fields and the class could be split. It's especially useful for finding incidentally coupled utility classes when migrating an architecture. Its limit: it finds only *structural* lack of cohesion, not logical fit.
+
+## Coupling metrics (Robert Martin)
+
+Building on afferent (Ca) and efferent (Ce) [coupling](/foundations/components-and-coupling/):
+
+- **Abstractness** `A = abstract ÷ (abstract + concrete)` — too low is one giant `main()`; too high is incomprehensible.
+- **Instability** `I = Ce ÷ (Ce + Ca)` — high instability means volatile and brittle; the component depends on many others and breaks when they change.
+- **Distance from the Main Sequence** `D = |A + I − 1|` — the "main sequence" is the ideal A/I line.
+
+<Mermaid code={String.raw`graph TD
+  MS["Main sequence<br/>(A + I = 1, balanced)"]
+  ZU["Zone of uselessness<br/>(too abstract: high A, low I)"]
+  ZP["Zone of pain<br/>(too concrete/brittle: low A, low I)"]
+  MS --- ZU
+  MS --- ZP`} />
+
+Classes near the main sequence are well balanced. The **upper-right** is the **zone of uselessness** (too abstract to use); the **lower-left** is the **zone of pain** (too concrete and brittle). A fitness function can fail any class drifting outside a tolerance band.
+
+## Other structural signals
+
+- **Cyclomatic complexity** `CC = E − N + 2P` — under 10 is the common threshold; the authors prefer under 5. The **"herding"** technique uses a cascading threshold (warn, then escalate to error) to bring legacy code into compliance gradually.
+- **Cyclic dependencies** — an IDE's auto-import silently creates package cycles; a JDepend or ArchUnit check kills them in CI.
+
+<Callout type="gotcha" title="⚠️ Metrics need interpretation">
+No metric distinguishes **essential** complexity ("we have a hard problem") from **accidental** complexity ("we made it hard"). A high cyclomatic complexity might be unavoidable. Metrics need baselines and human judgment — honour the Second Law: *why over how.*
+</Callout>
+
+## From metric to decision: split, share, or replicate
+
+When migrating a monolith, use these metrics to decide a shared module's fate:
+
+<Mermaid code={String.raw`graph TD
+  Q["Shared module<br/>(measure it)"] --> H{"High LCOM?"}
+  H -->|"yes — disjoint concerns"| Split["Split into focused modules"]
+  H -->|"no — cohesive"| C{"Changes often<br/>AND widely used?"}
+  C -->|"yes — dangerous"| Rep["Replicate (prefer duplication)"]
+  C -->|"no"| Share["Share as a library"]`} />
+
+In short: high LCOM → **split** it; otherwise **share** it as a library (a form of coupling, discouraged) or **replicate** it. *Building Evolutionary Architectures* warns that the most dangerous code is **simultaneously frequently-changing and widely-used** — and that "the more reusable code is, the less usable it is," so microservices often **prefer duplication to coupling**.
+
+<Callout type="go" title="💡 Key insight">
+A metric becomes governance only when it has an objective threshold, an alert, and fast feedback — wire it into the pipeline as a [fitness function](/foundations/fitness-functions/) rather than checking it by hand at review time.
+</Callout>
+
+## See also
+
+- [Components and coupling](/foundations/components-and-coupling/) — the afferent/efferent basics.
+- [Connascence](/foundations/connascence/) — the qualitative companion to these metrics.
+- [Measuring and governing characteristics](/foundations/measuring-and-governing-characteristics/) — wiring metrics into governance.

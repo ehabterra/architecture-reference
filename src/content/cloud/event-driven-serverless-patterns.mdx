@@ -1,0 +1,129 @@
+---
+title: "Event-Driven Serverless Patterns"
+category: cld-serverless
+kind: topic
+order: 3
+difficulty: "Intermediate"
+status: ready
+intent: "Compose serverless systems from named patterns — storage-first, functionless integration, gatekeeper bus, choreography vs. orchestration — over an event-driven backbone."
+book: "Serverless Development on AWS (Brisals & Hedger)"
+related:
+  - serverless-first-design
+  - what-is-serverless
+  - testing-serverless
+when_use:
+  - "Connecting decoupled microservices via events, messages, and managed integrations"
+  - "You need resilience: idempotency, dead-letter queues, store-before-process guarantees"
+  - "Deciding between central orchestration and decentralized choreography"
+when_avoid:
+  - "A simple single-service workload where patterns add accidental complexity"
+  - "Chaining functions synchronously (an antipattern) instead of using events or workflows"
+  - "Relying on event ordering or exactly-once delivery from at-least-once buses"
+quiz:
+  - q: "What does the storage-first pattern require?"
+    options:
+      - text: "Persist incoming data (in SQS, Kinesis, S3, or DynamoDB) before processing it"
+        correct: true
+      - text: "Always write to a relational database first"
+        correct: false
+      - text: "Cache responses before returning them"
+        correct: false
+      - text: "Store function code before deployment"
+        correct: false
+    explain: "Storing first means async decoupling never loses data, and it enables idempotency via uniqueness checks and audit logs."
+  - q: "Why must serverless event consumers be idempotent?"
+    options:
+      - text: "Event buses deliver at-least-once, so duplicates must be handled safely"
+        correct: true
+      - text: "Functions are billed per duplicate"
+        correct: false
+      - text: "Events always arrive out of order"
+        correct: false
+      - text: "It guarantees exactly-once delivery"
+        correct: false
+    explain: "EventBridge delivers at-least-once with no ordering guarantee, so consumers must safely tolerate duplicate events."
+  - q: "What is the functionless integration pattern?"
+    options:
+      - text: "Knitting services together with native integrations and IaC instead of transport Lambdas"
+        correct: true
+      - text: "Removing all business logic from a system"
+        correct: false
+      - text: "Running functions without a runtime"
+        correct: false
+      - text: "Using only synchronous APIs"
+        correct: false
+    explain: "Native integrations (API Gateway VTL, Step Functions SDK, EventBridge) reduce code, failure points, IAM policies, concurrency risk, and cost. 'Transform, not transport.'"
+  - q: "What distinguishes choreography from orchestration?"
+    options:
+      - text: "Choreography has no central controller; orchestration uses a central conductor (Step Functions)"
+        correct: true
+      - text: "Choreography is synchronous; orchestration is asynchronous"
+        correct: false
+      - text: "Choreography needs no events"
+        correct: false
+      - text: "Orchestration cannot cross service boundaries"
+        correct: false
+    explain: "In choreography services react to events independently (dancers); in orchestration a central conductor coordinates steps, branches, and collation."
+takeaway: "Compose serverless from named patterns: store first, prefer functionless 'transform-not-transport,' guard boundaries with a gatekeeper bus, and make every consumer idempotent."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A busy restaurant runs on tickets, not shouting. An order is written down (stored) before anyone cooks it; the printer fans tickets to the right stations; line cooks react to their own tickets (choreography) while the expediter coordinates a complex banquet (orchestration). Serverless patterns are these tickets — proven ways to move work without losing it.
+</Callout>
+
+## Patterns are guides, not silver bullets
+
+Serverless is both *influenced by* decades of prior patterns (GoF, enterprise integration, microservices) and *generative of* new ones. The substrate of every pattern is **resilience, idempotency, and loose coupling** built over an **event-driven** backbone — where immutable **events** (something that already happened) flow between decoupled services via **producers**, **consumers**, and **event carriers** (buses/brokers).
+
+## The event bus: Amazon EventBridge
+
+EventBridge is the fully managed serverless **event bus** — it ingests, filters, transforms, and routes events to up to five targets per rule. Key facts that shape design: **at-least-once delivery** with **no ordering guarantee**, retries up to 24 hours then a **dead letter queue (DLQ)**, and a **256 KB max event payload**. Auxiliary features include **archive and replay**, a **schema registry**, **EventBridge Scheduler**, and **EventBridge Pipes** (one source → one target with filter/transform/enrich).
+
+<Mermaid code={String.raw`graph TD
+  P["Producer<br/>(publish-and-forget)"] --> SF["Storage-first<br/>(store before process)"]
+  SF --> EB["EventBridge bus<br/>(filter + route)"]
+  EB --> C1["Consumer A<br/>(idempotent)"]
+  EB --> C2["Consumer B<br/>(idempotent)"]
+  EB -. undeliverable .-> DLQ["Dead letter queue"]
+  C1 --> R["Event relay<br/>(emit new event,<br/>never modify-and-relay)"]`} />
+
+## A catalog of named patterns
+
+- **Storage-first pattern** (Eric Johnson) — "store first, process after." Persist incoming data in SQS, Kinesis, S3, or DynamoDB *before* computing, so async decoupling never loses data; choice depends on retention. Enables idempotency and audit logs.
+- **Strangler fig pattern** (Fowler) — incrementally migrate legacy to serverless, strangling it piece by piece (redirect data flows into a common S3 bucket; run old and new API routes in parallel behind an API Gateway or **BFF** façade).
+- **Circuit breaker pattern** — fail fast when a dependency is unhealthy to avoid retry storms and runaway cost. States: **closed**, **open**, **half-open**. Lambda has none built-in; implement with a status check in SSM/DynamoDB or a dedicated status service, with store-and-replay while open.
+- **Functionless integration pattern** — connect services with native integrations and IaC instead of "transport" Lambdas (API Gateway VTL, Step Functions direct + AWS SDK integrations, EventBridge API destinations). Benefits: less code, fewer failure points, fewer IAM policies, lower cost. Keep a function where you need detailed or censored logs.
+- **Gatekeeper event bus pattern** — a dedicated custom bus guarding a bounded-context boundary, controlling event **outflow** (only domain events leave) and **inflow** (only required events enter), isolating encryption, cross-account routing, and DLQs.
+
+<Callout type="gotcha" title="Idempotency and ordering">
+Because delivery is **at-least-once** with **no ordering guarantee**, consumers must be **idempotent** (handle duplicates) and must not rely on order — sort by timestamp or sequence numbers. Never **modify-and-relay** an event; use the **event relay pattern** and emit a *new* event under your own identity.
+</Callout>
+
+## Choreography vs. orchestration
+
+- **Choreography** — no central controller; services react to events independently (the dancers analogy). Considerations: event loss (retries + DLQ), duplicates, action sequencing, distributed resiliency, and traceability via an immutable `trace_id` plus AWS X-Ray.
+- **Orchestration** — a central conductor coordinates steps, branches, and collation. **AWS Step Functions** is the orchestrator; chaining Lambdas via synchronous invocations is an **antipattern**. Types: in-service, cross-service, and distributed (long-running async via **task tokens** and the callback pattern).
+- **Saga pattern** — consistency across distributed transactions as atomic local steps, undone by **compensating transactions**, with **pivot transactions** marking the point of no return.
+
+<Mermaid code={String.raw`graph LR
+  subgraph CH["Choreography (no controller)"]
+    S1["Service A"] -- event --> S2["Service B"]
+    S2 -- event --> S3["Service C"]
+  end
+  subgraph OR["Orchestration (central conductor)"]
+    SF["Step Functions"] --> A1["Service A"]
+    SF --> A2["Service B"]
+    SF --> A3["Service C"]
+  end`} />
+
+<Callout type="go" title="Key insight">
+Use Lambda to **transform, not transport**. Wherever a function only moves data between services, reach for a native integration instead — fewer moving parts means fewer failures, lower cost, and a smaller security surface.
+</Callout>
+
+## See also
+
+- [What is serverless](/cloud/what-is-serverless/) — the managed services these patterns compose.
+- [Serverless-first design](/cloud/serverless-first-design/) — event-driven-first as a prerequisite.
+- [Testing serverless](/cloud/testing-serverless/) — testing integration points and data contracts.

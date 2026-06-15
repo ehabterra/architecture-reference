@@ -1,0 +1,155 @@
+---
+title: "Service-Based Architecture"
+category: sty-distributed
+kind: topic
+order: 7
+difficulty: "Intermediate"
+status: ready
+intent: "The pragmatic distributed style — a separate UI, a handful of coarse-grained domain services, and a shared database, giving modularity and ACID without microservices' cost."
+book: "Fundamentals of Software Architecture; Software Architecture: The Hard Parts"
+related:
+  - fallacies-of-distributed-computing
+  - microservices-architecture
+  - event-driven-architecture
+  - choosing-an-architecture-style
+when_use:
+  - "You want modularity and independent deployability without microservices' cost and complexity."
+  - "Your data is tightly coupled and cannot easily be split into many schemas."
+  - "You need to preserve ACID transactions within coarse-grained domain services."
+when_avoid:
+  - "You need function-level scalability and elasticity — coarse services replicate too much."
+  - "You need hundreds of independently deployable, fine-grained units."
+  - "Every service must own a fully isolated database."
+quiz:
+  - q: "What is the typical topology of a service-based architecture?"
+    options:
+      - text: "A separate UI, 4-12 coarse-grained domain services, and a usually-shared database"
+        correct: true
+      - text: "Hundreds of fine-grained services each with its own database"
+        correct: false
+      - text: "A core system plus plug-ins"
+        correct: false
+      - text: "Processing units with in-memory data grids"
+        correct: false
+    explain: "Service-based is a distributed macro-layered style with a separately deployed UI, a handful (avg ~7) of coarse domain services, and a shared monolithic database."
+  - q: "What advantage does service-based have over microservices regarding transactions?"
+    options:
+      - text: "Coarse-grained services can use ACID transactions, since most work stays within one service"
+        correct: true
+      - text: "It uses two-phase commit across all services"
+        correct: false
+      - text: "It has no transactions at all"
+        correct: false
+      - text: "It requires sagas for every operation"
+        correct: false
+    explain: "Because services are coarse-grained, a request like 'place order' is orchestrated internally at the class level inside one service, allowing atomic commit/rollback — microservices must fall back to BASE/sagas."
+  - q: "How does an API access facade orchestrate a request in service-based?"
+    options:
+      - text: "Internally, at the class level inside the service"
+        correct: true
+      - text: "Externally, by calling many separate services"
+        correct: false
+      - text: "Through a central ESB"
+        correct: false
+      - text: "Via an in-memory data grid"
+        correct: false
+    explain: "Unlike microservices' external orchestration across services, service-based orchestrates the workflow inside the coarse service at the class level."
+  - q: "How do you control the blast radius of a shared-database schema change?"
+    options:
+      - text: "Logically partition the DB into data domains with federated shared entity libraries"
+        correct: true
+      - text: "Use a single shared entity library for all services"
+        correct: false
+      - text: "Give every service direct table access"
+        correct: false
+      - text: "Avoid using a database"
+        correct: false
+    explain: "A single shared entity library means any table change forces every service to redeploy; federated libraries (common, customer, order, etc.) limit a change to services using that library."
+takeaway: "Service-based is the Ferrari you don't redline: a few coarse domain services over a shared DB give modularity, ACID, and fault tolerance at modest cost."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Service-based architecture is splitting one big restaurant into a few specialized stations — grill, bakery, bar — that share one pantry and one cash register. Each station works independently and can be replaced or scaled a bit, but they still draw from the same stock, so a recipe change rarely disrupts the others. It is far simpler than running a dozen separate food trucks.
+</Callout>
+
+## Topology
+
+**Service-based** is the most pragmatic distributed style — "a hybrid of microservices" without the cost. It consists of a **separately deployed UI**, a handful of coarse-grained, separately deployed **domain services**, and a (usually) **shared monolithic database**.
+
+<Mermaid code={String.raw`graph TD
+  UI["User interface<br/>(separately deployed)"] --> S1["Quoting service"]
+  UI --> S2["Receiving service"]
+  UI --> S3["Assessment service"]
+  S1 --> DB[("Shared database")]
+  S2 --> DB
+  S3 --> DB`} />
+
+- Services deploy like a monolith (EAR/WAR/assembly — **no containerization required**) and usually number **4–12** (average ~7). Usually one instance per service, with more added for scale or failover.
+- The UI accesses services remotely (typically REST), often directly via a **service locator pattern**.
+- The **shared database** allows SQL joins; because there are few services, connections aren't an issue — but schema changes can ripple.
+
+**Topology variants** are very flexible: break the monolithic UI into domain UIs, split the DB into domain-scoped databases, or add an **API layer** (reverse proxy/gateway) for external exposure and shared cross-cutting concerns (metrics, security, auditing).
+
+## Service design and granularity
+
+Each domain service is internally a layered architecture (API facade + business + persistence) or sub-domain-partitioned like a modular monolith. An **API access facade** orchestrates the request **internally at the class level** (e.g., place order = create order, generate ID, apply payment, update inventory) — versus microservices' *external* orchestration across many services.
+
+<Callout type="go" title="ACID is the headline advantage">
+Because services are coarse-grained, they can use **ACID** transactions (commit/rollback) for integrity. An expired card can roll back the entire order atomically — no sagas required. This is the best preservation of ACID among the distributed styles. The trade-off: a change to order placement requires testing and redeploying the whole coarse service (including payment).
+</Callout>
+
+## Database partitioning
+
+A shared DB means schema changes can ripple, so manage it deliberately:
+
+- **Worst practice:** a single shared entity library — any table change forces a change and redeploy of *every* service.
+- **Better:** logically partition the DB into data domains with **federated shared libraries** (e.g., common, customer, invoicing, order, tracking) so a table change only impacts services using that library. Lock **common** entity objects to the DB team.
+
+<Mermaid code={String.raw`graph TD
+  S1["Quoting service"] --> LC["lib: common"]
+  S1 --> LCu["lib: customer"]
+  S2["Invoicing service"] --> LC
+  S2 --> LI["lib: invoicing"]
+  LC --> DB[("Shared DB<br/>logical data domains")]
+  LCu --> DB
+  LI --> DB`} />
+- **Tip:** make logical partitioning as fine-grained as possible while keeping well-defined data domains.
+
+<Callout type="gotcha" title="Don't redline the Ferrari">
+The book's metaphor: service-based is "a Ferrari in rush-hour traffic" — don't overbuy power you can't use. If you reach for microservices when your data is tightly coupled and your scale is moderate, you pay for complexity you'll never benefit from. Service-based gives modularity without the granularity pitfalls.
+</Callout>
+
+## Characteristics
+
+| Characteristic | Rating |
+|---|---|
+| Partitioning | Domain |
+| Overall cost | Moderate (low for a distributed style) |
+| Agility / Testability / Deployability | 4 / 5 |
+| Fault tolerance / Availability | 4 / 5 |
+| Scalability | 3 / 5 |
+| Elasticity | 2 / 5 |
+| Simplicity | High (for a distributed style) |
+
+No five-star ratings, but many fours: small domain scope yields fast change, good test coverage, and frequent low-risk deploys. Self-contained services with little interservice communication give **good fault tolerance** — one service down doesn't affect the others. Coarse granularity costs **scalability and elasticity** (more functionality replicates per instance). Quanta = 1 unless you federate both the UI and the database.
+
+## When to use it
+
+- You want **modularity without microservices' cost and complexity** — a natural fit for DDD.
+- Your **data is tightly coupled** and can't easily split into many schemas (if so, choose this over microservices).
+- You need to **preserve ACID** within coarse domain services.
+
+## When to avoid it
+
+- You need **function-level scalability and elasticity**.
+- You need **hundreds of fine-grained, independently deployable** units.
+- Every service must own a **fully isolated** database.
+
+## See also
+
+- [Microservices architecture](/styles/microservices-architecture/) — the finer-grained, costlier sibling.
+- [Event-driven architecture](/styles/event-driven-architecture/) — add asynchrony for scale and responsiveness.
+- [Fallacies of distributed computing](/styles/fallacies-of-distributed-computing/) — the tax even this lightweight style pays.
+- [Choosing an architecture style](/styles/choosing-an-architecture-style/) — when "pragmatic distributed" is the right call.

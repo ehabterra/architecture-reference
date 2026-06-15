@@ -1,0 +1,138 @@
+---
+title: "Integrating with Services and APIs"
+category: auto-operating
+kind: topic
+order: 7
+difficulty: "Intermediate"
+status: ready
+intent: "Orchestrate anything with an API — and respect boundaries: synchronous or async calls, correlation, and clean result-only APIs instead of the hot-potato anti-pattern."
+book: "Practical Process Automation (Bernd Ruecker)"
+related:
+  - handling-failures-and-retries
+  - orchestration-vs-choreography
+  - executable-workflow-models
+when_use:
+  - "A process must coordinate software, decisions, humans, RPA bots, or devices via APIs"
+  - "A service should own a long-running responsibility and expose a clean API"
+  - "Choosing how a process crosses a boundary (API call) versus reuses within one (call activity)"
+when_avoid:
+  - "Building a process monolith that embeds another context's internal details"
+  - "Using a call activity across a service boundary (it couples both to one engine)"
+  - "Letting an RPA bot own the overall process instead of one screen-automation step"
+quiz:
+  - q: "What can a workflow engine orchestrate?"
+    options:
+      - text: "Anything with an API — software, decisions, humans, RPA bots, and devices"
+        correct: true
+      - text: "Only stateless serverless functions"
+        correct: false
+      - text: "Only human tasks"
+        correct: false
+      - text: "Only services written in the same language as the engine"
+        correct: false
+    explain: "Orchestration here means coordination. Real processes mix software calls, DMN decisions, human tasks, RPA bots for legacy GUIs, and IoT devices — all reachable via APIs."
+  - q: "What is the 'hot potato' anti-pattern?"
+    options:
+      - text: "A service without persistent state hands its problem to the client, leaking internal concepts and increasing coupling"
+        correct: true
+      - text: "Caching responses too aggressively"
+        correct: false
+      - text: "Retrying a request infinitely"
+        correct: false
+      - text: "Sending commands as events"
+        correct: false
+    explain: "Without long-running capability a stuck service can only throw the problem back to its caller, exposing internals like credit-card retry logic in its API. Statefulness lets it own the responsibility and expose a clean result-only API."
+  - q: "When is a BPMN call activity appropriate?"
+    options:
+      - text: "Only within one service boundary, where both caller and callee share the same engine"
+        correct: true
+      - text: "Across any boundary, as the default integration mechanism"
+        correct: false
+      - text: "Whenever you want to avoid writing an API"
+        correct: false
+      - text: "Only for serverless functions"
+        correct: false
+    explain: "A call activity makes the engine itself the API, so both sides must use BPMN on the same engine — true only inside one boundary. Crossing a boundary must be a normal API call (REST/SOAP/messaging)."
+  - q: "What should RPA be used for?"
+    options:
+      - text: "One screen-automation step for an API-less legacy system, with a human fallback and a plan to replace it"
+        correct: true
+      - text: "Owning and driving the entire core business process"
+        correct: false
+      - text: "Replacing the workflow engine"
+        correct: false
+      - text: "Storing process state"
+        correct: false
+    explain: "RPA bots are brittle GUI automation — one bot per service task, with human fallback for errors. Prefer a real API and plan to swap the bot out, often without changing the model."
+takeaway: "Orchestrate anything with an API, but cross boundaries with real API calls and give services long-running state so they expose clean result-only APIs."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A conductor does not play the instruments — they cue the violins, the brass, a guest soloist, and even a recorded track, each on their own. A workflow engine **orchestrates** the same way: it cues software, a decision table, a human, an RPA bot, or a device, as long as each exposes something it can call.
+</Callout>
+
+## Orchestrate anything with an API
+
+In process automation, **orchestration means coordination** (not the cloud-native sense of container management). Because the engine drives tasks, and tasks can call **anything with an API**, it can orchestrate:
+
+- **software** — microservices, methods, or serverless functions;
+- **decisions** — a DMN **business rule task** delegating to a decision engine;
+- **humans** — **human task management**, where a user task appears in a tasklist (assign to **groups**, not individuals, and lean on the built-in task **life cycle** for reminders and escalation rather than modeling them);
+- **RPA bots** — for legacy apps with no API, a bot automates the GUI for **one** service task;
+- **devices** — IoT, where a stream processor derives an insight that **starts a process**.
+
+Real processes mix all of these — and the architecture style (microservices, serverless, modular monolith) shapes deployment but not the engine's value.
+
+## Sync, async, and correlation
+
+<Mermaid code={String.raw`sequenceDiagram
+  participant P as Process instance
+  participant Pay as Payment service
+  P->>Pay: charge (command, correlationId=UUID)
+  Note over P: instance waits<br/>(state in DB, no thread blocked)
+  Pay-->>P: paid (echoes correlationId)
+  Note over P: correlate by UUID,<br/>resume the right instance
+  P->>P: timer: if no response in 1 day, escalate`} />
+
+- **Synchronous request/response** (typically REST) is modeled as a **service task** the process waits at. It hides complexity — the remote service may be slow or down — which quickly forces your own service to become [long-running](/automation/why-long-running-processes-are-hard/).
+- **Asynchronous request/response** removes temporal coupling but forces you to handle "what if the response never comes" with a **timeout** timer.
+- **Correlation** matches an incoming async response to the right waiting instance. Use a **fresh artificial ID (a UUID)** stored in process variables; *avoid* engine IDs like process-instance IDs (they can change across restarts or versions); be careful with business data (one order ID split into two payments can't be correlated distinctly).
+
+<Callout type="gotcha" title="The hot-potato anti-pattern">
+A payment service *without* persistent state that hits a problem can only **throw it back to its client** — leaking internal concepts (credit-card retry logic, expired cards) into its API and increasing coupling. Give the service **long-running capability** so it fully owns its responsibility (email the user, wait a week) and exposes a clean **success/failure API**. Whether to surface an error to the client should be a conscious business decision, not an accident of missing state.
+</Callout>
+
+## Respect boundaries: call activity vs API call
+
+A process model is **domain logic owned by exactly one bounded context**. How processes communicate determines coupling:
+
+- **Within a boundary**, a BPMN **call activity** can directly invoke another process — the parent waits for the child, which can raise error/escalation events. It's a handy shortcut for reuse, but the engine *is* the API: both sides must use BPMN on the **same engine**, true only inside one boundary.
+- **Across a boundary**, use a **normal API call** (REST, SOAP, messaging). The caller need not know an engine is involved, so you stay free to change the implementation behind a backward-compatible API.
+
+<Mermaid code={String.raw`graph TD
+  Q{"Caller and callee in the same boundary?"} -->|"yes"| CA["BPMN call activity<br/>engine is the API, same engine both sides"]
+  Q -->|"no"| API["Normal API call<br/>REST, SOAP, or messaging"]
+  CA --> R["Handy reuse, tight coupling to one engine"]
+  API --> F["Free to change implementation<br/>behind a backward-compatible API"]`} />
+
+<Callout type="gotcha" title="Avoid the process monolith">
+A model that embeds another context's internal details is a **process monolith** — it can't be owned by anyone, every relevant change forces multi-team meetings, and ubiquitous-language conflicts pile up. Cut the end-to-end process into **per-service pieces**, each owned by one team, collaborating through clean APIs. This is favored by Fowler's "smart endpoints and dumb pipes" — keep smarts in the services, not a central spider.
+</Callout>
+
+## RPA, decisions, and devices
+
+<Callout type="go" title="RPA is a stopgap, not a platform">
+An RPA bot is "the macro recorder on steroids" — brittle GUI automation for systems with no API. Use it for **one** service task, keep a **human task as fallback** for bot errors, and plan to replace it with a real API (often without changing the model). Never let RPA own the core process; that just imports low-code's disadvantages.
+</Callout>
+
+<Callout type="tip" title="Externalize fast-changing decisions">
+Decision logic changes far faster than control flow. Express it as a **DMN decision table** with **FEEL**, invoke it from a **business rule task**, and the business can change rules without touching the process. The decision's audit info shows up in the instance history.
+</Callout>
+
+## See also
+
+- [Handling failures and retries](/automation/handling-failures-and-retries/) — what to do when these calls fail.
+- [Orchestration vs choreography](/automation/orchestration-vs-choreography/) — commands vs events on each link.
+- [Executable workflow models](/automation/executable-workflow-models/) — the glue code behind every service task.

@@ -1,0 +1,143 @@
+---
+title: "The Strangler Fig Pattern"
+category: ms-decomposition
+kind: topic
+order: 5
+difficulty: "Intermediate"
+status: ready
+intent: "Migrate functionality out of a monolith incrementally by wrapping it, intercepting calls, and redirecting them to new services one slice at a time — with rollback at every step."
+book: "Monolith to Microservices (Sam Newman)"
+related:
+  - modeling-service-boundaries
+  - migration-patterns
+  - decomposing-the-database
+when_use:
+  - "You are incrementally extracting functionality from a monolith you can route around."
+  - "The functionality has an inbound call you can intercept at the perimeter."
+  - "You want a low-risk, reversible migration — even for black-box systems."
+when_avoid:
+  - "The functionality is deep inside the monolith with no external call to redirect — use branch by abstraction."
+  - "You plan a big-bang rewrite (don't)."
+quiz:
+  - q: "What are the three steps of the strangler fig pattern?"
+    options:
+      - text: "Identify the functionality, migrate it to a new service, redirect calls"
+        correct: true
+      - text: "Freeze, rewrite, deploy"
+        correct: false
+      - text: "Copy the database, switch traffic, delete the monolith"
+        correct: false
+      - text: "Branch, merge, release"
+        correct: false
+    explain: "Identify what to move, migrate (copy or reimplement) it to the new microservice, then redirect inbound calls from the monolith to the service."
+  - q: "Why can you deploy the new service before redirecting any traffic?"
+    options:
+      - text: "Deployment is separate from release — it can return 501 and you operate it before going live"
+        correct: true
+      - text: "Because the monolith automatically forwards traffic"
+        correct: false
+      - text: "Because the database is already split"
+        correct: false
+      - text: "You cannot — deployment and release are the same event"
+        correct: false
+    explain: "Until calls are redirected the functionality isn't 'live' even when deployed, so you can get comfortable operating it and redirect later — each step easily reversible."
+  - q: "When does the strangler fig pattern work poorly?"
+    options:
+      - text: "When the functionality is deep inside the monolith with no perimeter call to intercept"
+        correct: true
+      - text: "When the monolith uses HTTP"
+        correct: false
+      - text: "When you have a dedicated proxy like NGINX"
+        correct: false
+      - text: "When you can map an inbound call to the asset"
+        correct: false
+    explain: "Strangler fig requires mapping an inbound call to the thing you're moving; for deep-inside functionality use branch by abstraction instead."
+  - q: "Why copy rather than delete code when extracting?"
+    options:
+      - text: "Leaving it in the monolith preserves a rollback point and enables parallel runs"
+        correct: true
+      - text: "Deleting code is technically impossible"
+        correct: false
+      - text: "Copies run faster"
+        correct: false
+      - text: "It avoids licensing issues"
+        correct: false
+    explain: "Remove the original only once migration is confirmed; until then the monolith copy is your safety net."
+takeaway: "Wrap the monolith, intercept inbound calls, and redirect them slice by slice to new services — deploy early returning 501, copy not delete, and keep every step reversible."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A strangler fig seeds in the branches of a host tree, sends roots down around the trunk, and gradually envelops it — the new plant grows while the old still supports it, until eventually the original is gone. Migrating a monolith works the same way: the new system grows around the old, both coexist, and you replace the host one branch at a time.
+</Callout>
+
+## The pattern
+
+Martin Fowler's metaphor (2004) gives us a three-step, incremental migration that supports **pause, stop, and rollback** at every point:
+
+<Mermaid code={String.raw`sequenceDiagram
+  participant C as Client
+  participant P as Proxy / interceptor
+  participant N as New microservice
+  participant M as Monolith
+  C->>P: Request
+  alt functionality migrated & redirected
+    P->>N: Route to new service
+    N-->>C: Response
+  else not yet migrated
+    P->>M: Pass through to monolith
+    M-->>C: Response
+  end`} />
+
+1. **Identify** the parts to migrate.
+2. **Migrate** the functionality to a new microservice (copy or reimplement — *copy, don't delete*).
+3. **Redirect** calls from the monolith to the new service.
+
+## Deployment is not release
+
+A crucial discipline: until calls are redirected, the new functionality is **not live even when deployed**. So you can stand up the service early — returning `501 Not Implemented` — deploy it to production, set up monitoring, and "sit with it a while" to get comfortable operating it. Then redirect later. Each step is **easily reversible**: switch the redirection back for instant rollback.
+
+## A worked example — the HTTP reverse proxy
+
+1. **Insert the proxy** first as a pure pass-through (assess latency, set up monitoring before changing anything).
+2. **Migrate functionality** — stand up the new service returning `501`, deploy to production (deployed, not released).
+3. **Redirect calls** only once *all* the functionality is moved — use a **feature toggle**, and consider a canary or [parallel run](/microservices/migration-patterns/) at the proxy.
+
+<Mermaid code={String.raw`graph LR
+  subgraph P1["1. Insert proxy (pass-through)"]
+    C1["Client"] --> Px1["Proxy"] --> M1["Monolith"]
+  end
+  subgraph P2["2. Deploy new service (501, not released)"]
+    Px2["Proxy"] --> M2["Monolith"]
+    Px2 -. "deployed only" .- N2["New service (501)"]
+  end
+  subgraph P3["3. Redirect when ready"]
+    Px3["Proxy"] --> N3["New service"]
+  end`} />
+
+**Proxy advice:** prefer a dedicated proxy like **NGINX** (the author's two hand-coded proxies were "incredibly inefficient"; extend NGINX in Lua for custom behaviour). Redirecting by URI/REST resource is easy; switching on a request-body parameter is harder.
+
+<Callout type="tip" title="💡 Keep the pipes dumb">
+A proxy *can* transform protocols (SOAP→gRPC), but logic piling up there makes a shared proxy a contention point. "Keep the pipes dumb, the endpoints smart." Prefer pushing mapping *into the service* — support old and new protocols internally. Square migrated to gRPC via a **service mesh** (a local proxy per instance, central control plane, built on Envoy) for exactly this reason.
+</Callout>
+
+## Where it fits — and where it doesn't
+
+The strangler fig moves functionality **without changing the existing system**, so it shines when the monolith is worked on by others or is a black box. It works cleanly for end-to-end vertical slices with no downstream dependencies, and "shallow" extractions that still call back into the monolith are possible. It is often the first port of call — HTTP is very amenable; FTP and even batch-file uploads can be strangled (Homegate intercepted FTP uploads by watching the server log).
+
+**Requirement:** you must be able to **map an inbound call to the asset you're moving.** When functionality is buried deep inside with no external call to redirect, the strangler fig fails — use [branch by abstraction](/microservices/migration-patterns/) instead.
+
+<Callout type="gotcha" title="⚠️ Don't change behaviour mid-migration">
+Rollback assumes the monolith and the microservice are *functionally equivalent*. If the new service quietly adds a bug fix or a feature, rolling back reintroduces the bug or removes the feature — and there's no easy fix. Prefer a **feature freeze** on the migrating part and keep each migration small so there's no pressure to "slip a feature in."
+</Callout>
+
+<Callout type="go" title="🔑 Key insight">
+The strangler fig is the canonical first migration pattern because it is light-touch, works on black boxes, and is reversible at every step. Its only hard requirement is an interceptable inbound call.
+</Callout>
+
+## See also
+
+- [Modeling service boundaries](/microservices/modeling-service-boundaries/) — deciding *what* to strangle first.
+- [Migration patterns](/microservices/migration-patterns/) — branch by abstraction, parallel run, and friends.
+- [Decomposing the database](/microservices/decomposing-the-database/) — the harder half of any extraction.

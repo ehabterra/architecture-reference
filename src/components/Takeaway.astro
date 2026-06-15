@@ -1,0 +1,42 @@
+---
+// BLUEPRINT §14 — "One thing to remember" takeaway box.
+// One short, flashcard-worthy line per page; rendered near the end of a lesson.
+const { text } = Astro.props as { text: string };
+---
+<aside class="dp-takeaway">
+  <p class="dp-takeaway__label" data-i18n="page.takeaway">💡 One thing to remember</p>
+  <p class="dp-takeaway__text">{text}</p>
+</aside>
+
+<style>
+  .dp-takeaway {
+    margin: 2.4rem 0 1.6rem;
+    padding: 1.3rem 1.5rem 1.4rem;
+    border: 1px solid var(--dp-border-strong);
+    border-left: 4px solid var(--dp-accent);
+    border-radius: var(--dp-radius-sm);
+    background:
+      linear-gradient(180deg, rgba(0, 194, 242, 0.06), rgba(0, 194, 242, 0.015)),
+      var(--dp-surface);
+    box-shadow: var(--dp-shadow-sm);
+  }
+  .dp-takeaway__label {
+    margin: 0 0 0.4rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dp-accent);
+  }
+  .dp-takeaway__text {
+    margin: 0;
+    font-size: 1.15rem;
+    line-height: 1.5;
+    font-weight: 600;
+    color: var(--dp-text);
+  }
+  :global([dir='rtl']) .dp-takeaway {
+    border-left: 1px solid var(--dp-border-strong);
+    border-right: 4px solid var(--dp-accent);
+  }
+</style>

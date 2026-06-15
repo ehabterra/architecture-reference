@@ -1,0 +1,152 @@
+---
+title: "The Fallacies of Distributed Computing"
+category: ds-foundations
+kind: guide
+order: 1
+difficulty: "Start here"
+status: ready
+intent: "The dangerous assumptions every distributed system must unlearn — why networks fail partially, clocks lie, and 'it worked on one machine' stops being true."
+book: "Foundations of Scalable Systems (Ian Gorton); Designing Distributed Systems (Brendan Burns)"
+related:
+  - communication-and-consistency
+  - time-and-ordering
+  - scalability-fundamentals
+when_use:
+  - "Before designing anything that spans more than one process or machine."
+  - "When reviewing an API that calls a remote service and assumes the call always returns."
+  - "When a system works in dev (one box) but fails intermittently in production."
+  - "When estimating capacity or latency budgets across data centers or regions."
+  - "When choosing between synchronous calls and asynchronous messaging for a remote dependency."
+when_avoid:
+  - "For pure single-node, single-threaded code with no network or shared state."
+  - "As an excuse to over-engineer a system that will never leave one machine."
+  - "As a reason to abandon distribution — the fallacies are constraints to respect, not a verdict against scaling out."
+  - "To justify retry storms — blind retries without backoff or idempotency make partial failure worse."
+quiz:
+  - q: "A client sends a write, gets no reply, and times out. What does it actually know about the server?"
+    options:
+      - text: "Nothing decisive — the server may have crashed before, during, or after applying the write, or the reply may have been lost"
+        correct: true
+      - text: "The write definitely did not happen"
+        correct: false
+      - text: "The write definitely happened but the ack was lost"
+        correct: false
+      - text: "The server has crashed permanently"
+        correct: false
+    explain: "On an asynchronous network these outcomes are indistinguishable — this is a partial (crash) fault. The fix is idempotence so a safe retry cannot double-apply."
+  - q: "Why is naively retrying a failed mutation dangerous?"
+    options:
+      - text: "The original request may have succeeded, so the retry double-applies the operation"
+        correct: true
+      - text: "Retries always overload the network"
+        correct: false
+      - text: "Retries are forbidden by TCP"
+        correct: false
+      - text: "The server cannot accept the same request twice"
+        correct: false
+    explain: "TCP gives at-least-once delivery, so duplicates are inevitable. Mutations need an idempotency key so the server detects and ignores a replay (the double-deposit problem)."
+  - q: "What does the FLP impossibility theorem establish?"
+    options:
+      - text: "Guaranteed consensus is impossible on an asynchronous network with even one crash fault"
+        correct: true
+      - text: "Networks are always reliable if you use TCP"
+        correct: false
+      - text: "Clocks on different nodes are always synchronized"
+        correct: false
+      - text: "Latency is always zero on a LAN"
+        correct: false
+    explain: "FLP proves consensus cannot be guaranteed in bounded time under asynchrony with crash faults. In practice sensible timeouts and retries let real systems reach consensus anyway."
+  - q: "Which delivery guarantee does plain TCP provide to an application?"
+    options:
+      - text: "At-least-once — reliable, but duplicates are still possible"
+        correct: true
+      - text: "Exactly-once with no extra work"
+        correct: false
+      - text: "At-most-once, like UDP"
+        correct: false
+      - text: "No guarantee at all"
+        correct: false
+    explain: "TCP retransmits to guarantee delivery, but a lost ack causes resends, so applications must build exactly-once semantics themselves on top of at-least-once."
+  - q: "Which of these is NOT one of the eight classic fallacies of distributed computing?"
+    options:
+      - text: "Every node runs the same operating system"
+        correct: true
+      - text: "The network is reliable"
+        correct: false
+      - text: "Latency is zero"
+        correct: false
+      - text: "Bandwidth is infinite"
+        correct: false
+    explain: "The eight fallacies are: the network is reliable, latency is zero, bandwidth is infinite, the network is secure, topology doesn't change, there is one administrator, transport cost is zero, and the network is homogeneous. 'Same OS' is a paraphrase trap — the real fallacy is that the network (protocols, formats, MTUs) is homogeneous."
+takeaway: "The network is unreliable, latency is non-zero, and clocks lie — design every remote call to survive partial failure with idempotent, retry-safe operations."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Mailing a letter across the world is nothing like handing a note across a desk. The letter can be delayed, lost, duplicated by an over-eager postal worker, or arrive out of order — and you never know which until much later. A local function call is the desk; a remote call is the post. The whole discipline of distributed systems is refusing to confuse the two.
+</Callout>
+
+The "fallacies of distributed computing" are the comfortable assumptions that hold on a single machine and quietly break the moment a call crosses the network. Ian Gorton's *Foundations of Scalable Systems* and Brendan Burns' *Designing Distributed Systems* both open from the same hard truth: distributed systems are **more reliable and scalable** when built right, but **far harder to design and debug** than single-machine code, and the realities below pervade every later decision.
+
+<Mermaid code={String.raw`graph TD
+  F["The 8 fallacies"] --> F1["Network is reliable"]
+  F --> F2["Latency is zero"]
+  F --> F3["Bandwidth is infinite"]
+  F --> F4["Network is secure"]
+  F --> F5["Topology never changes"]
+  F --> F6["One administrator"]
+  F --> F7["Transport cost is zero"]
+  F --> F8["Network is homogeneous"]`} />
+
+## The network is unreliable and best-effort
+
+A request traverses heterogeneous networks — LANs (sub-millisecond), WANs (bounded by the speed of light: New York to Sydney is ~80 ms before any router delay), and wireless links of wildly varying quality. Underneath sits **IP**, which is **best-effort and unreliable**: packets may be corrupted, lost, duplicated, or reordered by packet switching.
+
+**TCP** layers reliability on top — a three-way handshake, sequence numbers to reassemble order, cumulative acknowledgments, retransmission, checksums, and flow control — which makes it heavyweight, trading efficiency for reliability. **UDP** is a thin, connectionless veneer where occasional loss is acceptable (streaming, conferencing, gaming). Neither makes the network *behave like local memory*.
+
+## Latency is not zero (and bandwidth is finite)
+
+Even a perfect network costs time. The speed of light sets a floor on WAN latency that no amount of money removes. This is why **chatty APIs** are an anti-pattern — every round trip pays the latency tax — and why caching, compression, and asynchronous messaging exist at all. Assuming "the call is basically instant" is how a system that flies in development crawls in production.
+
+## Partial failure: the defining problem
+
+On one machine, a component is either up or down. In a distributed system a component can be **partially** failed — present but slow, reachable but mid-crash, or done but unable to tell you. When a client gets no reply, several outcomes are *indistinguishable*:
+
+<Mermaid code={String.raw`graph TD
+  C["Client sends write, then times out"] --> Q{"What happened?"}
+  Q --> A["Server crashed BEFORE applying"]
+  Q --> B["Server applied it, then crashed"]
+  Q --> D["Server is just slow"]
+  Q --> E["Reply was lost on the network"]
+  A --> R["Indistinguishable from the client's view"]
+  B --> R
+  D --> R
+  E --> R`} />
+
+These are **crash faults**. The naive response — retry after a timeout — risks applying a mutation twice (the classic double-deposit). The cure is **idempotence**: reads are naturally idempotent; mutations need an **idempotency key** (e.g. user id + UUID/timestamp) stored durably so the server recognises and ignores a replay.
+
+<Callout type="gotcha" title="⚠️ At-least-once is not exactly-once">
+TCP guarantees <strong>at-least-once</strong> delivery — duplicates are unavoidable when an ack is lost. The delivery spectrum runs <strong>at-most-once</strong> (UDP, fast and lossy) → <strong>at-least-once</strong> (TCP) → <strong>exactly-once</strong> (guards against duplicates, slower). Exactly-once is not free; your mutating API has to implement it.
+</Callout>
+
+## Consensus cannot be guaranteed, and clocks lie
+
+Two further impossibilities shape everything downstream. The **Two Generals' Problem** shows agreement over a lossy channel cannot be *guaranteed*. The **FLP impossibility theorem** proves consensus on an asynchronous network with even one crash fault cannot be guaranteed in bounded time. In practice, sensible timeouts let real systems agree anyway — but you cannot assume agreement is automatic. (Malicious **Byzantine faults** are a separate, harder class, largely excluded for well-protected enterprise systems.)
+
+And node clocks **drift** — 10–20 seconds per day is common — while time services like NTP can reset a clock *backward*. The crucial consequence: **timestamps from different nodes cannot be compared to determine ordering**. See [time and ordering](/distributed-systems/time-and-ordering/).
+
+<Callout type="go" title="💡 The mindset shift">
+Single-machine code asks "did this work?" Distributed code must ask "what do I do when I cannot tell whether it worked?" Idempotent operations, explicit timeouts, retries with backoff, and never trusting a remote clock are the baseline tax for every network crossing.
+</Callout>
+
+## Why bother, then?
+
+Because the payoff is real: replication across machines buys **scalability** and **availability** that a single box can never reach. The rest of this track is about earning that payoff while respecting the fallacies — picking [consistency models](/distributed-systems/communication-and-consistency/) deliberately, using [consensus and coordination](/distributed-systems/consensus-and-coordination/) where agreement truly matters, and applying battle-tested [patterns](/distributed-systems/single-node-patterns/) instead of rebuilding them by hand.
+
+## See also
+
+- [Communication and consistency](/distributed-systems/communication-and-consistency/) — CAP and the consistency models you must choose between.
+- [Time and ordering](/distributed-systems/time-and-ordering/) — why clocks can't order distributed events.
+- [Consensus and coordination](/distributed-systems/consensus-and-coordination/) — agreeing despite failure.
+- [Scalability fundamentals](/distributed-systems/scalability-fundamentals/) — the upside that makes the difficulty worthwhile.

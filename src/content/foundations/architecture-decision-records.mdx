@@ -1,0 +1,138 @@
+---
+title: "Architecture Decision Records"
+category: fnd-evolution
+kind: topic
+order: 15
+difficulty: "Beginner"
+status: ready
+intent: "How to capture, justify, and communicate architecture decisions as ADRs — overcoming the three decision anti-patterns by recording the why."
+book: "Fundamentals of Software Architecture; Head First Software Architecture"
+related:
+  - thinking-in-trade-offs
+  - the-architects-role
+  - fitness-functions
+when_use:
+  - "When a decision affects structure, characteristics, dependencies, interfaces, or construction techniques"
+  - "When you need a single durable record of WHY a choice was made"
+  - "When a decision keeps getting re-litigated because no one wrote down the rationale"
+when_avoid:
+  - "When the decision is trivial design with no significant trade-off"
+  - "When the ADR process becomes so heavy that people stop writing them"
+quiz:
+  - q: "Which anti-pattern does writing technical AND business justification directly address?"
+    options:
+      - text: "Groundhog Day — a decision re-discussed endlessly because no one recorded why"
+        correct: true
+      - text: "Covering Your Assets"
+        correct: false
+      - text: "Email-Driven Architecture"
+        correct: false
+      - text: "The entity trap"
+        correct: false
+    explain: "Groundhog Day is cured by recording both technical and business justification; business value is also a litmus test for whether to make the decision at all."
+  - q: "When should an Accepted ADR be changed?"
+    options:
+      - text: "Never edited in place — it is superseded by a new ADR with bidirectional links"
+        correct: true
+      - text: "Edited freely as the team learns"
+        correct: false
+      - text: "Deleted once obsolete"
+        correct: false
+      - text: "Merged into the next ADR"
+        correct: false
+    explain: "Accepted ADRs are immutable except to move to Superseded; superseding uses links between old and new so the chronological project memory is preserved."
+  - q: "Per Nygard, a technology choice IS an architecture decision when it affects…"
+    options:
+      - text: "Structure, nonfunctional characteristics, dependencies, interfaces, or construction techniques"
+        correct: true
+      - text: "Only the database"
+        correct: false
+      - text: "Only the programming language"
+        correct: false
+      - text: "Nothing — all tech choices are design"
+        correct: false
+    explain: "Michael Nygard's criteria define architectural significance across those five areas."
+  - q: "Which ADR section carries the trade-off analysis — the good AND the bad?"
+    options:
+      - text: "Consequences"
+        correct: true
+      - text: "Title"
+        correct: false
+      - text: "Status"
+        correct: false
+      - text: "Notes"
+        correct: false
+    explain: "Consequences records the overall impact, good and bad; 'if you can't find any consequences, keep looking.'"
+takeaway: "Record every significant decision as an ADR — Title, Status, Context, Decision, Consequences — emphasising the why, and supersede rather than edit."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧾 Analogy">
+An ADR is the receipt for an architectural decision. Months later, when someone asks 'why did we choose messaging here?', you don't reconstruct it from memory or re-argue it — you pull the receipt. The most valuable line on it isn't *what* you bought, it's *why*.
+</Callout>
+
+## Three decision anti-patterns
+
+Making decisions is a core architect expectation, and three progressive anti-patterns get in the way:
+
+1. **Covering Your Assets** — avoiding or deferring a decision out of fear of being wrong. *Fix:* decide at the **last responsible moment** (enough info to justify, not so late you block teams) and collaborate continually so you can adjust.
+2. **Groundhog Day** — a decision re-discussed endlessly because no one recorded *why*. *Fix:* provide both **technical AND business** justification. Business value is also a litmus test — no business value may mean don't make the decision. The four common business justifications: **cost, time to market, user satisfaction, strategic positioning**.
+3. **Email-Driven Architecture** — people lose, forget, or never knew a decision. *Fix:* don't put the decision in an email **body** (avoid multiple systems of record) — link to a single source of truth, and notify only those it directly impacts.
+
+## What is "architecturally significant"?
+
+Per Michael Nygard, a technology decision *is* an architecture decision when it affects any of: **structure** (patterns/styles), **nonfunctional characteristics** (the -ilities), **dependencies** (coupling points), **interfaces** (how services are accessed; contracts, versioning), or **construction techniques** (platforms, frameworks, processes).
+
+## The ADR structure
+
+An **Architecture Decision Record** is a short (1-2 page) text file per decision, accumulating into a **decision log**. The five standard sections plus two recommended:
+
+<Mermaid code={String.raw`graph TD
+  T["Title<br/>(numbered, descriptive)"] --> St["Status<br/>(Proposed · Accepted · Superseded)"]
+  St --> C["Context<br/>(forces + alternatives)"]
+  C --> D["Decision<br/>(the WHY, commanding voice)"]
+  D --> Co["Consequences<br/>(good AND bad trade-offs)"]
+  Co --> Cp["Compliance (recommended)<br/>(how it's governed)"]
+  Cp --> N["Notes (recommended)<br/>(metadata)"]`} />
+
+- **Title** — sequentially numbered, short, descriptive ("42. Use of Asynchronous Messaging Between Order and Payment Services").
+- **Status** — **Proposed** (needs approval), **Accepted** (approved), **Superseded** (replaced — cross-link old↔new). An **RFC** status with a respond-by deadline avoids Analysis Paralysis. Status forces the "what can I self-approve?" conversation; good criteria are **cost**, **cross-team impact**, and **security**.
+- **Context** — the forces at play and the alternatives considered.
+- **Decision** — the decision plus full justification in an **affirmative, commanding voice** ("we will use..."), emphasising **why over how**.
+- **Consequences** — the overall impact, good *and* bad, with trade-off analysis. "If you can't find any consequences, keep looking."
+- **Compliance** (recommended) — how the decision is governed: manually, or automated as a [fitness function](/foundations/fitness-functions/).
+- **Notes** (recommended) — metadata (author, approval date, approved by, superseded dates).
+
+```text
+042-use-async-messaging-between-order-and-payment.md
+Status: Accepted
+```
+
+An ADR moves through a small, well-defined lifecycle — never backwards, never edited in place:
+
+<Mermaid code={String.raw`stateDiagram-v2
+  [*] --> Proposed
+  Proposed --> Accepted: approved
+  Proposed --> Rejected: declined
+  Accepted --> Superseded: replaced by a new ADR
+  Superseded --> [*]
+  Rejected --> [*]`} />
+
+<Callout type="gotcha" title="⚠️ Supersede, never edit in place">
+An Accepted ADR is **immutable** except to move it to Superseded. Editing it in place scrambles the chronological order of the log — the project's memory. Use **bidirectional links** between the old and new ADR so the history ("what about messaging?") stays intact.
+</Callout>
+
+<Callout type="tip" title="Keep it frictionless">
+Don't "feed the beast" with endless sections — concision is what keeps people writing ADRs. Store them where they're easy to add and search: a separate Git repo (good history, harder for non-devs) or a change-tracked **wiki** (more accessible). Start simple before adopting tooling.
+</Callout>
+
+<Callout type="go" title="💡 Key insight">
+ADRs fill a real gap: no standard exists for *documenting* architecture (only for diagramming, like C4). They double as documentation and as the way to justify standards — and understanding the *why* is what makes developers actually follow them.
+</Callout>
+
+## See also
+
+- [Thinking in trade-offs](/foundations/thinking-in-trade-offs/) — the analysis an ADR records.
+- [The architect's role](/foundations/the-architects-role/) — why making and justifying decisions is core.
+- [Fitness functions](/foundations/fitness-functions/) — automating an ADR's compliance section.

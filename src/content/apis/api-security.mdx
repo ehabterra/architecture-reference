@@ -1,0 +1,146 @@
+---
+title: "API Security: Threat Modeling, OAuth2 and OIDC"
+category: api-management
+kind: topic
+order: 11
+difficulty: "Advanced"
+status: ready
+intent: "Start security left: threat-model with STRIDE and the OWASP API Top 10, then authenticate and authorize with OAuth2 access tokens and OIDC identity — enforced on every endpoint."
+book: "Mastering API Architecture"
+related:
+  - api-gateways
+  - service-mesh
+  - rate-limiting-and-quotas
+when_use:
+  - "You are exposing an API to external consumers or third parties."
+  - "You need to delegate access on a user's behalf without sharing credentials."
+  - "You are reviewing an architecture for security weaknesses before release."
+when_avoid:
+  - "Never skip it — but don't reinvent an identity layer; use an OIDC provider instead."
+  - "Don't rely on gateway checks alone as a substitute for service-level controls."
+quiz:
+  - q: "What does each letter of STRIDE represent?"
+    options:
+      - text: "Spoofing, Tampering, Repudiation, Information disclosure, Denial of service, Elevation of privilege"
+        correct: true
+      - text: "Scan, Test, Review, Investigate, Defend, Encrypt"
+        correct: false
+      - text: "Secure Transport Requires Identity, Data, Encryption"
+        correct: false
+      - text: "Static Threat Risk Inspection of Distributed Endpoints"
+        correct: false
+    explain: "STRIDE (Garg & Kohnfelder, Microsoft) is applied per element — each process and connection — to enumerate threat categories."
+  - q: "In OAuth2, what is the access token for, versus an OIDC ID token?"
+    options:
+      - text: "An OAuth2 access token grants API access; an OIDC ID token conveys user identity — never use an ID token as an access token"
+        correct: true
+      - text: "They are interchangeable"
+        correct: false
+      - text: "The access token conveys identity; the ID token grants access"
+        correct: false
+      - text: "Both are only for machine-to-machine"
+        correct: false
+    explain: "OAuth2 grants API access but not identity; OIDC adds an identity layer (the openid scope and an ID token). ID tokens are long-lived and must never be used as access tokens."
+  - q: "Which OAuth2 grant should a public client (SPA) use?"
+    options:
+      - text: "Authorization Code Grant + PKCE"
+        correct: true
+      - text: "Implicit Grant"
+        correct: false
+      - text: "Resource Owner Password Credentials Grant"
+        correct: false
+      - text: "HTTP Basic"
+        correct: false
+    explain: "Public clients cannot protect a secret, so they must use Authorization Code + PKCE (Proof Key for Code Exchange); Implicit and ROPC are discouraged."
+  - q: "Why are OAuth2 scopes NOT a substitute for authorization enforcement?"
+    options:
+      - text: "A user can grant a client a permission the user does not themselves have, so every endpoint still needs an authorization check (e.g. RBAC)"
+        correct: true
+      - text: "Scopes are encrypted and unreadable"
+        correct: false
+      - text: "Scopes apply only to GET requests"
+        correct: false
+      - text: "Scopes replace authentication"
+        correct: false
+    explain: "Scopes are coarse-grained, user-consented limits; they don't equal effective access. Enforce authorization (RBAC) on every endpoint to prevent BOLA."
+takeaway: "Start security left: threat-model with STRIDE/OWASP, then use OAuth2 (Auth Code + PKCE) for access and OIDC for identity — and enforce authorization on every endpoint."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🏠 Analogy">
+Threat modeling is walking around your house thinking like a burglar: which windows are unlatched, did you leave a key under the doormat, is the back door stronger than the side gate? Authentication is the lock that proves who is at the door; authorization is the rule about which rooms each guest may enter. A steel front door with the key under the mat is security theatre.
+</Callout>
+
+## Start left: threat modeling
+
+Security is the often-deferred concern that does the most damage when neglected. The mindset is to **"start left"** — make security a foundation in design, not a bolt-on. **Threat modeling** identifies threats, attacks, vulnerabilities, and countermeasures; you can only mitigate what you have identified. You do not need to be an expert — the key skill is to **think like an attacker**.
+
+The repeatable six-step process: (1) identify objectives, (2) gather information, (3) decompose the system (usually with a **Data Flow Diagram** of external entities, processes, datastores, flows, and trust **boundaries**), (4) identify threats, (5) evaluate risk, (6) validate — recursively and continually.
+
+Apply **STRIDE per element** and prioritise with **DREAD**:
+
+<Mermaid code={String.raw`graph TD
+  S["Spoofing → authenticate every request"]
+  T["Tampering → validate input, prepared statements, guard mass assignment"]
+  R["Repudiation → logging and monitoring"]
+  I["Information disclosure → avoid excessive data exposure / asset sprawl"]
+  D["Denial of service → rate limiting and load shedding"]
+  E["Elevation of privilege → enforce authorization (RBAC)"]`} />
+
+DREAD scores qualitative risk as (**D**amage + **R**eproducibility + **E**xploitability + **A**ffected users + **D**iscoverability) / 5. Pair this with the **OWASP API Security Top 10**. The financial stakes are real — the average data-breach cost in 2021 was $4.24M, and GDPR fines have reached hundreds of millions.
+
+<Callout type="gotcha" title="Some controls can't live at the gateway">
+'Trust, but verify': gateway checks (input validation, TLS termination, header allowlists) are a last line of defence, not a replacement for service-level controls. Mass assignment (an ORM binding a malicious read-only field) cannot be solved at the gateway — it must be guarded inside the API.
+</Callout>
+
+## Authentication vs authorization
+
+- **Authentication** verifies *who* the caller is (username/password + MFA; machine-to-machine via keys or certificates).
+- **Authorization** decides *what* an authenticated caller may do — enforced on **every endpoint**.
+
+API **keys** identify a *system* (cryptographically random, ~256-bit) but must never be trusted to *assert who the end user is*. Do not allow **HTTP Basic** (it means handing over a username and password). The right answer for credential-free delegated access is **OAuth2**.
+
+## OAuth2: delegated access
+
+**OAuth2** is the de facto token-based authorization framework: a user *consents* that a third-party app may access their data — the **consent is the authorization**. Four roles: **Resource Owner**, **Authorization Server**, **Client**, **Resource Server**. Tokens are usually **JWTs** carrying signed **claims** (`iss`, `sub`, `aud`, `exp`, …); a **JWS**-signed JWT provides integrity and is validated **in-process with no DB lookup** (use **JWE** if you need encryption). Keep tokens short-lived (1–60 min); use revocable refresh tokens for UX.
+
+Pick the grant by client type:
+
+- **Authorization Code + PKCE** — public clients (SPAs, mobile). PKCE (Proof Key for Code Exchange) sends a hashed `code_challenge` then the `code_verifier`, mitigating code interception. The most common grant.
+- **Authorization Code** — confidential web apps that can protect a secret.
+- **Client Credentials** — machine-to-machine, no resource owner; often the easiest way to introduce OAuth2.
+- **Device Authorization** — input-constrained devices (IoT).
+
+Avoid the **Implicit** grant (replaced by Auth Code + PKCE) and the **Resource Owner Password Credentials** grant.
+
+<Mermaid code={String.raw`sequenceDiagram
+  participant U as User
+  participant C as Client (SPA)
+  participant AS as Authorization server
+  participant RS as Resource server
+  C->>AS: authorize request with code_challenge
+  AS->>U: prompt login and consent
+  U-->>AS: approve
+  AS-->>C: authorization code
+  C->>AS: exchange code with code_verifier
+  AS-->>C: access token
+  C->>RS: call API with access token`} />
+
+## OIDC adds identity
+
+OAuth2 grants API *access* but not *user identity*. **OIDC (OpenID Connect)** adds an identity layer: the client requests the **`openid`** scope and receives an **ID token** (a JWT of user claims), enriched by `profile`, `email`, and similar scopes.
+
+<Callout type="gotcha" title="Scopes are not permissions">
+OAuth2 **scopes** are coarse-grained, user-consented limits shown on a consent screen — they are not a substitute for entitlement enforcement. A user can grant a client a permission the user does not themselves have, so every endpoint still needs an authorization check (typically **RBAC**) to prevent **BOLA** (Broken Object Level Authorization). The gateway can usefully enforce scopes, but it is not the whole story.
+</Callout>
+
+<Callout type="go" title="Don't build your own identity layer">
+Never use an ID token as an access token (it is long-lived and meant to convey user info), and don't roll your own identity layer — use a provider that supports OIDC. Always send tokens over HTTPS, and prefer in-process-validatable JWTs over per-request DB lookups.
+</Callout>
+
+## See also
+
+- [API gateways](/apis/api-gateways/) — TLS termination and scope enforcement at the edge.
+- [Service mesh](/apis/service-mesh/) — mTLS and service identity for east–west traffic.
+- [Rate limiting and quotas](/apis/rate-limiting-and-quotas/) — mitigating denial-of-service.

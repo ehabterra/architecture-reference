@@ -1,0 +1,130 @@
+---
+title: "Conway's Law and Team Topologies"
+category: ms-organization
+kind: topic
+order: 16
+difficulty: "Intermediate"
+status: ready
+intent: "Systems mirror the communication structure of the organizations that build them — so align teams to business domains, use the four Team Topologies team types, and apply the Inverse Conway Maneuver incrementally."
+book: "Building Microservices, 2nd ed. (Sam Newman); Enabling Microservice Success (Sarah Wells)"
+related:
+  - modeling-service-boundaries
+  - ownership-and-platform-teams
+  - choreography-vs-orchestration
+when_use:
+  - "You are aligning team structure with service architecture."
+  - "Your three-tier teams produce tightly coupled systems."
+  - "You want to evolve the org to enable a target architecture."
+when_avoid:
+  - "You have a single team and one deployable."
+  - "You need boundary-finding technique rather than org design."
+quiz:
+  - q: "What does Conway's law state?"
+    options:
+      - text: "Organizations produce designs that copy their communication structures"
+        correct: true
+      - text: "Bigger teams produce better software"
+        correct: false
+      - text: "Architecture should be decided by a central committee"
+        correct: false
+      - text: "Microservices require ten or more teams"
+        correct: false
+    explain: "Mel Conway (1968): a system's structure mirrors the communication structure of the organization that builds it."
+  - q: "What is a stream-aligned team?"
+    options:
+      - text: "A team that owns a valuable flow of work end-to-end (a vertical slice of business functionality)"
+        correct: true
+      - text: "A team organized by technical layer"
+        correct: false
+      - text: "A team that only writes streaming code"
+        correct: false
+      - text: "A temporary project team"
+        correct: false
+    explain: "In Team Topologies, stream-aligned teams are the majority; they own an end-to-end slice of business value, the opposite of the three-tier split."
+  - q: "What is the Inverse Conway Maneuver?"
+    options:
+      - text: "Evolving the organization incrementally to make the desired architecture easier"
+        correct: true
+      - text: "A one-time big reorganization to fix a design"
+        correct: false
+      - text: "Letting architecture dictate hiring forever"
+        correct: false
+      - text: "Outsourcing architecture decisions"
+        correct: false
+    explain: "It's incremental ('pinching off' parts of system and org together); 'a reorganisation won't fix a broken design.'"
+  - q: "When architecture and organization conflict, which wins?"
+    options:
+      - text: "The organization"
+        correct: true
+      - text: "The architecture"
+        correct: false
+      - text: "Whichever is documented first"
+        correct: false
+      - text: "Neither — they are independent"
+        correct: false
+    explain: "Wells: build the org to support your architecture, because the org's communication structure will reassert itself."
+takeaway: "Systems mirror team communication, so align stream-aligned teams to business domains, support them with enabling/platform/complicated-subsystem teams, and evolve the org incrementally."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+If three separate companies build a bridge — one for the deck, one for the cables, one for the towers — the seams between their work show up as the weakest joints in the finished bridge. Software is the same: the gaps in your org chart become the interfaces (and the coupling) in your system. Draw the teams the way you want the architecture to look.
+</Callout>
+
+## Conway's law
+
+Mel Conway (1968): **"organizations produce designs that copy their communication structures."** Newman shows MusicCorp's three-tiered architecture (DBAs, backend, frontend) is Conway's law in action — teams grouped by *technical competency* produce systems with high cohesion of *technology* and low cohesion of *business functionality*, so any single feature change ripples across all three layers and all three teams.
+
+The evidence is strong: MacCormack's product/organization "mirroring" study, the Windows Vista error-proneness study, Amazon's **two-pizza teams** (which drove the creation of AWS), and Netflix. The fix for the three-tier problem is **organizational**: cross-functional teams aligned to domains.
+
+<Mermaid code={String.raw`graph TD
+  subgraph Tech["Teams by technical layer"]
+    UI["UI team"] --> Layer1["smeared feature across 3 services"]
+    BE["Backend team"] --> Layer1
+    DBA["DBA team"] --> Layer1
+  end
+  subgraph Domain["Teams by business domain"]
+    T1["Orders team"] --> S1["Orders service (end-to-end)"]
+    T2["Payments team"] --> S2["Payments service (end-to-end)"]
+  end`} />
+
+## The four Team Topologies team types
+
+<Mermaid code={String.raw`graph TD
+  SA["Stream-aligned teams<br/>(the majority)<br/>own a flow end-to-end"]
+  EN["Enabling teams<br/>help build new capabilities<br/>(reduce intrinsic load)"]
+  CS["Complicated-subsystem teams<br/>specialist subsystem (optional)"]
+  PL["Platform teams<br/>self-service tooling<br/>(reduce extrinsic load)"]
+  EN -.->|"facilitate"| SA
+  PL -.->|"X-as-a-service"| SA
+  CS -.->|"provide subsystem"| SA`} />
+
+- **Stream-aligned** — the majority; own a valuable flow end-to-end, ideally including the UI via micro-frontends. The opposite of the layer-split.
+- **Enabling** — specialists who help stream-aligned teams build new capabilities, reducing their **intrinsic** cognitive load (the *FT*'s 3-month secondments to observability teams). Newman places architects here.
+- **Complicated-subsystem** — build/maintain a specialist subsystem (the *FT*'s Prometheus/Go example). Optional.
+- **Platform** — usually a group; reduce **extrinsic** load via self-service services built as a **Thinnest Viable Platform** (see [ownership and platform teams](/microservices/ownership-and-platform-teams/)).
+
+The three **interaction modes** keep coupling low: **Collaboration** (intense, short, high-uncertainty work at a boundary), **X-as-a-Service** (the default for platform teams), and **Facilitating** (the enabling-team consultancy model).
+
+## The Inverse Conway Maneuver — incrementally
+
+You can deliberately evolve the org to make the desired architecture easier — but it must be **incremental**, "pinching off" parts of system and org together, *not* a big reorg. "A reorganisation won't fix a broken design," and reorgs cause stress and attrition ("people aren't resources"), so keep teams together and evolve over time.
+
+<Callout type="tip" title="💡 Team size and autonomy">
+Smaller is better — productivity worsens at nine or more. The challenge is building "large organizations out of smaller, autonomous teams," minimizing **coordination** (Brooks's Law) via a clear **team API**. But beware cargo-culting the "Spotify model" — "not even Spotify uses the Spotify model"; copy the *questions*, not the answers.
+</Callout>
+
+<Callout type="gotcha" title="⚠️ Communication is the cost you're managing">
+Communication paths grow roughly **quadratically** with people, and Thoughtworks found cross-team-dependent tasks 10–12x slower in elapsed time ("backlog coupling"). Constant communication *within* a team is healthy; frequent high-bandwidth synchronous communication *between* teams couples them. Share key information asynchronously and searchably.
+</Callout>
+
+<Callout type="go" title="🔑 Key insight">
+If architecture and organization conflict, **the organization wins** — its communication structure reasserts itself. So design them together: align stream-aligned teams to business domains, support them with enabling, platform, and complicated-subsystem teams, and expect to iterate the boundaries.
+</Callout>
+
+## See also
+
+- [Modeling service boundaries](/microservices/modeling-service-boundaries/) — the domains your teams align to.
+- [Ownership and platform teams](/microservices/ownership-and-platform-teams/) — strong ownership and the paved road.
+- [Choreography vs orchestration](/microservices/choreography-vs-orchestration/) — team ownership drives the coordination style.

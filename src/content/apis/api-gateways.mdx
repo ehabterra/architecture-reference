@@ -1,0 +1,132 @@
+---
+title: "API Gateways"
+category: api-management
+kind: topic
+order: 9
+difficulty: "Intermediate"
+status: ready
+intent: "The single entry point for north–south traffic — a control-plane/data-plane reverse proxy that reduces coupling, simplifies consumption, and protects and meters your APIs."
+book: "Mastering API Architecture"
+related:
+  - service-mesh
+  - api-security
+  - rate-limiting-and-quotas
+when_use:
+  - "External consumers must reach a growing set of backend APIs through one front door."
+  - "You need cross-cutting concerns (TLS, auth, rate limiting, observability) handled at the edge."
+  - "You are running a strangler-fig migration and want to route to legacy or new behind a facade."
+when_avoid:
+  - "A single endpoint where a simple proxy or load balancer already suffices."
+  - "Internal service-to-service traffic — that is service-mesh territory, not the gateway (avoid loopback)."
+quiz:
+  - q: "An API gateway primarily manages which kind of traffic?"
+    options:
+      - text: "North–south (ingress) traffic from external consumers into backend services"
+        correct: true
+      - text: "East–west service-to-service traffic"
+        correct: false
+      - text: "Database replication traffic"
+        correct: false
+      - text: "Only TLS handshake traffic"
+        correct: false
+    explain: "A gateway is the single entry point at the edge for north–south ingress; east–west traffic is handled by a service mesh."
+  - q: "What are the two fundamental components of an API gateway?"
+    options:
+      - text: "A control plane (config: routes, policies, telemetry) and a data plane (executes: routing, policy, telemetry)"
+        correct: true
+      - text: "A frontend and a database"
+        correct: false
+      - text: "A cache and a queue"
+        correct: false
+      - text: "A firewall and a CDN"
+        correct: false
+    explain: "Operators define routes/policies in the control plane; the data plane is where packets are routed and policies enforced."
+  - q: "Which is an API gateway anti-pattern from the book?"
+    options:
+      - text: "Routing internal service-to-service traffic out through the edge gateway (the loopback anti-pattern)"
+        correct: true
+      - text: "Terminating TLS at the gateway"
+        correct: false
+      - text: "Injecting correlation identifiers"
+        correct: false
+      - text: "Using host-based routing"
+        correct: false
+    explain: "Loopback sends internal traffic out and back through the edge, hurting performance, security, and cost, and making the gateway a bottleneck/SPOF."
+  - q: "Why should you avoid routing on the request payload/body?"
+    options:
+      - text: "It leaks coupled domain detail into the gateway and is computationally expensive to parse"
+        correct: true
+      - text: "Payloads cannot be read at the edge"
+        correct: false
+      - text: "It is forbidden by HTTP"
+        correct: false
+      - text: "It disables caching"
+        correct: false
+    explain: "Body-based routing couples the gateway to payload schemas (schema changes force gateway changes) and adds deserialization cost — route on path/host instead."
+takeaway: "An API gateway is the edge's single front door: a control-plane/data-plane reverse proxy for ingress — keep internal traffic out of it and keep business logic out of it."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🏨 Analogy">
+An API gateway is the reception desk of a large hotel. Guests do not wander into the kitchens or boiler room — they check in at one counter that verifies who they are, hands out keys, points them to the right floor, logs comings and goings, and shields the staff behind it. Rebuild the kitchens and the reception experience is unchanged.
+</Callout>
+
+## What an API gateway is
+
+An **API gateway** is a management tool at the **edge** of a system, between a consumer and a collection of backend services, acting as the **single point of entry** for a defined group of APIs. At the network level it behaves as a **reverse proxy** (designed to protect servers, unlike a forward proxy that protects clients). It manages **north–south (ingress)** traffic — requests flowing from an external origin into your backend.
+
+It splits into two parts:
+
+- **Control plane** — where operators define routes, policies, and telemetry.
+- **Data plane** — where the work happens: packets routed, policies enforced, telemetry emitted.
+
+<Mermaid code={String.raw`graph TD
+  subgraph Edge
+    GW["API Gateway<br/>(reverse proxy)"]
+  end
+  M["Mobile app"] -->|north-south| GW
+  P["Partner system"] -->|north-south| GW
+  GW --> Legacy["Legacy conference app"]
+  GW --> Att["Attendee service"]
+  GW --> Sess["Session service"]
+  CP["Control plane<br/>(routes, policies, telemetry)"] -. configures .-> GW`} />
+
+A gateway is **not** the only ingress option — a simple proxy or load balancer may suffice — but it is the most common and usually the most scalable, maintainable, and secure choice as consumers and providers grow. The capability ladder runs: reverse proxy (single backend, TLS) → load balancer (multiple backends, service discovery) → API gateway (composition, authorization, retries, rate limiting, logging/tracing, circuit breaking).
+
+<Mermaid code={String.raw`graph LR
+  RP["Reverse proxy<br/>single backend, TLS"] --> LB["Load balancer<br/>many backends, discovery"]
+  LB --> GW["API gateway<br/>composition, authz, retries,<br/>rate limiting, tracing"]`} />
+
+## Six reasons to use one
+
+1. **Reduce coupling** — act as a **facade** (a simpler new interface) or **adapter** (reuse an old one) so backends can change location, language, or framework while the contract holds.
+2. **Simplify consumption** — aggregate or translate backends (e.g. SOAP → REST-like), orchestrate parallel calls.
+3. **Protect from overuse and abuse** — TLS termination, authn/authz, IP allow/deny lists, WAFs, [rate limiting](/apis/rate-limiting-and-quotas/), contract validation.
+4. **Understand consumption** — the edge is ideal for top-line metrics (errors, throughput, latency) and injecting **correlation identifiers** propagated downstream.
+5. **Manage APIs as products** — full-lifecycle API management across create/control/consume.
+6. **Monetize APIs** — developer portals, plans, billing.
+
+## Routing patterns
+
+Map URL paths or hosts to backend services — `prefix: /attendees` → `attendees.nextgen:8080`, or host-based `attendees.conferencesystem.com` → the new service. This is the engine of a **strangler-fig migration**: over time the legacy app shrinks to a shell as paths are peeled off behind the gateway facade.
+
+<Callout type="gotcha" title="Don't route on the payload">
+Routing on the request body leaks coupled domain information into the gateway — a payload schema change forces a gateway change — and is computationally expensive because the gateway must deserialize and parse every message. Route on path or host instead.
+</Callout>
+
+## Anti-patterns to avoid
+
+- **Loopback** — sending internal service-to-service traffic out through the edge gateway for discovery. It adds egress and inter-AZ cost, hurts performance and observability, and turns the gateway into a bottleneck and single point of failure. Keep internal traffic internal — that is [service mesh](/apis/service-mesh/) territory.
+- **Gateway-as-ESB** — pushing business logic into gateway plug-ins (Lua, WASM filters, Groovy) couples gateway to service and recreates a weaker enterprise service bus.
+- **"Turtles all the way down"** — stacking many hierarchical gateways (a transport gateway, an auth gateway, a logging gateway…) multiplies cost-of-change and per-hop latency.
+
+<Callout type="go" title="It is on the critical path">
+A gateway is a single point of failure: design for high availability (multiple instances across AZs/regions), test load-balancer-to-gateway failover regularly, assign an accountable owner, define SLOs/SLAs, and run blameless postmortems. Beware components that 'fail open' — fine when availability is paramount, wrong for financial or government systems.
+</Callout>
+
+## See also
+
+- [Service mesh](/apis/service-mesh/) — the east–west counterpart to the gateway.
+- [API security](/apis/api-security/) — TLS, OAuth2, and threat modeling at the edge.
+- [Rate limiting and quotas](/apis/rate-limiting-and-quotas/) — protecting APIs from overuse.

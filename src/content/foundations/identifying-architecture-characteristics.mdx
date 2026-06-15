@@ -1,0 +1,131 @@
+---
+title: "Identifying Architecture Characteristics"
+category: fnd-characteristics
+kind: topic
+order: 6
+difficulty: "Intermediate"
+status: ready
+intent: "How architects uncover the driving -ilities from domain concerns, explicit requirements, and implicit domain knowledge — without over-specifying."
+book: "Fundamentals of Software Architecture; Head First Software Architecture"
+related:
+  - architecture-characteristics
+  - measuring-and-governing-characteristics
+  - identifying-component-boundaries
+when_use:
+  - "At the start of a project, when turning vague business goals into engineering criteria"
+  - "When you need consensus on which qualities matter most without ranking a long list"
+  - "When distinguishing a domain requirement from a true architecture characteristic"
+when_avoid:
+  - "When you would over-specify by trying to support everything (the Vasa)"
+  - "When you try to rank a full list — pick a top three instead"
+quiz:
+  - q: "What are the three sources for deriving characteristics?"
+    options:
+      - text: "Domain concerns, explicit requirements, and implicit domain knowledge"
+        correct: true
+      - text: "Cost, schedule, and scope"
+        correct: false
+      - text: "Operational, structural, and cross-cutting"
+        correct: false
+      - text: "Architects, developers, and stakeholders"
+        correct: false
+    explain: "Characteristics come from translating domain concerns, reading explicit requirements, and applying implicit/holistic domain knowledge."
+  - q: "Why have stakeholders pick the top three characteristics rather than rank the whole list?"
+    options:
+      - text: "Ranking a full list is a fool's errand stakeholders won't agree on; choosing the top three builds consensus"
+        correct: true
+      - text: "Three is the maximum a system can support"
+        correct: false
+      - text: "It is faster to type"
+        correct: false
+      - text: "The other characteristics can then be ignored entirely"
+        correct: false
+    explain: "Picking the top three (in any order) builds consensus and fuels trade-off discussion without an impossible ranking exercise."
+  - q: "What is the difference between scalability and elasticity?"
+    options:
+      - text: "Scalability handles many concurrent users; elasticity handles sudden bursts"
+        correct: true
+      - text: "They are synonyms"
+        correct: false
+      - text: "Elasticity is for databases only"
+        correct: false
+      - text: "Scalability is about storage; elasticity is about CPU"
+        correct: false
+    explain: "A hotel-booking system is scalable but not elastic; a concert-ticket system needs elasticity for the burst when tickets drop."
+  - q: "A characteristic that requires deep domain knowledge to understand is probably…"
+    options:
+      - text: "A domain requirement, not an architecture characteristic"
+        correct: true
+      - text: "Always cross-cutting"
+        correct: false
+      - text: "Implicit"
+        correct: false
+      - text: "Impossible to measure"
+        correct: false
+    explain: "The litmus test: if it needs domain knowledge it is domain; an abstract concern like elasticity is a characteristic."
+takeaway: "Derive characteristics from domain concerns, explicit requirements, and implicit knowledge — then have stakeholders pick the top three rather than rank them all."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🩺 Analogy">
+A good doctor doesn't just treat the symptom you describe — they ask about your history and read between the lines to find the real problem. Identifying characteristics is the same diagnostic skill: stakeholders hand you symptoms ("make it reliable," "millions of users"), and the architect translates them into measurable engineering criteria.
+</Callout>
+
+## Three sources
+
+Characteristics come from three places:
+
+<Mermaid code={String.raw`graph TD
+  S1["Domain concerns<br/>(business goals)"] --> C["Driving<br/>characteristics"]
+  S2["Explicit requirements<br/>(stated numbers)"] --> C
+  S3["Implicit / holistic<br/>domain knowledge"] --> C
+  C --> T["Stakeholders pick<br/>top three"]`} />
+
+1. **Domain concerns** — translate business goals into "-ilities." Mergers and acquisitions imply interoperability and extensibility; time-to-market implies agility, testability, and deployability; competitive advantage implies scalability and availability. Note that *time to market = agility + testability + deployability* — don't fixate on one ingredient.
+2. **Explicit requirements** — stated user counts and scale numbers ("millions of users" decodes to **scalability**).
+3. **Implicit / holistic domain knowledge** — what the requirements don't say. 1,000 students won't register evenly across 10 hours; they'll swarm the first and last 10 minutes, so design for the **elastic burst**.
+
+## Decode business language into engineering terms
+
+Architects and stakeholders speak different languages. A small translation table goes a long way: "I needed it yesterday" → time to market (agility); "lightning fast" → performance; "zero downtime" → availability. The architect's job is **translation** — converting business speak into *identifiable and measurable* characteristics.
+
+A subtle but critical distinction: **scalability** (many concurrent users) versus **elasticity** (handling sudden bursts). A hotel-booking system is scalable but not elastic; a concert-ticket or mealtime-rush system needs elasticity.
+
+<Mermaid code={String.raw`graph TD
+  subgraph Scalability["Scalability — steady growth"]
+    L1["Load rises gradually"] --> S1["Add capacity over weeks"]
+  end
+  subgraph Elasticity["Elasticity — sudden burst"]
+    L2["Ticket drop: 0 to 50k in seconds"] --> S2["Auto-scale in seconds, then shrink"]
+  end`} />
+
+## Pick a top three, don't rank everything
+
+<Callout type="tip" title="The top-three technique">
+Don't try to *prioritise* the full list — that's a fool's errand stakeholders will never agree on. Instead, have them choose the **top three** characteristics, in any order. This builds consensus and fuels the trade-off conversation, while keeping the list short.
+</Callout>
+
+A useful inverse exercise: ask which characteristic you could *cull*. The answer is usually an explicit one (implicit characteristics tend to support general success), which sharpens the team's understanding of what truly drives the design.
+
+## The litmus test: domain or characteristic?
+
+When a candidate quality appears, ask: *does understanding it require domain knowledge?* If yes, it's a **domain requirement**. If it's an abstract concern like elasticity or auditability that applies regardless of the business, it's an **architecture characteristic**. For ambiguous cases (a "reputation index" → auditability?), confirm with a subject-matter expert.
+
+<Callout type="gotcha" title="⚠️ Over-specifying is as harmful as under-specifying">
+"There are no wrong answers in architecture, only expensive ones." The **Generic Architecture** anti-pattern tries to support everything and collapses; the **Ivory Tower Architect** decides in isolation. Collaborate with developers, product managers, ops, and domain analysts — never decide alone.
+</Callout>
+
+## Worked example: Silicon Sandwiches
+
+A franchised sandwich chain wants online ordering for millions of users. The architect decodes: "millions" → **scalability**; mealtime bursts → **elasticity** (implicit); per-location promotions and directions → **customizability**; overseas expansion → internationalization (mostly design); franchising → cost/feasibility constraints. Implicit characteristics surfaced: **availability**, **reliability**, and **security** (third-party payment needs only standard hygiene).
+
+<Callout type="go" title="💡 Key insight">
+Keep the list short and collaborate. The fewer characteristics you commit to, the simpler and cheaper the architecture — and the easier it is to evolve when [unknown unknowns](/foundations/evolutionary-architecture/) surface.
+</Callout>
+
+## See also
+
+- [Architecture characteristics](/foundations/architecture-characteristics/) — what qualifies as one.
+- [Measuring and governing characteristics](/foundations/measuring-and-governing-characteristics/) — making them concrete and enforced.
+- [Identifying component boundaries](/foundations/identifying-component-boundaries/) — where characteristics drive component splits.

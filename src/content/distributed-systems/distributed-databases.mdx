@@ -1,0 +1,153 @@
+---
+title: "Distributed Databases: Replication and Sharding"
+category: ds-scalability
+kind: topic
+order: 8
+difficulty: "Advanced"
+status: ready
+intent: "Scaling the data tier — read replicas, partitioning and sharding, leader-follower vs leaderless replication, NoSQL data models, and the consistency knobs real engines expose."
+book: "Foundations of Scalable Systems (Ian Gorton)"
+related:
+  - communication-and-consistency
+  - consensus-and-coordination
+  - caching
+when_use:
+  - "When data exceeds single-node capacity or needs low-latency global access."
+  - "When read or write throughput outgrows a single database server."
+  - "When you can denormalize around access patterns to avoid distributed joins."
+when_avoid:
+  - "When a single scaled-up relational node still comfortably handles the load."
+  - "For graph-shaped data that partitions poorly — often best on one large server."
+quiz:
+  - q: "What is the central modeling shift when moving to NoSQL?"
+    options:
+      - text: "From problem-domain modeling (normalize, join) to solution-domain modeling (prejoin/denormalize the data each request needs)"
+        correct: true
+      - text: "From SQL to no querying at all"
+        correct: false
+      - text: "From disk storage to memory storage"
+        correct: false
+      - text: "From replication to no replication"
+        correct: false
+    explain: "NoSQL trades normalization for denormalization: you bundle the fields a request needs into one object (no joins), accepting duplicated data, faster reads, slower writes, and integrity-maintenance burden."
+  - q: "How does horizontal partitioning (sharding) differ from vertical partitioning?"
+    options:
+      - text: "Sharding allocates rows across nodes (by value or hash); vertical partitioning splits by columns"
+        correct: true
+      - text: "Sharding splits columns; vertical splits rows"
+        correct: false
+      - text: "They are the same thing"
+        correct: false
+      - text: "Sharding only works for SQL databases"
+        correct: false
+    explain: "Horizontal partitioning (sharding) distributes rows across nodes by value/hash/range; vertical partitioning splits a table by columns. Sharding is the primary tool for scaling data size."
+  - q: "Why does a read replica introduce a stale-read window?"
+    options:
+      - text: "Replication from the primary is asynchronous, so a secondary may briefly lag the primary"
+        correct: true
+      - text: "Replicas reject writes"
+        correct: false
+      - text: "Replicas use a different schema"
+        correct: false
+      - text: "Replicas always serve cached data"
+        correct: false
+    explain: "A single primary asynchronously replicates to secondaries; until propagation completes a read from a secondary may return an older value. Smaller replication delay means less staleness."
+  - q: "How is leaderless replication different from leader-follower?"
+    options:
+      - text: "Any replica can accept reads and writes, making it more scalable for writes"
+        correct: true
+      - text: "It forbids replication entirely"
+        correct: false
+      - text: "Only one replica may ever be read"
+        correct: false
+      - text: "It requires SQL"
+        correct: false
+    explain: "Leader-follower funnels all writes through one leader with read-only followers; leaderless lets any replica read and write (the handling replica is the coordinator), scaling writes better at the cost of more conflict handling."
+takeaway: "Scale data with read replicas and sharding; choose leader-follower or leaderless replication and denormalize around access patterns to avoid distributed joins."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+One enormous filing cabinet eventually can't hold the paperwork of a growing company. You either buy a bigger cabinet (scale up — there's a ceiling), copy popular files into a reading room so staff stop queueing at the master cabinet (read replicas), or split the files across many cabinets by surname (sharding). Each move trades simplicity for capacity.
+</Callout>
+
+When data outgrows a single machine — or needs low-latency global access — the database itself must be distributed. Internet-scale applications generating vast, heterogeneous data for tens of millions of users broke the relational-only world: strong consistency and joins carry a performance cost not always justified (nobody minds if a dinner photo reaches some followers seconds late).
+
+## Scaling a relational database
+
+Three moves, in increasing complexity:
+
+- **Scale up** — more powerful hardware, unchanged code. Downsides: exponential cost, a single-node availability limit, repeated migrations.
+- **Read replicas** — a single **primary** (the only writer) asynchronously replicates to **secondary** read replicas (possibly in other data centers). Scales reads and improves availability, but introduces a **stale-read window** (smaller replication delay → less staleness).
+- **Partitioning** — **horizontal partitioning (sharding)** allocates rows across nodes by value or hash; **vertical partitioning** splits a table by columns.
+
+<Callout type="gotcha" title="⚠️ Distributed joins are the sharding tax">
+Once rows live on different nodes, a join can shuffle huge amounts of data over the network. Minimize movement: replicate small <strong>reference tables</strong> everywhere, join on partition keys or secondary indexes, and apply highly selective filters first. The cleaner fix is to model so the join isn't needed at all.
+</Callout>
+
+## The NoSQL modeling shift
+
+NoSQL arose from cheap commodity hardware, evolving unstructured data, and the need for native horizontal scaling. The deep change is from **problem-domain modeling** (normalize to third normal form, join for any query) to **solution-domain modeling** — **prejoining (denormalizing)** the exact data each request needs into one object. A normalized "ski visit" spread across joined tables becomes a single `VisitDay` object bundling every report field — **no joins**, trading duplicated data (cheap disk), faster reads, slower writes, and an integrity burden (a resort rename updates every `VisitDay`, run off-hours).
+
+<Mermaid code={String.raw`graph TD
+  subgraph Norm["Normalized — join at read time"]
+    V["Visit"] --> Sk["Skier"]
+    V --> Re["Resort"]
+    V --> Li["Lift"]
+  end
+  subgraph Denorm["Denormalized — prejoined object"]
+    VD["VisitDay { skier, resort, lift, ... }<br/>one read, no joins"]
+  end`} />
+
+The four NoSQL data models:
+
+- **Key-value** (Redis) — opaque values.
+- **Document** (MongoDB) — encoded JSON, queryable/indexable fields, schemaless collections.
+- **Wide column** (Cassandra, Bigtable) — named columns, a 2D hash map.
+- **Graph** (Neo4j) — relationships first-class, closest to relational; partitions poorly, so often best on one large server.
+
+Query languages are proprietary — MongoDB's `find()`, Cassandra's SQL-like **CQL** (single-table SELECTs, no joins), Neo4j's openCypher.
+
+## Data distribution: sharding + replication
+
+NoSQL is designed for **shared-nothing** horizontal scaling. **Sharding** is by **hash key**, **value-based**, or **range-based**, with **replication** layered on for availability:
+
+<Mermaid code={String.raw`graph TD
+  R["Incoming request (key)"] --> H{"Shard function<br/>hash / range / value"}
+  H -->|"shard A"| SA["Node A<br/>(+ replicas)"]
+  H -->|"shard B"| SB["Node B<br/>(+ replicas)"]
+  H -->|"shard C"| SC["Node C<br/>(+ replicas)"]
+  SA --> RA["Leader-follower OR leaderless"]
+  SB --> RA
+  SC --> RA`} />
+
+Two replication architectures:
+
+- **Leader-follower** — one leader accepts writes, read-only followers serve reads. Simpler; the leader is a write bottleneck.
+- **Leaderless** — any replica reads and writes (the handling replica is the **coordinator**). More scalable for writes, at the cost of more conflict handling.
+
+Replica consistency ranges from **strong** (wait for all replicas) to **eventual** (wait for one, propagate later). See [communication and consistency](/distributed-systems/communication-and-consistency/) for the **N/W/R** quorum dials and [consensus and coordination](/distributed-systems/consensus-and-coordination/) for how strong consistency is achieved.
+
+<Callout type="go" title="💡 Don't trust the AP/CP label on the box">
+The CAP theorem says a partition forces a consistency-vs-availability choice — but the AP/CP labels are rarely absolute. Most databases let you <strong>tune toward either</strong> per operation (write concerns, read preferences, consistency levels). Evaluate by looking under the hood, not at the marketing.
+</Callout>
+
+## How real engines differ
+
+Superficially similar architectures behave very differently:
+
+- **Redis** — in-memory data-structure store; **Redis Cluster** uses 16,384 hash slots with gossip; primary-replica async replication; promotion on failure has **no guarantee the most up-to-date replica wins** (possible data loss). Favours performance over data safety.
+- **MongoDB** — document store on **WiredTiger**; **hash- or range-based sharding** via `mongos` routers and config servers; **replica sets** with **Raft-based** leader election; tunable **write concerns** (default *majority* in v5.0) and **read preferences**.
+- **DynamoDB** — fully managed; items hashed across partitions, replicated **three times** across availability zones; eventual by default, with **strongly consistent reads and transactions single-region only**; watch the **hotkey problem** (a hot key capped at 3,000 read / 1,000 write capacity units/sec).
+
+<Callout type="tip" title="🛠️ There is no perfect database">
+Each engine trades performance, data safety, scalability, consistency, and availability differently. Do serious due diligence and build a proof-of-technology prototype against your real access patterns before committing.
+</Callout>
+
+## See also
+
+- [Communication and consistency](/distributed-systems/communication-and-consistency/) — N/W/R quorums and CAP.
+- [Consensus and coordination](/distributed-systems/consensus-and-coordination/) — Raft/Paxos inside these engines.
+- [Caching](/distributed-systems/caching/) — relieving the database before sharding it.
+- [Scalability fundamentals](/distributed-systems/scalability-fundamentals/) — where the data tier sits in the progression.

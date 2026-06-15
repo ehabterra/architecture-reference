@@ -1,0 +1,131 @@
+---
+title: "Entities and Aggregates"
+category: ddd-tactical
+kind: topic
+order: 6
+difficulty: "Intermediate"
+status: ready
+intent: "Entities have identity; aggregates are the consistency and transactional boundary mutated only through their root and committed atomically."
+book: "Learning Domain-Driven Design (Vlad Khononov)"
+related:
+  - value-objects
+  - domain-events-and-services
+  - event-sourcing
+when_use:
+  - "For complex business logic in a core subdomain — intricate state transitions, rules, and invariants."
+  - "When several pieces of data must change together and stay strongly consistent."
+  - "When you need a single place to enforce invariants and prevent state corruption."
+when_avoid:
+  - "For simple CRUD over supporting subdomains — a transaction script or active record is enough."
+  - "Don't let an aggregate span data that can be eventually consistent — reference it by ID instead."
+quiz:
+  - q: "What is the transactional rule for aggregates?"
+    options:
+      - text: "One aggregate instance per database transaction, committed atomically"
+        correct: true
+      - text: "Multiple aggregates per transaction for efficiency"
+        correct: false
+      - text: "One transaction per entity inside the aggregate"
+        correct: false
+      - text: "Transactions are not needed for aggregates"
+        correct: false
+    explain: "An aggregate is a transactional boundary; all its changes commit atomically and only one instance is modified per transaction. Needing multi-aggregate transactions signals wrong boundaries."
+  - q: "How should external code change an aggregate's state?"
+    options:
+      - text: "Only by issuing commands to the aggregate root, which enforces invariants"
+        correct: true
+      - text: "By directly setting fields on any internal entity"
+        correct: false
+      - text: "Through the application layer's setters"
+        correct: false
+      - text: "By writing to the database directly"
+        correct: false
+    explain: "The aggregate root is the single public interface; external code may only read the aggregate, and all mutations go through commands on the root that validate input and enforce invariants in one place."
+  - q: "What distinguishes an entity from a value object?"
+    options:
+      - text: "An entity requires an explicit identity field and is mutable"
+        correct: true
+      - text: "An entity is always immutable"
+        correct: false
+      - text: "An entity has no behavior"
+        correct: false
+      - text: "An entity cannot be persisted"
+        correct: false
+    explain: "An entity needs an explicit identification field (which stays immutable) and is mutable; it is implemented only inside an aggregate, describing its properties with value objects."
+  - q: "How should one aggregate reference another?"
+    options:
+      - text: "By ID — anything that can be eventually consistent lives in a separate aggregate"
+        correct: true
+      - text: "By embedding the full other aggregate"
+        correct: false
+      - text: "By a direct object pointer for strong consistency"
+        correct: false
+      - text: "By a shared database row"
+        correct: false
+    explain: "Keep aggregates small — include only strongly-consistent data — and reference other aggregates by ID, since data that can be eventually consistent belongs in a different aggregate."
+takeaway: "Make aggregates small, mutate them only through the root, enforce invariants inside, and commit one instance per transaction."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Think of a shipping container with one sealed door. You can't reach in and rearrange individual boxes — you hand instructions to the dock crew at the door, and they guarantee nothing inside ever ends up in an invalid arrangement. The aggregate root is that single door; the container is the consistency boundary.
+</Callout>
+
+## Entities: identity matters
+
+An **entity** requires an *explicit identification field* and is **mutable** (though its identity field stays immutable). It describes its properties using [value objects](/ddd/value-objects/) — an explicit identity lets the model distinguish two namesakes that happen to share every other attribute. Crucially, an entity is **not implemented independently** — only *inside* an aggregate.
+
+## Aggregates: the consistency boundary
+
+An **aggregate** is an entity whose purpose is to **protect the consistency of its data**. It is simultaneously a **consistency-enforcement boundary** and a **transactional boundary**: a hierarchy of entities and value objects bound by business logic and **invariants** — rules that must hold at all times.
+
+<Mermaid code={String.raw`graph TD
+  Root["Aggregate Root: Ticket<br/>(single public interface)"] --> M["List of Message (inside)"]
+  Root --> Cmd["Commands: AddMessage, RequestEscalation"]
+  Root -. "by ID" .-> Cust["Customer (other aggregate)"]
+  Root -. "by ID" .-> Agent["AssignedAgent (other aggregate)"]
+  Cmd --> Inv["Validate input + enforce invariants"]
+  Inv --> Ev["Append domain event"]`} />
+
+- **Aggregate root** — The single entity designated as the public interface. All external interaction goes through the root; from outside the aggregate is **read-only**.
+- **Commands** — State-modifying methods on the root, implemented as a plain method or a *parameter object* passed to an `Execute` method. The root validates input and enforces every invariant in **one place**, so logic can't leak and duplicate in the application layer.
+- **Transactional boundary** — All changes commit atomically, **one aggregate instance per transaction**. Needing to modify several aggregates in one transaction means the boundaries are wrong.
+
+## Keep them small, reference by ID
+
+Design aggregate boundaries from **data-consistency requirements**: include only the data that must be *strongly consistent*. Anything that can be **eventually consistent** belongs in a *different* aggregate, referenced **by ID**. The heuristic: *would working on this data while it's slightly stale lead to an invalid state?* If not, it doesn't belong inside.
+
+<Mermaid code={String.raw`graph TD
+  subgraph Agg["Ticket aggregate — transaction boundary"]
+    R["Root: Ticket"] --> Msgs["Messages (strongly consistent)"]
+    R --> Status["Status, priority (invariants)"]
+  end
+  R -. "reference by ID<br/>(eventually consistent)" .-> Cust["Customer aggregate"]
+  R -. "reference by ID" .-> Agent["Agent aggregate"]`} />
+
+```text
+Ticket {
+  id, version
+  messages: [ ... ]        // inside — strongly consistent
+  customerId, agentId      // references to OTHER aggregates, by ID
+}
+```
+
+<Callout type="go" title="Invariants reduce degrees of freedom">
+Goldratt's *degrees of freedom* are the data points needed to describe a system's state — more degrees, more complexity. Encapsulating invariants (e.g., deriving values instead of storing them independently) reduces degrees of freedom, so a class that *looks* more complex can actually be *less* complex. That is the essence of how aggregates tackle complexity.
+</Callout>
+
+<Callout type="tip" title="Protect concurrency optimistically">
+Guard each aggregate with **optimistic concurrency**: a `_version` field and an `UPDATE ... WHERE id=@id AND version=@expected` — on mismatch, throw a concurrency exception and retry. The application layer that loads → executes a command → saves is itself essentially a transaction script, so concurrency management is essential.
+</Callout>
+
+<Callout type="gotcha" title="Don't use aggregates for CRUD">
+The domain model (value objects, entities, aggregates) suits *complex* logic — usually a **core subdomain**. Forcing aggregates onto simple supporting-subdomain CRUD is over-engineering; see the [business logic patterns](/ddd/business-logic-and-architecture-patterns/) for when a transaction script or active record is the right tool.
+</Callout>
+
+## See also
+
+- [Value objects](/ddd/value-objects/) — the immutable building blocks of an aggregate.
+- [Domain events and services](/ddd/domain-events-and-services/) — how aggregates communicate and cross-aggregate logic lives.
+- [Event sourcing](/ddd/event-sourcing/) — persisting an aggregate as a stream of events.

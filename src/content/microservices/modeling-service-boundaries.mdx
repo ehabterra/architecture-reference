@@ -1,0 +1,137 @@
+---
+title: "Modeling Service Boundaries"
+category: ms-decomposition
+kind: topic
+order: 4
+difficulty: "Intermediate"
+status: ready
+intent: "Where to draw the lines — using information hiding, coupling/cohesion, the four (or five) types of coupling, and just-enough domain-driven design (aggregates and bounded contexts) to find stable boundaries."
+book: "Building Microservices, 2nd ed. & Monolith to Microservices (Sam Newman)"
+related:
+  - what-are-microservices
+  - the-strangler-fig-pattern
+  - conways-law-and-team-topologies
+when_use:
+  - "You are deciding how to split a system into services or modules."
+  - "You want to evaluate whether two services are too chatty or wrongly coupled."
+  - "You need a shared vocabulary (aggregates, bounded contexts) for boundaries and APIs."
+  - "You want a defensible, business-aligned seam rather than a technical-layer split."
+  - "You are running Event Storming or a domain-modeling workshop with stakeholders."
+when_avoid:
+  - "The domain is still unstable or poorly understood — defer splitting until it settles."
+  - "You only need to move one existing piece — see the strangler fig pattern instead."
+  - "A single team owns everything and a modular monolith already gives you what you need."
+  - "You are tempted to split fine-grained from day one — start coarse instead."
+quiz:
+  - q: "What does Constantine's law state?"
+    options:
+      - text: "A structure is stable if cohesion is strong and coupling is low"
+        correct: true
+      - text: "Every service should own exactly one database table"
+        correct: false
+      - text: "Coupling and cohesion are the same thing"
+        correct: false
+      - text: "Smaller services are always more stable"
+        correct: false
+    explain: "Strong cohesion (code that changes together stays together) plus loose coupling (services know as little as needed about each other) gives a stable structure."
+  - q: "Which type of coupling is pathological and must be avoided?"
+    options:
+      - text: "Content coupling — reaching into another service's internals/database to change its state"
+        correct: true
+      - text: "Domain coupling — one service using another's functionality"
+        correct: false
+      - text: "Temporal coupling"
+        correct: false
+      - text: "Pass-through coupling"
+        correct: false
+    explain: "Content coupling destroys information hiding and blurs ownership; domain coupling is largely unavoidable and loose."
+  - q: "In DDD, what is an aggregate?"
+    options:
+      - text: "A self-contained domain concept with state, identity, and a life cycle, managed by exactly one service"
+        correct: true
+      - text: "A view that joins multiple database tables"
+        correct: false
+      - text: "A group of services deployed together"
+        correct: false
+      - text: "A cache of frequently read data"
+        correct: false
+    explain: "An aggregate (e.g., Order) is often a state machine; one aggregate is managed by exactly one microservice, and cross-aggregate references should be explicit."
+  - q: "What is Newman's recommended starting granularity?"
+    options:
+      - text: "Map whole bounded contexts to services, then subdivide along aggregate boundaries later"
+        correct: true
+      - text: "One service per database table"
+        correct: false
+      - text: "One service per aggregate from day one"
+        correct: false
+      - text: "One service per developer"
+        correct: false
+    explain: "Start coarse with bounded contexts; you can hide a later split behind a coarser API. 'Turtles all the way down.'"
+takeaway: "Find boundaries with information hiding, strong cohesion, and loose coupling — start coarse at bounded contexts, split to aggregates later, and avoid content coupling."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A well-run hospital groups people by what they accomplish together — a maternity ward, an emergency department — each with its own staff, supplies, and records, exposing only a referral interface to the rest. A badly-run one groups by job title (all the nurses here, all the records there), so every patient journey crosses every department. Service boundaries work the same way: organize around business capability, not technical layer.
+</Callout>
+
+## The three foundations
+
+- **Information hiding** (Parnas) — minimize the assumptions modules make about each other: "the connections between modules are the assumptions which the modules make about each other." Hide what changes; expose a stable contract. "If you hide it now, you can always decide to share it later."
+- **Cohesion** — "the code that changes together, stays together." Strong cohesion means a change happens in one place and releases quickly.
+- **Coupling** — loosely coupled services know as little as needed about collaborators. **Constantine's law**: "a structure is stable if cohesion is strong and coupling is low."
+
+## Types of coupling — from desirable to pathological
+
+<Mermaid code={String.raw`graph TD
+  D["Domain coupling<br/>uses another's functionality"] -->|"acceptable, minimize"| OK["Looser"]
+  T["Temporal coupling<br/>both must be up at once"] -->|"mitigate with async"| OK
+  P["Pass-through coupling<br/>forwarding data downstream"] --> MID["Reduce"]
+  CC["Common coupling<br/>shared mutable data"] --> MID
+  X["Content coupling<br/>reaching into internals"] -->|"avoid entirely"| BAD["Pathological"]`} />
+
+- **Domain coupling** — `Order Processor` calls `Warehouse` and `Payment`. Largely unavoidable and loose; send only what's needed (a `Pick Instruction` with packing info, not the whole order with credit-card details).
+- **Temporal coupling** — a synchronous call needs the callee up *now*; mitigate with [asynchronous communication](/microservices/communication-styles/).
+- **Pass-through coupling** — a service forwards data only because something downstream needs it; fix by constructing it locally or treating it as an opaque blob.
+- **Common coupling** — multiple services share mutable data (both writing `Order.Status`). Benign for static read-only reference data; for changing data, fix with a **finite state machine** owned by a single source-of-truth service that rejects invalid transitions.
+- **Content coupling** (pathological) — a service reaches into another's database and changes its state directly. Avoid it; it destroys information hiding.
+
+## Just enough domain-driven design
+
+- **Ubiquitous language** — use the domain's real terms in code (a bank collapsing everything into a generic "arrangement" is the counter-example).
+- **Aggregate** — a self-contained domain concept (Order, Invoice, Stock Item) with state, identity, and a life cycle, often a state machine. **One aggregate is managed by exactly one microservice.** It can *say no* to illegal transitions. Cross-aggregate references should be explicit (e.g., a URI).
+- **Bounded context** — a larger boundary that hides internal detail and contains one or more aggregates (warehouse forklift types are nobody else's business).
+
+Both aggregates and bounded contexts are units of cohesion with well-defined interfaces, so both make good boundaries. **Rule of thumb: start coarse — map whole bounded contexts to services — then split along aggregate boundaries later**, hiding the split behind a coarser API if you like.
+
+<Mermaid code={String.raw`graph TD
+  subgraph BC["Warehouse bounded context (start as 1 service)"]
+    A1["Stock Item aggregate"]
+    A2["Shelf aggregate"]
+    A3["Pick List aggregate"]
+  end
+  BC -->|"split later if needed"| S1["Stock service"]
+  BC --> S2["Picking service"]`} />
+
+<Callout type="tip" title="💡 Event Storming">
+Alberto Brandolini's **Event Storming** brings technical *and* nontechnical stakeholders together with coloured sticky notes to discover, bottom-up, **domain events → commands → aggregates → bounded contexts**. The real output is *shared understanding*; the hard part is getting the right people in the room.
+</Callout>
+
+## Don't be dogmatic
+
+Newman's defaults are **organizational and domain-driven** boundaries, mixed as the problem demands. He acknowledges alternatives: **volatility**-based (extract frequently-changing parts), **data** (privacy/regulatory — a PCI "red zone"), **technology** (different runtime needs), and **organizational** ([Conway's law](/microservices/conways-law-and-team-topologies/) — avoid boundaries spanning teams). "If someone says 'the only way to do this is X!' they are likely just selling you more dogma."
+
+<Callout type="gotcha" title="⚠️ Beware the chatty pair">
+On the whiteboard, watch for **circular references** and two overly **chatty** services constantly calling each other — a strong sign they should be a single service. Premature, fine-grained splitting along the wrong seam is far more expensive to undo than starting coarse.
+</Callout>
+
+<Callout type="go" title="🔑 Key insight">
+Signs your boundaries are wrong: services you always change together, excessive cross-team communication, lots of inbound feature requests to one service, and trouble agreeing on a model. If architecture and organization conflict, the organization wins — so design them together.
+</Callout>
+
+## See also
+
+- [What are microservices?](/microservices/what-are-microservices/) — information hiding and owning your own state.
+- [The strangler fig pattern](/microservices/the-strangler-fig-pattern/) — extracting a boundary from a monolith incrementally.
+- [Conway's law and Team Topologies](/microservices/conways-law-and-team-topologies/) — why boundaries follow team structure.

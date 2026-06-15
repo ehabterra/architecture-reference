@@ -1,0 +1,131 @@
+---
+title: "Design Heuristics and Evolving Design"
+category: ddd-application
+kind: topic
+order: 11
+difficulty: "Advanced"
+status: ready
+intent: "Answer DDD's perennial 'it depends' with a decision tree driven by subdomain type — then evolve those decisions as the business changes."
+book: "Learning Domain-Driven Design (Vlad Khononov)"
+related:
+  - business-logic-and-architecture-patterns
+  - business-domains-and-subdomains
+  - eventstorming
+when_use:
+  - "When deciding the implementation pattern, architecture, and testing strategy for a subdomain."
+  - "When sizing a bounded context and you're unsure how wide to start."
+  - "When the 'pain' of extending a component signals that its design no longer fits."
+when_avoid:
+  - "Don't treat the heuristics as hard rules — they are rules of thumb that have exceptions."
+  - "Don't keep a design frozen — subdomains migrate between types and design must follow."
+quiz:
+  - q: "According to the heuristics, what does 'it depends' mostly depend on?"
+    options:
+      - text: "The subdomain's type and the complexity of its business logic and data"
+        correct: true
+      - text: "The programming language"
+        correct: false
+      - text: "Team size"
+        correct: false
+      - text: "The deadline"
+        correct: false
+    explain: "The unified tactical decision tree starts from subdomain type and the complexity of logic and data, which then drive the business-logic pattern, architecture, and testing strategy."
+  - q: "What is the recommended starting size for a bounded context when the domain is poorly understood?"
+    options:
+      - text: "Wider — decompose later, because logical-boundary refactoring is cheap and physical is costly"
+        correct: true
+      - text: "As small as possible from day one"
+        correct: false
+      - text: "Exactly one aggregate"
+        correct: false
+      - text: "One context per database table"
+        correct: false
+    explain: "Cross-context changes are expensive and signal bad boundaries; volatile, poorly-known core subdomains should start with wider boundaries and be decomposed as knowledge grows."
+  - q: "Which testing strategy fits a domain model best?"
+    options:
+      - text: "The testing pyramid — many unit tests"
+        correct: true
+      - text: "The testing diamond"
+        correct: false
+      - text: "The reversed pyramid"
+        correct: false
+      - text: "No tests"
+        correct: false
+    explain: "Aggregates and value objects are perfect units, so the pyramid (many unit, fewer integration, fewest end-to-end) fits both domain-model variants; active record fits the diamond, transaction script the reversed pyramid."
+  - q: "What is the clearest signal that a subdomain has changed type?"
+    options:
+      - text: "The current technical design can't support business needs — the 'pain' of change"
+        correct: true
+      - text: "A new manager arrives"
+        correct: false
+      - text: "The database grows"
+        correct: false
+      - text: "A new programming language is adopted"
+        correct: false
+    explain: "The pain of adding functionality to a poorly-fitting design is diagnostic; a supporting subdomain growing complex is the classic supporting-to-core transition."
+takeaway: "Let subdomain type and logic complexity pick pattern, architecture, and tests — start contexts wide, decompose later, and evolve as types change."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A heuristic is a seasoned chef's "season to taste" — not a guaranteed-correct rule, but a rule of thumb that focuses on the cues that matter and ignores the noise. DDD's design heuristics make explicit what the eternal "it depends" actually depends on.
+</Callout>
+
+## The unified decision tree
+
+A **heuristic** is a rule of thumb sufficient for your immediate goals — it focuses on the "swamping forces" and ignores noise. DDD chains several into one tree, all flowing from **subdomain type** and the complexity of the logic and data.
+
+<Mermaid code={String.raw`graph TD
+  Sub["Subdomain type + complexity"] --> BL["Business-logic pattern"]
+  BL --> ES["money/audit/analysis -> event-sourced"]
+  BL --> DM["complex logic -> domain model"]
+  BL --> AR["complex data -> active record"]
+  BL --> TS["else -> transaction script"]
+  ES --> A1["Architecture: CQRS"]
+  DM --> A2["Architecture: ports & adapters"]
+  AR --> A3["Architecture: layered + service layer"]
+  TS --> A4["Architecture: minimal layers"]
+  A2 --> T1["Tests: pyramid"]
+  A1 --> T1
+  A3 --> T2["Tests: diamond"]
+  A4 --> T3["Tests: reversed pyramid"]`} />
+
+- **Business-logic cascade** — money/audit/deep-analysis → event-sourced; complex logic → domain model; complex data → active record; else → transaction script. Distinguish complex from simple by whether the ubiquitous language describes CRUD or intricate processes, rules, and invariants. A by-product: the chosen pattern *validates* your subdomain-type assumption (a "core" that fits active record is a signal to revisit).
+- **Architecture follows logic** — event-sourced → CQRS; domain model → ports & adapters; active record → layered with a service layer; transaction script → minimal three layers.
+- **Testing follows both** — domain models → **testing pyramid** (aggregates and value objects are perfect units); active record → **testing diamond** (logic spread across service + business layers); transaction script → **reversed pyramid** (end-to-end).
+
+<Callout type="go" title="Reverse the mapping to validate it">
+A foolproofing trick: first pick the implementation pattern that fits the requirements (no gold-plating), then map it back to a subdomain type, then check against the business vision. A "core" you can hack in a day → look for finer subdomains. A "supporting" needing a domain model → either accidental complexity or a hidden competitive edge.
+</Callout>
+
+## Sizing: start wide, decompose later
+
+Size is "one of the least useful" heuristics for service boundaries — make the bounded context's size a *function of the model*, not the model a function of the size. Because cross-context changes are expensive and refactoring *physical* boundaries is far costlier than *logical* ones, **start with wider boundaries** (especially for volatile, poorly-known core subdomains) and decompose as knowledge grows. *The less you know about the domain, the wider the initial boundaries.*
+
+## Design must evolve
+
+Subdomains migrate between types in **all six directions** — core↔generic, core↔supporting, generic↔supporting — driven by whether the complexity is justified by advantage or profit, or whether a market solution has commoditized the capability (route optimization core→generic; Amazon→AWS generic→core).
+
+<Mermaid code={String.raw`graph LR
+  Core["Core"] <-->|"commoditized / re-invented"| Gen["Generic"]
+  Core <-->|"value rises / falls"| Sup["Supporting"]
+  Gen <-->|"customized / standardized"| Sup
+  Core -.->|"e.g. route opt → buyable"| Gen
+  Gen -.->|"e.g. Amazon → AWS"| Core`} />
+
+A type change ripples into **strategic** decisions (integration patterns, build vs buy) and **tactical** ones (the implementation pattern). Patterns migrate incrementally: transaction script → active record → domain model → event-sourced domain model. Migrating to event sourcing forces a choice between *generating approximate past transitions* (losing true history) and a single honest `migrated-from-legacy` event (leaving permanent legacy traces).
+
+<Callout type="gotcha" title="Don't ignore the pain">
+The clearest signal of a type change is that the current technical design can't support business needs. The *pain* of adding functionality is diagnostic — if it's the tactical design that hurts, the subdomain has likely evolved. Unmanaged growth turns sophisticated designs into a **big ball of mud**; treat change as a first-class design element and keep eliminating **accidental complexity** while managing **essential complexity** with DDD's tools.
+</Callout>
+
+<Callout type="tip" title="Heuristics, not dogma">
+Prefer the simplest tool that fits and escalate only when necessary — though context matters (some experienced teams use event sourcing everywhere because it's simpler *for them*). Treat the decision trees as a starting framework, never a replacement for critical thinking.
+</Callout>
+
+## See also
+
+- [Business domains and subdomains](/ddd/business-domains-and-subdomains/) — the types that drive the tree.
+- [Business logic and architecture patterns](/ddd/business-logic-and-architecture-patterns/) — the patterns being selected.
+- [EventStorming](/ddd/eventstorming/) — how to recover lost knowledge when evolving a design.

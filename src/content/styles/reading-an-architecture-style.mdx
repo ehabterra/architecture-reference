@@ -1,0 +1,130 @@
+---
+title: "Reading an Architecture Style"
+category: sty-fundamentals
+kind: guide
+order: 1
+difficulty: "Start here"
+status: ready
+intent: "What an architecture style is, how it differs from a pattern, and how to read each style's characteristics scorecard before you commit to one."
+book: "Software Architecture Patterns (2nd ed.); Fundamentals of Software Architecture"
+related:
+  - technical-vs-domain-partitioning
+  - comparing-the-styles
+  - choosing-an-architecture-style
+when_use:
+  - "You are about to pick a structure for a new system and want a shared vocabulary for the trade-offs."
+  - "You inherited a system and need to name its style to reason about what it can and cannot do."
+  - "You want to combine styles into a hybrid and need to understand each one first."
+when_avoid:
+  - "You only need a code-level construct — that is a design pattern, not an architecture style."
+  - "The system has no discernible structure at all — fix the big ball of mud before classifying it."
+quiz:
+  - q: "What is the difference between an architecture style and an architecture pattern?"
+    options:
+      - text: "A style is the macro structure of the whole system; a pattern is a reusable building block used inside a style"
+        correct: true
+      - text: "A style is for the frontend; a pattern is for the backend"
+        correct: false
+      - text: "A style is code-level; a pattern is system-level"
+        correct: false
+      - text: "They are two names for the same thing"
+        correct: false
+    explain: "A style (e.g., event-driven) describes the system's overall shape; a pattern (e.g., CQRS) is a structural building block that can live inside many styles, which in turn use design patterns like Builder."
+  - q: "What does it mean that 'every style is a set of trade-offs'?"
+    options:
+      - text: "Each style supports some architecture characteristics well at the expense of others"
+        correct: true
+      - text: "Every style is equally good, so the choice does not matter"
+        correct: false
+      - text: "Styles only differ in cost, never in capability"
+        correct: false
+      - text: "A style with five-star scalability has no weaknesses"
+        correct: false
+    explain: "No style maximizes every characteristic. High scalability and fault tolerance, for example, almost always cost simplicity and money."
+  - q: "What is the 'big ball of mud' the book warns against?"
+    options:
+      - text: "A tightly coupled, brittle system with no defined structure and no predictable characteristics"
+        correct: true
+      - text: "A monolith that is too large to deploy"
+        correct: false
+      - text: "Any system that uses more than one architecture style"
+        correct: false
+      - text: "A microservices system with too many services"
+        correct: false
+    explain: "Coding without a deliberate style produces a big ball of mud: you cannot answer whether it scales, performs, or can change, because it has no known characteristics."
+  - q: "On the book's scorecard, what does a five-dot rating for a characteristic mean?"
+    options:
+      - text: "The characteristic is excellently supported by that style"
+        correct: true
+      - text: "The style costs five dollars to run"
+        correct: false
+      - text: "There are five ways to implement it"
+        correct: false
+      - text: "It is the fifth most important characteristic"
+        correct: false
+    explain: "Each characteristic is scored 1 (poorly supported) to 5 (excellently supported); cost uses a separate 1-to-5 dollar scale where one dollar is cheapest."
+takeaway: "An architecture style is a named bundle of trade-offs — read its characteristics scorecard, not its hype, before you choose."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Choosing an architecture style is like choosing a vehicle. A sports car, a minivan, and a cargo truck are all "correct" — for different jobs. None is best at everything: the sports car trades cargo space for speed, the truck trades agility for payload. An architecture style is the same kind of named bundle of strengths and sacrifices.
+</Callout>
+
+## Style, pattern, design pattern
+
+These three words are often used interchangeably, but *Software Architecture Patterns* keeps them in a strict hierarchy:
+
+- **Architecture style** — the *macro structure* of a system: how its code is organized into deployment units and how those units interact (e.g., layered, microservices, event-driven).
+- **Architecture pattern** — a reusable *structural building block* used **inside** a style to solve a specific problem (e.g., **CQRS**, Command Query Responsibility Segregation, which separates read and write models). A pattern can appear in *any* style.
+- **Design pattern** — a *code-level* construct (e.g., Builder) that shapes source code.
+
+Styles are composed of patterns, which are composed of design patterns. CQRS, for instance, can be applied inside a microservices style and implemented with Builder objects.
+
+<Mermaid code={String.raw`graph TD
+  S["Architecture style<br/>(macro structure, e.g. event-driven)"] --> P["Architecture pattern<br/>(building block, e.g. CQRS)"]
+  P --> D["Design pattern<br/>(code construct, e.g. Builder)"]`} />
+
+## The characteristics scorecard
+
+Every style is rated against a common set of **architecture characteristics** — the non-functional "-ilities." The book scores each on a **1-to-5 dot scale** (1 = poorly supported, 5 = excellently supported) and rates cost separately on a **1-to-5 dollar scale** (one dollar = cheapest). The characteristics that matter most across styles are:
+
+- **Partitioning** — technical or domain (see [Technical vs domain partitioning](/styles/technical-vs-domain-partitioning/)).
+- **Deployability, elasticity, scalability** — the operational "superpowers" of distributed styles.
+- **Performance, simplicity, testability** — often where monoliths win.
+- **Fault tolerance** and **cost** — usually inversely related to each other.
+
+<Callout type="go" title="Read the scorecard, not the hype">
+A style's name tells you almost nothing. "Microservices" sounds modern, but its scorecard shows the *highest* cost and *weakest* performance among distributed styles. The scorecard is how you separate fashion from fit.
+</Callout>
+
+## No structure is the worst structure
+
+Skipping this analysis altogether produces the **big ball of mud**: a tightly coupled, brittle, spaghetti-code system with no clear vision. The danger is not that it is ugly — it is that it has *no predictable characteristics*. You cannot say whether it scales, performs, or can be changed safely, because nothing about it was decided on purpose.
+
+<Callout type="gotcha" title="Hybrids are normal — but learn the parts first">
+Real systems frequently combine styles: event-driven microservices, space-based microservices, event-driven microkernel. That is healthy. The pitfall is reaching for a hybrid before you understand each constituent style's individual strengths and weaknesses — you just multiply the problems you do not understand.
+</Callout>
+
+## How to read each style page
+
+Each style in this track follows the same template:
+
+<Mermaid code={String.raw`graph LR
+  T["1. Topology<br/>components + flow"] --> C["2. Components<br/>named parts"]
+  C --> S["3. Characteristics<br/>scorecard"]
+  S --> U["4. When to use<br/>/ avoid"]`} />
+
+1. **Topology** — a diagram of the components and how requests flow.
+2. **Components** — the named parts and what each does.
+3. **Characteristics** — the scorecard, with the standout strengths and weaknesses.
+4. **When to use / when to avoid** — the trade-off guidance.
+
+Once you can read one scorecard, you can compare them all in [Comparing the styles](/styles/comparing-the-styles/) and apply the decision process in [Choosing an architecture style](/styles/choosing-an-architecture-style/).
+
+## See also
+
+- [Technical vs domain partitioning](/styles/technical-vs-domain-partitioning/) — the axis that shapes every style.
+- [Comparing the styles](/styles/comparing-the-styles/) — the full scorecard side by side.
+- [Choosing an architecture style](/styles/choosing-an-architecture-style/) — turning the scorecard into a decision.

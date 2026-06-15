@@ -1,0 +1,133 @@
+---
+title: "The Well-Architected Lens"
+category: cld-serverless
+kind: topic
+order: 4
+difficulty: "Intermediate"
+status: ready
+intent: "The AWS Well-Architected Framework's six pillars — plus the Serverless Lens — give a shared vocabulary for reviewing trade-offs across security, cost, reliability, and sustainability."
+book: "Serverless Development on AWS (Brisals & Hedger)"
+related:
+  - serverless-first-design
+  - observability-and-cost
+  - what-is-serverless
+when_use:
+  - "Running a structured architecture review before or after go-live"
+  - "Making trade-offs explicit across security, reliability, performance, cost, and sustainability"
+  - "Embedding security and cost-awareness from the start (shift-left / start-left)"
+when_avoid:
+  - "Treating the review as a one-time checkbox rather than a recurring practice"
+  - "Optimizing one pillar (e.g., peak performance) without weighing its cost and energy impact"
+  - "Bolting security on at the perimeter as a last-minute task"
+quiz:
+  - q: "How many pillars does the AWS Well-Architected Framework have?"
+    options:
+      - text: "Six: Operational Excellence, Security, Reliability, Performance Efficiency, Cost Optimization, Sustainability"
+        correct: true
+      - text: "Five, with Sustainability excluded"
+        correct: false
+      - text: "Four: the serverless square of balance"
+        correct: false
+      - text: "Three: cost, security, reliability"
+        correct: false
+    explain: "There are six pillars; Sustainability is the newest. There is also a dedicated Serverless Lens."
+  - q: "What two cornerstones underpin serverless security?"
+    options:
+      - text: "Zero trust architecture and the principle of least privilege"
+        correct: true
+      - text: "Castle-and-moat and a strong perimeter firewall"
+        correct: false
+      - text: "Encryption and a single shared admin role"
+        correct: false
+      - text: "VPNs and IP allowlists"
+        correct: false
+    explain: "Zero trust treats every connection as a threat; least privilege grants minimum permissions. Serverless suits zero trust because resources are naturally isolated and IAM is per-resource."
+  - q: "What is 'denial of wallet'?"
+    options:
+      - text: "An attack unique to pay-per-use scale that runs up a huge bill — mitigate with budget alerts"
+        correct: true
+      - text: "Losing access to the billing console"
+        correct: false
+      - text: "A function that refuses to run without payment"
+        correct: false
+      - text: "A throttling error on the payment service"
+        correct: false
+    explain: "Because serverless scales with traffic and you pay per use, attackers can inflate cost. The book adds DoS and denial of wallet as serverless-specific OWASP extras."
+  - q: "Under the AWS Shared Responsibility Model, who secures the function code and its configuration?"
+    options:
+      - text: "The customer — security 'in' the cloud (code, libraries, IAM roles, configuration)"
+        correct: true
+      - text: "AWS — security 'of' the cloud"
+        correct: false
+      - text: "Neither; managed services need no security"
+        correct: false
+      - text: "A third-party auditor"
+        correct: false
+    explain: "AWS secures the cloud (runtime patching, isolation, infrastructure); the customer secures what runs in it. Fully managed services shift more to AWS."
+takeaway: "Review architecture against the six pillars and Serverless Lens; build security on zero trust + least privilege and treat reviews as a recurring habit, not a checkbox."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A building inspector doesn't ask "is it pretty?" — they walk a checklist: structure, fire safety, electrics, plumbing, accessibility, energy efficiency. The Well-Architected Framework is that inspection for cloud systems: six lenses you walk deliberately so trade-offs surface before they become incidents.
+</Callout>
+
+## Six pillars, one shared language
+
+The **AWS Well-Architected Framework** gives teams a common vocabulary for reasoning about trade-offs. Its **six pillars** are:
+
+<Mermaid code={String.raw`graph TD
+  WA["Well-Architected Framework"] --> OE["Operational Excellence"]
+  WA --> SEC["Security"]
+  WA --> REL["Reliability"]
+  WA --> PERF["Performance Efficiency"]
+  WA --> COST["Cost Optimization"]
+  WA --> SUS["Sustainability (newest)"]
+  WA --> LENS["+ Serverless Lens"]`} />
+
+A dedicated **Serverless Lens** adapts the framework to serverless specifics. Reviews are not one-off — the book's interviewees fold them into the cadence of work (David Anderson's **SCORP**: Security, Cost, Operational Excellence, Reliability, Performance, reviewed each sprint).
+
+## Security: zero trust + least privilege
+
+Serverless removes traditional burdens (OS patching, perimeter hardening) but introduces new ones. The book rejects the **security paradox** of treating security as a last-minute perimeter task — "security is a process, not a product" (Schneier) — and advocates a **shift-left / start-left (DevSecOps)** approach on two cornerstones:
+
+- **Zero trust architecture** — assume every connection is a threat; protect *every* interface (public and internal) with **authentication** (who?) and **authorization** (what?). Serverless suits this because resources are naturally isolated — "a unique key for every door" instead of castle-and-moat.
+- **Principle of least privilege** — grant minimum permissions. **AWS IAM is deny by default**; prefer per-resource roles over wildcards, and one unique role per resource.
+
+<Callout type="gotcha" title="OWASP serverless extras">
+Beyond the OWASP Top 10, serverless adds two threats: **denial of service (DoS)** and **denial of wallet** — uniquely dangerous because pay-per-use scales the bill with the attack. Set **budget alerts**, validate requests at the API Gateway, and watch for infinite recursive loops.
+</Callout>
+
+## The Shared Responsibility Model
+
+AWS is responsible for security **of** the cloud (runtime patching, execution isolation, infrastructure); you are responsible for security **in** the cloud (your function code and third-party libraries, configuration, and IAM roles/policies). Fully managed services shift more of the burden to AWS — but never all of it.
+
+<Mermaid code={String.raw`graph TD
+  subgraph AWS["AWS: security OF the cloud"]
+    RP["Runtime patching"]
+    EI["Execution isolation"]
+    IN["Infrastructure"]
+  end
+  subgraph CUST["Customer: security IN the cloud"]
+    FC["Function code + libraries"]
+    CF["Configuration"]
+    IAM["IAM roles and policies"]
+  end`} /> **Threat modeling with STRIDE** (Spoofing, Tampering, Repudiation, Information disclosure, Denial of service, Elevation of privilege) done early and per-feature is the recommended discipline.
+
+## Reliability, performance, cost, sustainability
+
+- **Reliability** — design for failure ("everything fails all the time"); use retries with exponential backoff and jitter, DLQs, and Step Functions to move retry logic out of functions; eliminate single points of failure across Regions and Availability Zones.
+- **Performance Efficiency** — right-size memory (use power-tuning), keep init-phase work minimal but reusable, and consider Graviton/ARM processors.
+- **Cost Optimization** — pay-per-use rewards efficient architecture and punishes inefficiency at scale; see [observability and cost](/cloud/observability-and-cost/).
+- **Sustainability** — the newest pillar. A key trade-off: optimizing for **cost** usually lowers energy use, while optimizing for peak **performance** often raises it — so optimize "to the required level and not over."
+
+<Callout type="go" title="Key insight">
+The pillars are not independent dials. Cost, performance, and sustainability form a three-way trade-off; security and reliability cut across everything. The value of a Well-Architected review is making those tensions **explicit and recurring** rather than discovering them in production.
+</Callout>
+
+## See also
+
+- [Serverless-first design](/cloud/serverless-first-design/) — the disciplines a review reinforces.
+- [Observability and cost](/cloud/observability-and-cost/) — the cost and operations pillars in practice.
+- [What is serverless](/cloud/what-is-serverless/) — the characteristics each pillar evaluates.

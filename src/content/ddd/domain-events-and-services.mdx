@@ -1,0 +1,124 @@
+---
+title: "Domain Events and Domain Services"
+category: ddd-tactical
+kind: topic
+order: 7
+difficulty: "Intermediate"
+status: ready
+intent: "Past-tense messages that announce what happened, and stateless objects that host logic spanning multiple aggregates."
+book: "Learning Domain-Driven Design (Vlad Khononov)"
+related:
+  - entities-and-aggregates
+  - event-sourcing
+  - context-mapping
+when_use:
+  - "Domain events: to notify other processes that something significant happened, without breaking aggregate encapsulation."
+  - "Domain services: for a calculation or analysis that needs data from several aggregates or fits none."
+  - "When you need to react to business changes asynchronously across components."
+when_avoid:
+  - "Don't use a domain service to transactionally modify multiple aggregates — it should read across them, not write."
+  - "Don't publish domain events directly from the aggregate or after commit without the outbox."
+  - "Don't expose raw internal domain events as a public integration contract — translate them first."
+quiz:
+  - q: "How are domain events named?"
+    options:
+      - text: "In the past tense — they describe something that already happened"
+        correct: true
+      - text: "In the imperative — they are commands"
+        correct: false
+      - text: "As nouns only"
+        correct: false
+      - text: "With the aggregate's version number"
+        correct: false
+    explain: "A domain event is a message describing a significant event that already happened, named in past tense (Ticket Assigned, Ticket Escalated); it cannot be cancelled, only overturned by a compensating action."
+  - q: "What is a domain service?"
+    options:
+      - text: "A stateless object hosting logic that spans multiple aggregates or fits none"
+        correct: true
+      - text: "A microservice"
+        correct: false
+      - text: "A mutable entity shared across aggregates"
+        correct: false
+      - text: "A database stored procedure"
+        correct: false
+    explain: "A domain service is a stateless object hosting business logic that fits no single aggregate or spans several — typically reading across components to compute something. It is unrelated to microservices."
+  - q: "What must a domain service NOT do?"
+    options:
+      - text: "Transactionally modify several aggregates at once"
+        correct: true
+      - text: "Read data from multiple aggregates"
+        correct: false
+      - text: "Be stateless"
+        correct: false
+      - text: "Compute a derived value"
+        correct: false
+    explain: "A domain service should read multiple aggregates and compute, not transactionally modify several — it is not a loophole around the one-aggregate-per-transaction rule."
+  - q: "What reliably publishes an aggregate's domain events?"
+    options:
+      - text: "The outbox pattern — commit state and events atomically, then a relay publishes them"
+        correct: true
+      - text: "Publishing from the aggregate before commit"
+        correct: false
+      - text: "Publishing from the application layer after commit"
+        correct: false
+      - text: "A nightly batch job reading the database"
+        correct: false
+    explain: "Publishing before commit can't retract on rollback; publishing after commit loses events on failure. The outbox commits events with state in one transaction, then a relay publishes them at-least-once."
+takeaway: "Name domain events in past tense and publish them via the outbox; use stateless domain services to read across aggregates, never to write across them."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A domain event is like a newspaper headline: it reports something that *already happened* ("Ticket Escalated"), and anyone interested can read it and react. A domain service is the accountant who pulls figures from several ledgers to compute one number — they read from everywhere but don't own any single ledger.
+</Callout>
+
+## Domain events
+
+A **domain event** is a message describing a *significant event that already happened* in the domain, named in **past tense** — Ticket Assigned, Ticket Escalated. It is part of the aggregate's public interface: other processes subscribe and react. Within an aggregate, the root appends the event to a `_domainEvents` collection during a command, and subscribers respond.
+
+```json
+{ "type": "ticket-escalated", "ticketId": "82c1...", "reason": "SLA breach", "timestamp": "2026-06-15T10:04:00Z" }
+```
+
+<Mermaid code={String.raw`graph LR
+  Cmd["Command: RequestEscalation"] --> Agg["Ticket aggregate"]
+  Agg --> Ev["Append TicketEscalated event"]
+  Ev --> Outbox["Outbox table<br/>(committed atomically with state)"]
+  Outbox --> Relay["Message relay"]
+  Relay --> Sub["Subscribers react"]`} />
+
+<Callout type="gotcha" title="Publish events through the outbox">
+Two naive approaches fail. Publishing **from the aggregate** dispatches before the transaction commits and can't be retracted on rollback. Publishing **from the application layer after commit** loses events if the process or bus fails between commit and publish. The **outbox pattern** commits the event records *together with* the aggregate's state in one atomic transaction; a separate relay then fetches and publishes them, guaranteeing **at-least-once** delivery — so consumers must tolerate duplicates.
+</Callout>
+
+## Domain services
+
+A **domain service** is a **stateless** object that hosts business logic fitting no single aggregate or spanning several — typically *reading* across components to compute something. It is unrelated to microservices.
+
+The classic example: computing an agent's response deadline needs data from several sources — the ticket's priority and escalation state, the department's SLA, and the agent's shift schedule. None of these is "the owner" of the calculation, so a `ResponseTimeFrameCalculationService` orchestrates the reads and computes the result.
+
+<Mermaid code={String.raw`graph TD
+  DS["ResponseTimeFrame<br/>CalculationService (stateless)"]
+  DS -->|"read"| T["Ticket aggregate"]
+  DS -->|"read"| Dept["Department SLA"]
+  DS -->|"read"| Sh["Agent shift schedule"]
+  DS --> Out["Compute deadline (read-only)"]`} />
+
+<Callout type="go" title="Read across, don't write across">
+A domain service should *read* multiple aggregates, not transactionally *modify* several. It is **not** a loophole around the one-aggregate-per-transaction rule. To coordinate changes across aggregates, use a [saga or process manager](/ddd/context-mapping/) driven by domain events instead.
+</Callout>
+
+## Events as part of the contract
+
+Domain events that cross a bounded context become part of its **public interface**. Don't expose raw internal events as the integration contract — that couples consumers to your implementation. For an [open-host service](/ddd/context-mapping/), translate domain events into a **published language**, distinguishing *private* events (internal) from *public* events (for consumers). This keeps the model encapsulated while still letting others react.
+
+<Callout type="tip" title="Sagas and process managers consume events">
+A **saga** matches incoming events to outgoing commands (with compensating actions on failure) for simple linear processes; a **process manager** maintains state for branching, multi-step workflows. Both react to domain events asynchronously and issue commands via the outbox — separating state transitions from command execution.
+</Callout>
+
+## See also
+
+- [Entities and aggregates](/ddd/entities-and-aggregates/) — where domain events originate.
+- [Event sourcing](/ddd/event-sourcing/) — when events become the source of truth.
+- [Context mapping](/ddd/context-mapping/) — translating events into a published language.

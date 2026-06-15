@@ -1,0 +1,136 @@
+---
+title: "Context Mapping and Integration Patterns"
+category: ddd-strategic
+kind: topic
+order: 4
+difficulty: "Intermediate"
+status: ready
+intent: "The six patterns for integrating bounded contexts — partnership, shared kernel, conformist, ACL, OHS, separate ways — and the map that charts them."
+book: "Learning Domain-Driven Design (Vlad Khononov)"
+related:
+  - bounded-contexts
+  - domain-events-and-services
+  - design-heuristics-and-evolution
+when_use:
+  - "Whenever two bounded contexts must cooperate and you need to choose the integration relationship."
+  - "When a downstream context is a core subdomain and must not conform to a messy upstream model (use an ACL)."
+  - "When a supplier serves many important consumers and wants to evolve freely (use an OHS)."
+  - "When teams collaborate closely and want ad-hoc, two-way integration (partnership) or a small co-owned model (shared kernel)."
+  - "When you need a living, shared picture of who integrates with whom and how — draw a context map."
+when_avoid:
+  - "Don't choose separate ways for a core subdomain — duplication throws away the competitive advantage."
+  - "Don't use partnership across geographically distributed teams with weak communication."
+  - "Don't expose a supplier's internal model directly as its integration contract — translate it into a published language."
+  - "Don't grow a shared kernel beyond integration contracts and shared structures — it contradicts one-team-per-context."
+  - "Don't publish raw domain events from an OHS — separate private from public events."
+quiz:
+  - q: "Which pattern translates an upstream model into one tailored to the downstream's needs?"
+    options:
+      - text: "Anticorruption layer (ACL)"
+        correct: true
+      - text: "Conformist"
+        correct: false
+      - text: "Shared kernel"
+        correct: false
+      - text: "Separate ways"
+        correct: false
+    explain: "An ACL is implemented by the downstream to translate a messy or volatile upstream model into one tailored to its needs — ideal when the downstream is a core subdomain."
+  - q: "An open-host service (OHS) is best described as...?"
+    options:
+      - text: "The reversal of an ACL — the supplier decouples its model behind a published language for consumers"
+        correct: true
+      - text: "Two teams sharing part of their model"
+        correct: false
+      - text: "The downstream accepting the upstream contract as-is"
+        correct: false
+      - text: "Duplicating functionality"
+        correct: false
+    explain: "In an OHS the supplier (upstream) implements the translation, exposing a published language optimized for consumers and possibly multiple versions for gradual migration."
+  - q: "When is the conformist pattern justified?"
+    options:
+      - text: "When the upstream contract is an industry standard or simply good enough"
+        correct: true
+      - text: "When the downstream is a core subdomain"
+        correct: false
+      - text: "When the upstream model is a mess"
+        correct: false
+      - text: "When teams change the contract often"
+        correct: false
+    explain: "Conformist means accepting the upstream model take-it-or-leave-it; it is justified when the contract is an industry standard or good enough that translation isn't worth it."
+  - q: "A shared kernel is a justified exception to which rule?"
+    options:
+      - text: "One team per bounded context"
+        correct: true
+      - text: "One aggregate per transaction"
+        correct: false
+      - text: "Past-tense domain events"
+        correct: false
+      - text: "No technical jargon in the language"
+        correct: false
+    explain: "A shared kernel is an overlapping model co-owned by multiple contexts, which contradicts one-team-per-context; keep it small, test-gate every change, and justify the exception."
+takeaway: "Pick the integration pattern from team collaboration and power balance — protect a core downstream with an ACL, protect consumers with an OHS."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Two neighboring countries can be allies who plan together, trade through a customs office that translates currencies and rules, simply adopt each other's standards, or close the border and each do their own thing. Integrating bounded contexts is diplomacy: the right arrangement depends on how well the teams cooperate and who holds the power.
+</Callout>
+
+## Contracts between contexts
+
+Because bounded contexts evolve independently but must cooperate, there are always touchpoints — **contracts**. Each arises from differences in models and languages and must be deliberately coordinated, including *which* language the integration uses. DDD organizes the six patterns by the **nature of team collaboration**: cooperation, customer–supplier, and separate ways.
+
+<Mermaid code={String.raw`graph TD
+  Root["Integration patterns"] --> Coop["Cooperation"]
+  Root --> CS["Customer-Supplier"]
+  Root --> SW["Separate ways"]
+  Coop --> P["Partnership<br/>ad hoc, two-way"]
+  Coop --> SK["Shared kernel<br/>small overlapping model"]
+  CS --> Con["Conformist<br/>downstream accepts upstream"]
+  CS --> ACL["Anticorruption layer<br/>downstream translates"]
+  CS --> OHS["Open-host service<br/>upstream translates + publishes"]
+  SW --> Dup["Duplicate functionality"]`} />
+
+## Cooperation
+
+- **Partnership** — Integration coordinated *ad hoc* and two-way; no team dictates the contract and both solve issues together. Requires well-established collaboration, frequent sync, and continuous integration. *Avoid* across geographically distributed teams.
+- **Shared kernel** — A small *overlapping* model shared by multiple contexts, so any change to its source immediately affects all. Keep it tiny (just integration contracts and shared data structures), gate every change with integration tests, and require continuous integration. It contradicts one-team-per-context, so use it only when duplication cost exceeds coordination cost — e.g. geography/politics block partnership, temporary legacy modernization, or contracts between contexts owned by the *same* team.
+
+## Customer–Supplier
+
+Here one context (the **supplier / upstream**) provides a service to a **consumer / downstream**, with an imbalance of power.
+
+- **Conformist** — Power favors the upstream, which offers its contract take-it-or-leave-it; the downstream conforms. Justified when the contract is an industry standard or good enough.
+- **Anticorruption layer (ACL)** — Power favors upstream but the downstream *won't conform*; it translates the upstream model into one tailored to its needs. Use it when the downstream is a **core subdomain**, the upstream model is a mess (don't "conform to a mess"), or the supplier's contract changes often (changes then hit only the translation layer).
+- **Open-host service (OHS)** — Power favors *consumers*; the supplier decouples its implementation model from its public interface, exposing a **published language** and possibly multiple versions at once for gradual migration. It is the *reversal* of an ACL — the supplier implements the translation.
+
+<Callout type="go" title="ACL vs OHS — who translates?">
+Both share the same translation logic; they differ only in *direction*. The **ACL** protects the **downstream** (a core subdomain or a fragile legacy integration). The **OHS** protects **consumers** by hiding the supplier's internal model behind a stable, versioned published language — never publish raw internal domain events as the contract.
+</Callout>
+
+<Mermaid code={String.raw`graph LR
+  subgraph ACLg["ACL — downstream translates"]
+    U1["Upstream (messy)"] --> T1["ACL"] --> D1["Downstream core<br/>(clean model)"]
+  end
+  subgraph OHSg["OHS — upstream translates"]
+    U2["Supplier internal model"] --> T2["Published language"] --> D2["Many consumers"]
+  end`} />
+
+## Separate ways
+
+Sometimes collaboration isn't worth it — duplicate functionality instead of integrating. Choose this for communication friction, generic subdomains (e.g., a logging framework), or model differences too large for conformist/ACL.
+
+<Callout type="gotcha" title="Never choose separate ways for a core subdomain">
+Duplicating a core subdomain throws away your competitive advantage and guarantees the two copies will drift apart. A core needs single-team integration — a customer–supplier relationship — not duplication.
+</Callout>
+
+## The context map
+
+A **context map** is a visual chart of all bounded contexts and the integrations between them. It yields insight on three levels: high-level design, communication patterns (who collaborates vs who uses an ACL or goes separate ways), and organizational issues (e.g., *everyone* ACL-ing one team signals a problem). Maintain it continuously and collaboratively — tools like Context Mapper let you manage it as code. One caveat: a single context pair may exhibit several patterns at once.
+
+## See also
+
+- [Bounded contexts](/ddd/bounded-contexts/) — the units being integrated.
+- [Domain events and services](/ddd/domain-events-and-services/) — what often flows across the contract.
+- [Design heuristics and evolution](/ddd/design-heuristics-and-evolution/) — how integration patterns evolve over time.

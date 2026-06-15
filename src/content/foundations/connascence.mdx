@@ -1,0 +1,143 @@
+---
+title: "Connascence"
+category: fnd-components
+kind: topic
+order: 9
+difficulty: "Intermediate"
+status: ready
+intent: "A precise vocabulary for HOW two components are coupled — static vs dynamic connascence — and the three properties that guide refactoring toward weaker forms."
+book: "Fundamentals of Software Architecture; Building Evolutionary Architectures"
+related:
+  - components-and-coupling
+  - modularity-and-metrics
+  - evolutionary-architecture
+when_use:
+  - "When you need to reason precisely about why a change in one place forces a change elsewhere"
+  - "When refactoring to weaken coupling between modules or services"
+  - "When deciding what may safely cross an encapsulation boundary"
+when_avoid:
+  - "When the coupling is trivial and a simple afferent/efferent count suffices"
+  - "When you treat connascence as only a code-hygiene concern and ignore communication coupling"
+quiz:
+  - q: "What is the definition of connascence?"
+    options:
+      - text: "Two components are connascent if a change in one requires the other to be modified to maintain correctness"
+        correct: true
+      - text: "Two components that share a database"
+        correct: false
+      - text: "Two components deployed together"
+        correct: false
+      - text: "Two components with the same name"
+        correct: false
+    explain: "Page-Jones: connascence describes when changing one component forces a change in another to preserve overall correctness."
+  - q: "Which is the most desirable (weakest) form of static connascence?"
+    options:
+      - text: "Connascence of Name — agreeing on a name"
+        correct: true
+      - text: "Connascence of Position — agreeing on order"
+        correct: false
+      - text: "Connascence of Algorithm — agreeing on an algorithm"
+        correct: false
+      - text: "Connascence of Meaning — agreeing on a value's meaning"
+        correct: false
+    explain: "Name is the weakest and easiest to refactor; refactor strong forms toward Name where possible."
+  - q: "Dynamic connascence differs from static connascence because it…"
+    options:
+      - text: "Manifests at runtime and is harder to detect than source-level static connascence"
+        correct: true
+      - text: "Is always weaker"
+        correct: false
+      - text: "Only applies to databases"
+        correct: false
+      - text: "Cannot be refactored"
+        correct: false
+    explain: "Static connascence is discoverable by static analysis; dynamic forms (execution order, timing, values, identity) appear only at runtime."
+  - q: "What do Weirich's Rule of Degree and Rule of Locality advise?"
+    options:
+      - text: "Convert strong connascence to weaker forms, and weaken connascence as the distance between modules grows"
+        correct: true
+      - text: "Always increase connascence inside a module"
+        correct: false
+      - text: "Never refactor connascence"
+        correct: false
+      - text: "Maximise connascence across boundaries"
+        correct: false
+    explain: "Rule of Degree: convert strong to weak. Rule of Locality: the farther apart, the weaker the connascence should be."
+takeaway: "Connascence names HOW two things are coupled — refactor toward weaker (static over dynamic, Name over Algorithm) and more local forms, and never let strong connascence cross boundaries."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧬 Analogy">
+Connascence — literally 'having been born together' — is like the shared dependencies in a recipe. If two cooks merely agree on the *name* of an ingredient, either can swap brands freely. If they must agree on the exact *order* steps happen, or the precise *timing*, changing one forces the other to change too. The tighter the agreement, the harder either can move alone.
+</Callout>
+
+## What connascence adds to coupling
+
+Plain afferent/efferent [coupling](/foundations/components-and-coupling/) tells you *that* two components depend on each other; **connascence** (Meilir Page-Jones) tells you *how*. The definition: **two components are connascent if a change in one would require the other to be modified to maintain overall correctness.** It splits into two families.
+
+<Mermaid code={String.raw`graph TD
+  C["Connascence"] --> S["Static<br/>(source-level, analysable)"]
+  C --> D["Dynamic<br/>(runtime, harder to detect)"]
+  S --> SN["Name (weakest)"]
+  S --> ST["Type"]
+  S --> SM["Meaning / Convention"]
+  S --> SP["Position"]
+  S --> SA["Algorithm (strongest static)"]
+  D --> DE["Execution (order)"]
+  D --> DT["Timing"]
+  D --> DV["Value"]
+  D --> DI["Identity"]`} />
+
+## Static connascence (weakest to strongest)
+
+Discoverable by static analysis, ordered from easiest to hardest to refactor:
+
+- **Name (CoN)** — agree on a name (most desirable; renames are easy).
+- **Type (CoT)** — agree on a type.
+- **Meaning / Convention (CoM)** — agree on a value's meaning (magic numbers).
+- **Position (CoP)** — agree on order (parameter order).
+- **Algorithm (CoA)** — agree on an algorithm (a client and server computing the same hash).
+
+## Dynamic connascence (runtime)
+
+Harder to detect because it only appears when the system runs:
+
+- **Execution (CoE)** — order matters (set fields before sending).
+- **Timing (CoT)** — timing matters (race conditions).
+- **Value (CoV)** — related values must change together (a value spread across databases; distributed transactions).
+- **Identity (CoI)** — must reference the same entity (a shared distributed queue).
+
+## The three properties that guide refactoring
+
+Connascence is judged on three axes:
+
+- **Strength** — how easy it is to refactor. **Prefer static over dynamic**, and refactor toward weaker forms.
+- **Locality** — how close the connascent code is. Proximal code tolerates stronger connascence; distant code should be weakly coupled.
+- **Degree** — the size of the impact (a few modules vs many).
+
+**Weirich's rules** crystallise this: the **Rule of Degree** — convert strong connascence to weaker forms; the **Rule of Locality** — as distance increases, use weaker connascence. **Page-Jones's guidelines**: minimise overall connascence by encapsulating, minimise connascence that crosses encapsulation boundaries, and maximise connascence *within* a boundary.
+
+<Mermaid code={String.raw`graph LR
+  S["Strong & distant<br/>(Algorithm across services)"] -->|"Rule of Degree:<br/>weaken the form"| W["Weaker form<br/>(toward Name)"]
+  S -->|"Rule of Locality:<br/>pull it closer"| L["Same module<br/>(local & encapsulated)"]
+  W --> G["Weak & local = safe"]
+  L --> G`} />
+
+<Callout type="gotcha" title="⚠️ The 1990s blind spot">
+Classic connascence is low-level code hygiene and originally said nothing about the modern key decision: **synchronous vs asynchronous communication** in distributed systems. *The Hard Parts* and *Building Evolutionary Architectures* extend it with **communication connascence** (sync = stronger, async = weaker), which feeds directly into the [architecture quantum](/foundations/identifying-component-boundaries/).
+</Callout>
+
+<Callout type="tip" title="Connascence and bounded contexts">
+*Building Evolutionary Architectures* notes that connascence *locality* (1993) and DDD's **bounded context** (2003) express the same anti-brittleness principle: never expose implementation details — especially database schemas — across a boundary.
+</Callout>
+
+<Callout type="go" title="💡 Key insight">
+When you must couple two things, ask: can I make this Name connascence instead of Position or Algorithm, and can I keep it local? Weak-and-local beats strong-and-distant every time.
+</Callout>
+
+## See also
+
+- [Components and coupling](/foundations/components-and-coupling/) — the afferent/efferent foundation.
+- [Modularity and metrics](/foundations/modularity-and-metrics/) — measuring the result.
+- [Evolutionary architecture](/foundations/evolutionary-architecture/) — why appropriate coupling enables evolution.

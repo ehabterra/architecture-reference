@@ -1,0 +1,131 @@
+---
+title: "Handling Failures and Retries"
+category: auto-operating
+kind: topic
+order: 8
+difficulty: "Advanced"
+status: ready
+intent: "Remote calls are unreliable — keep failures local with stateful retries, design every operation to be idempotent, and clean up after ambiguous failures."
+book: "Practical Process Automation (Bernd Ruecker)"
+related:
+  - the-saga-and-compensation
+  - integrating-with-services-and-apis
+  - why-long-running-processes-are-hard
+when_use:
+  - "A flaky downstream service needs retries that survive crashes and span hours"
+  - "An operation can be invoked more than once and must not double-charge or double-ship"
+  - "A network error leaves you unsure whether a remote action actually happened"
+when_avoid:
+  - "Modeling every technical retry as a visible service task (configure it, don't draw it)"
+  - "Relying on business payload to detect duplicates (use a client-generated unique ID)"
+  - "Silently ignoring an ambiguous failure (decide ignore / apologize / resolve deliberately)"
+quiz:
+  - q: "What is idempotency?"
+    options:
+      - text: "An operation that can be applied multiple times without changing the result beyond the first application"
+        correct: true
+      - text: "An operation that always returns identical data"
+        correct: false
+      - text: "An operation that runs exactly once"
+        correct: false
+      - text: "An operation that never fails"
+        correct: false
+    explain: "Idempotent means repeating the call is safe. It does not mean an identical result — a query can return different data later — only that re-applying causes no extra effect."
+  - q: "How should a service keep a downstream failure 'local'?"
+    options:
+      - text: "Become stateful (e.g., via an embedded engine) so it holds state and schedules retries itself"
+        correct: true
+      - text: "Immediately throw the error back to the caller every time"
+        correct: false
+      - text: "Crash and restart"
+        correct: false
+      - text: "Drop the request silently"
+        correct: false
+    explain: "A stateful service can retry over hours and only return success/failure, rather than offloading failure handling to the client (worst case, a human's calendar)."
+  - q: "Why prefer a client-generated unique ID over business payload for duplicate detection?"
+    options:
+      - text: "Two genuinely identical operations (e.g., a real double charge) can occur milliseconds apart and share the same business data"
+        correct: true
+      - text: "Business payload is always encrypted"
+        correct: false
+      - text: "Unique IDs are faster to compare"
+        correct: false
+      - text: "Business payload cannot be stored"
+        correct: false
+    explain: "Matching on business data would wrongly merge two valid identical requests. A unique key per request lets the service detect true duplicates safely."
+  - q: "After a network exception on a 'charge card' call, what is the right response?"
+    options:
+      - text: "Restore consistency — check whether a charge occurred, or cancel it, ignoring 'doesn't exist' errors"
+        correct: true
+      - text: "Assume it failed and silently move on"
+        correct: false
+      - text: "Assume it succeeded and ship the goods"
+        correct: false
+      - text: "Retry forever with no checks"
+        correct: false
+    explain: "You can't tell whether the request, response, or service failed, so you don't know if the card was charged. Reconcile deliberately — your first remote call already put you in eventual consistency."
+takeaway: "Keep failures local with stateful retries, make every operation idempotent via a client-generated key, and reconcile after ambiguous failures."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+You tap your card at a terminal and the screen freezes mid-payment. Did it charge you or not? You don't tap again blindly — you check your banking app first. Distributed systems live in that exact moment constantly: a call fails, the outcome is unknown, and the safe move is to **reconcile**, not to guess.
+</Callout>
+
+## Remote communication is unreliable
+
+The **fallacies of distributed computing** (Deutsch et al.) warn that remote communication is inherently unreliable — services are sometimes slow, sometimes down, and the network can drop messages in either direction. As covered in [why long-running processes are hard](/automation/why-long-running-processes-are-hard/), your **first remote call** already drops you into long-running behaviour and **eventual consistency**. So failure handling is not an edge case to bolt on later; it is the main event.
+
+## Keep failures local with stateful retries
+
+<Mermaid code={String.raw`flowchart TD
+  A["Call flaky service"] --> B{"Success?"}
+  B -->|"yes"| C["Continue process"]
+  B -->|"temporary error"| D["Engine schedules retry<br/>(state persisted, may span hours)"]
+  D --> A
+  B -->|"still failing after N tries"| E["Escalate to business level<br/>(before SLA breaks)"]`} />
+
+The wrong move is to let a flaky downstream offload failure handling onto your **client** — in the worst case, a human's calendar (the boarding-pass example). Instead, **keep the error local**: make the calling service **stateful** (a [workflow engine](/automation/where-workflow-engines-fit/) within the service holds state and scheduling), retry over hours, and return **HTTP 202** when you can't respond immediately. Passing an error to the client is fine — but only as a **conscious business decision**.
+
+<Callout type="go" title="Don't model technical retries as tasks">
+Retrying a temporarily-unavailable service is a **technical reaction** — configure it via retry rules or handle the incident in operations; don't draw a retry loop in the diagram. Model a **business reaction** when the *business* must respond. A common pattern: retry technically on a scoring-service outage, then **escalate to a business level** after a time to protect the SLA (e.g., proceed and give every customer a good rating).
+</Callout>
+
+## Idempotency makes retrying safe
+
+**Idempotency** means an operation can be applied multiple times without changing the result beyond the first application — so a repeated call is harmless. (It is *not* the same as returning an identical result; a query may return different data later.) Queries and deletions are naturally idempotent. For non-idempotent operations like charging a card:
+
+- the **client generates a unique ID** and passes it to the service;
+- the service **detects duplicates** using its own state (a stateless service must add dedicated duplicate-detection state).
+
+<Callout type="gotcha" title="Never match on business payload">
+Two **identical** charges milliseconds apart may be a *genuine* double booking, not a duplicate. So don't deduplicate on business data — use the client-generated key. And design APIs for idempotency **from the start**: a client cannot fix a non-idempotent service.
+</Callout>
+
+## "Ready to receive" and poisoned messages
+
+Two operational gotchas recur. First, the BPMN standard correlates a message only if an instance is **waiting at the receive task at the exact moment** it arrives — otherwise the message is dumped. A fast async response that beats the instance to the receive task causes millisecond-level correlation failures; the clean fix is **message buffering** (a vendor extension with a time-to-live) or retrying correlation on a buffering transport. Second, a **poisoned message** — broken data from, say, a frontend bug — makes the consumer throw on every attempt and, after retries, lands in a **dead letter queue**. Most tools lack a good UI to inspect or redeliver, so teams build bespoke "message hospitals" — and diagnosing is hard because a failed message carries little context.
+
+## Cleaning up after ambiguous failure
+
+<Callout type="tip" title="Reconcile, don't guess">
+When a "charge card" call throws a **network exception**, you can't tell whether the request, the response, or the service failed — so you don't know if the card was charged. Don't ignore it. **Restore consistency**: check whether a charge occurred, use a cleanup API, or cancel the charge and ignore "doesn't exist" errors. A BPMN model can express exactly this cleanup.
+</Callout>
+
+Where cleanup means undoing *completed* steps across services, reach for the [saga and compensation](/automation/the-saga-and-compensation/). And remember the three business strategies for inconsistency — **ignore**, **apologize**, **resolve** — chosen by volume, business value, and impact, with stakeholders in the room.
+
+<Mermaid code={String.raw`graph TD
+  A["Network exception on charge card"] --> B{"Did the charge happen?"}
+  B -->|"unknown"| C["Query the payment service<br/>or use a cleanup API"]
+  C --> D{"Charge found?"}
+  D -->|"yes"| E["Cancel the charge"]
+  D -->|"no"| F["Ignore doesnt-exist error"]
+  E --> G["Consistency restored"]
+  F --> G`} />
+
+## See also
+
+- [The saga and compensation](/automation/the-saga-and-compensation/) — undoing completed steps when cleanup spans services.
+- [Integrating with services and APIs](/automation/integrating-with-services-and-apis/) — sync/async calls and correlation IDs.
+- [Why long-running processes are hard](/automation/why-long-running-processes-are-hard/) — why your first remote call changes everything.

@@ -1,0 +1,124 @@
+---
+title: "Event Sourcing"
+category: ed-patterns
+kind: topic
+order: 7
+difficulty: "Advanced"
+status: ready
+intent: "Recording immutable, append-only deltas and rebuilding state by replaying them — a powerful pattern inside a bounded context, and a trap when used across domain boundaries."
+book: "Building an Event-Driven Data Mesh; Building Event-Driven Microservices (Adam Bellemare)"
+related:
+  - event-notification-vs-state-transfer
+  - streams-and-the-log
+  - schemas-and-evolution
+when_use:
+  - "You need a complete audit trail and the ability to reconstruct any past state"
+  - "Within a single bounded context where you control both writer and reader"
+  - "Temporal queries — 'what did this look like at time T?' — are first-class requirements"
+when_avoid:
+  - "Publishing deltas as an interdomain data product (they become a public contract)"
+  - "Consumers would have to replicate your transition-interpretation logic"
+  - "You cannot tolerate an unbounded, non-compactable log of fine-grained changes"
+quiz:
+  - q: "Event sourcing builds current state by…"
+    options:
+      - text: "Recording immutable, append-only deltas and aggregating them, rather than mutating a CRUD row in place"
+        correct: true
+      - text: "Storing only the latest snapshot and discarding history"
+        correct: false
+      - text: "Querying a synchronous API"
+        correct: false
+      - text: "Compacting the log to one event per key"
+        correct: false
+    explain: "State is derived by replaying the ordered deltas. The log of changes is the source of truth; current state is a projection of it."
+  - q: "Why does Bellemare say event sourcing is misused as interdomain communication?"
+    options:
+      - text: "Any event crossing the boundary becomes part of the public contract, forcing every consumer to replicate interpretation logic"
+        correct: true
+      - text: "Deltas are too large to transmit"
+        correct: false
+      - text: "It requires a synchronous broker"
+        correct: false
+      - text: "It cannot be schematized"
+        correct: false
+    explain: "Across a boundary you get an infinite, shifting set of event types, replicated logic that drifts, inverted ownership, and a log that won't compact."
+  - q: "'Inversion of ownership' in the delta-events anti-pattern refers to…"
+    options:
+      - text: "Consumers pushing business logic into the producer, forcing hyper-specific events the producer often can't even create"
+        correct: true
+      - text: "Producers taking over consumer state stores"
+        correct: false
+      - text: "The broker owning the schema"
+        correct: false
+      - text: "Reversing partition assignment"
+        correct: false
+    explain: "Consumers demand events like `userReturnedItemAfterTelephoneComplaint`; the producer ends up responsible for logic and data that may span several domains."
+  - q: "A snapshot in an event-sourced system is used to…"
+    options:
+      - text: "Speed up state rebuilds so you don't replay the entire history every time"
+        correct: true
+      - text: "Replace the event log"
+        correct: false
+      - text: "Delete old events permanently"
+        correct: false
+      - text: "Enforce schema compatibility"
+        correct: false
+    explain: "Consumer-maintained snapshots (built into Kafka Streams, Flink, Spark) checkpoint state so a restart resumes from the snapshot rather than replaying from offset zero."
+takeaway: "Event-source deltas inside a bounded context for audit and replay — but expose state events across boundaries; interdomain deltas become an unbounded, ownership-inverting trap."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A bank statement is event sourcing: it doesn't store your balance, it stores every deposit and withdrawal, and the balance is *computed* by replaying them. You can reconstruct what you had on any date and audit every change. But you wouldn't hand the raw transaction ledger to a partner and ask them to re-derive your balance with your exact rounding rules — that's the boundary mistake.
+</Callout>
+
+## What event sourcing is
+
+Most systems use **CRUD**: a row holds current state and is mutated in place, destroying history. **Event sourcing** instead records immutable, append-only **delta events** — the *transitions* — and rebuilds current state by aggregating them in order. The log of changes is the source of truth; current state is a *projection*.
+
+<Mermaid code={String.raw`graph TD
+  subgraph CRUD["CRUD — mutate in place"]
+    R["row: qty=2"] -->|"update"| R2["row: qty=5 (old gone)"]
+  end
+  subgraph ES["Event sourcing — append deltas"]
+    A["+2"] --> B["+5"] --> C["-3"] --> Sum["replay → qty=4 + full history"]
+  end`} />
+
+The payoff is real: a complete **audit trail**, the ability to reconstruct any past state (temporal queries), and natural alignment with the [durable log](/event-driven/streams-and-the-log/). Bellemare's refrigerator example — modeling additions and removals as deltas and deriving contents — shows it working cleanly *within* a bounded context.
+
+<Mermaid code={String.raw`graph LR
+  D1["itemAddedToCart"] --> AGG["Aggregate / replay"]
+  D2["itemAddedToCart"] --> AGG
+  D3["itemRemovedFromCart"] --> AGG
+  D4["orderPaid"] --> AGG
+  AGG --> STATE["Current state<br/>(a projection)"]
+  AGG -.->|"replay from t0"| PAST["State at any past time"]`} />
+
+## The performance lever: snapshots
+
+Replaying a long history on every start is slow. **Snapshots** checkpoint the derived state periodically (built into Kafka Streams, Flink, and Spark) so a restart resumes from the latest snapshot and replays only the deltas since. This is what makes the [Kappa](/event-driven/streams-and-the-log/) "consume from the beginning" model practical for large data sets.
+
+<Callout type="go" title="The key insight">
+Event sourcing and event-carried state transfer are not competitors — they operate at different scopes. Source deltas *inside* a context; publish *state events* across a boundary. The internal ledger is yours; the external contract is everyone's.
+</Callout>
+
+## The boundary trap
+
+The data-mesh book is blunt: event sourcing is **misused as interdomain communication**. The moment a delta event crosses a domain boundary, it becomes part of the *public* contract. Five reasons it fails for data products:
+
+1. **Infinite event types** whose meaning keeps shifting as the domain evolves.
+2. **Replicated interpretation logic** — every consumer must implement the transition rules, which drift out of sync and break under out-of-order delivery.
+3. **Poor mapping to streams** — new deltas force notifying every consumer; lumping them into one stream violates the one-evolvable-schema-per-stream convention.
+4. **Inversion of ownership** — consumers push business logic into the producer, demanding hyper-specific events like `userReturnedItemAfterTelephoneComplaint` that a single system often can't even produce because the data spans domains.
+5. **No clean history** — deltas don't compact, the log grows unbounded, and the "fix" leads straight back to **Lambda**.
+
+<Callout type="gotcha" title="'Just publish a custom event for me' is a smell">
+When a consumer asks the producer to emit a delta tailored to *their* workflow, you're being pulled into the inversion-of-ownership trap. Publish the immutable **state**; let the consumer derive whatever transitions and aggregates they need on their side. See [event notification vs. state transfer](/event-driven/event-notification-vs-state-transfer/).
+</Callout>
+
+## See also
+
+- [Event notification vs. state transfer](/event-driven/event-notification-vs-state-transfer/) — why state events win across boundaries.
+- [Streams and the log](/event-driven/streams-and-the-log/) — the substrate for replay and snapshots.
+- [Schemas and evolution](/event-driven/schemas-and-evolution/) — the contract a delta would freeze in place.

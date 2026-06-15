@@ -1,0 +1,130 @@
+---
+title: "Idempotency and Safety"
+category: api-rest
+kind: topic
+order: 6
+difficulty: "Intermediate"
+status: ready
+intent: "The network is unreliable, so design writes to be safely repeatable — prefer idempotent PUT with conditional headers, and make the payload itself idempotent too."
+book: "RESTful Web API Patterns and Practices Cookbook"
+related:
+  - rest-and-the-richardson-maturity-model
+  - caching-and-conditional-requests
+  - hypermedia-and-hateoas
+when_use:
+  - "A write may be retried after a lost response, timeout, or network blip."
+  - "You are processing batches where a mid-run crash must be safely re-run."
+  - "You need optimistic concurrency to avoid clobbering another client's update."
+when_avoid:
+  - "A genuinely non-repeatable action where you instead need an idempotency key on POST."
+  - "Read-only endpoints — GET is already safe; no extra machinery needed."
+quiz:
+  - q: "What is the 'failed POST' problem the Cookbook describes?"
+    options:
+      - text: "A POST with no reply leaves the client unsure whether it arrived/processed, and unsafe to resend"
+        correct: true
+      - text: "POST requests are always rejected by firewalls"
+        correct: false
+      - text: "POST cannot carry a request body"
+        correct: false
+      - text: "POST is slower than GET"
+        correct: false
+    explain: "Because POST is not idempotent, a lost response means resending might create a duplicate — so the author defaults writes to PUT."
+  - q: "How do you create a resource idempotently with PUT?"
+    options:
+      - text: "PUT to a client-chosen URL with If-None-Match: * (201 on create)"
+        correct: true
+      - text: "POST with a random body"
+        correct: false
+      - text: "GET with a creation flag"
+        correct: false
+      - text: "DELETE then PUT"
+        correct: false
+    explain: "PUT-Create: the client supplies the identifier and uses If-None-Match:* so a repeat does not create a duplicate; mismatch on update returns 412."
+  - q: "Why is the HTTP method alone not enough for safe repeats?"
+    options:
+      - text: "The request body must also be idempotent — e.g. send absolute newPrice, not a percentage increment"
+        correct: true
+      - text: "PUT is not really idempotent"
+        correct: false
+      - text: "Headers cannot be repeated"
+        correct: false
+      - text: "Status codes change on retry"
+        correct: false
+    explain: "A PUT carrying 'apply 5%' is dangerous on partial failure; redesign the payload to carry replacement values applied only when the stored value still matches."
+  - q: "Which status code signals an optimistic-concurrency conflict on a conditional PUT?"
+    options:
+      - text: "412 Precondition Failed"
+        correct: true
+      - text: "200 OK"
+        correct: false
+      - text: "404 Not Found"
+        correct: false
+      - text: "301 Moved Permanently"
+        correct: false
+    explain: "If-Match against a stale ETag returns 412 Precondition Failed, telling the client to GET, merge, and retry."
+takeaway: "Default writes to idempotent PUT with If-None-Match/If-Match, and make the body itself repeatable — both network and operation idempotence are required."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🛗 Analogy">
+Idempotency is the lift-call button. Press it once or press it ten times in frustration — the lift still comes exactly once. A safe API write behaves the same: if the network swallows your reply and you press again, nothing duplicates. A non-idempotent write is a vending machine that charges you every time you re-tap, unsure if the first tap landed.
+</Callout>
+
+## The failed POST problem
+
+The network is unreliable. A `POST` that returns no reply leaves the client unsure whether the request arrived or was processed — and because POST is **not idempotent**, resending risks a duplicate. The Cookbook's default answer: **send all writes with `PUT`** (idempotent) rather than POST, using the **PUT-Create** pattern with conditional headers.
+
+```
+PUT /person/q1w2e3   If-None-Match: *        ->  201 CREATED + ETag
+PUT /person/q1w2e3   If-Match: "<etag>"      ->  200 OK + new ETag
+PUT /person/q1w2e3   If-Match: "<stale>"     ->  412 Precondition Failed
+```
+
+With PUT, the **client supplies the resource identifier** (like uploading a file to a known path). `If-None-Match: *` creates without risk of a duplicate; `If-Match` replaces exactly the version you read, and a mismatch returns **412** — the basis of optimistic concurrency. See [caching and conditional requests](/apis/caching-and-conditional-requests/) for how ETags work.
+
+<Mermaid code={String.raw`graph TD
+  P["PUT to client-chosen URL"] --> Q{"Intent?"}
+  Q -->|"create"| C1{"Resource exists?"}
+  C1 -->|"no, If-None-Match *"| Created["201 Created"]
+  C1 -->|"yes"| Conflict["412 Precondition Failed"]
+  Q -->|"update, If-Match ETag"| C2{"ETag matches?"}
+  C2 -->|"yes"| OK["200 OK"]
+  C2 -->|"no"| Conflict`} />
+
+## Two levels of idempotence
+
+Safe repeats need *both* levels — the method is not enough on its own.
+
+<Mermaid code={String.raw`graph TD
+  N["Network idempotence<br/>use GET / PUT / DELETE, avoid POST"] --> Safe["Safely repeatable write"]
+  O["Operation idempotence<br/>body uses replacement values, not increments"] --> Safe`} />
+
+- **Network idempotence** — use `GET` / `PUT` / `DELETE`; prefer `PUT` to create. A `PUT` that fails with `503` is safe to repeat.
+- **Operation idempotence** — design the *write itself* to be idempotent. A `priceUpdate` body of `updatePercent=.05` is dangerous: applied twice on a partial failure it compounds. Redesign it as `text/csv` rows of `productId, currentPrice, newPrice` so the service applies `newPrice` **only when the stored price still equals `currentPrice`**, skipping records already updated.
+
+<Callout type="gotcha" title="Don't trust the method alone">
+An idempotent HTTP method with a non-idempotent body is still unsafe. Make the payload conditionally applied (replacement values, not increments or percentages) so a crashed batch can be re-run from the start without double-applying anything.
+</Callout>
+
+## Safety: GET must not mutate
+
+A **safe** method has no side effects on server state — fundamentally, `GET`. This guarantee (part of Richardson [Level 2](/apis/rest-and-the-richardson-maturity-model/)) is what lets caches, proxies, and crawlers replay GETs freely. Reserve state changes for PUT/POST/DELETE, and only ever auto-retry **idempotent** methods (`GET`, `HEAD`, `PUT`, `DELETE`) — never `POST` or `PATCH`.
+
+## Reversible actions
+
+Sometimes you must undo. With no HTTP `UNDELETE`, design reversal explicitly:
+
+- **Issue a second request** — re-`PUT` the prior value with `If-Match` (requires knowing the prior value and that no one else changed it).
+- **Issue a special request** — e.g. recover a `DELETE` via an `undoDelete` operation (`PUT` to a rollback URL), which requires retaining deleted resources.
+
+<Callout type="tip" title="Idempotency keys for POST">
+POST can be made idempotent with an **idempotency key** header so the server recognises and de-duplicates a retried request. The Cookbook's author still defaults to PUT — but the key approach is the standard escape hatch when a true PUT-create does not fit.
+</Callout>
+
+## See also
+
+- [Caching and conditional requests](/apis/caching-and-conditional-requests/) — ETags and If-Match in depth.
+- [REST and the Richardson Maturity Model](/apis/rest-and-the-richardson-maturity-model/) — verb safety semantics.
+- [Hypermedia and HATEOAS](/apis/hypermedia-and-hateoas/) — designing idempotent actions into forms.

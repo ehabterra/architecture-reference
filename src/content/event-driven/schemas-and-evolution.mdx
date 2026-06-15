@@ -1,0 +1,132 @@
+---
+title: "Schemas and Evolution"
+category: ed-patterns
+kind: topic
+order: 6
+difficulty: "Intermediate"
+status: ready
+intent: "The data contract behind every event — explicit schemas, compatibility types (forward, backward, full), the schema registry, and how to handle breaking changes."
+book: "Building Event-Driven Microservices; Building an Event-Driven Data Mesh (Adam Bellemare)"
+related:
+  - event-notification-vs-state-transfer
+  - streams-and-the-log
+  - data-products
+when_use:
+  - "Producers and consumers evolve independently and must not break each other"
+  - "You want code generation, data discovery, and producer-side validation"
+  - "Multiple languages consume the same stream"
+when_avoid:
+  - "Using JSON (schemaless) as the contract — it lacks full-compatibility evolution"
+  - "Mixing incompatible event types in one stream"
+  - "Pushing schema reconciliation onto consumers instead of resolving at the producer"
+quiz:
+  - q: "A well-defined data contract has two components:"
+    options:
+      - text: "Data definition (what is produced) and triggering logic (why it is produced)"
+        correct: true
+      - text: "A key and a value"
+        correct: false
+      - text: "A producer and a consumer"
+        correct: false
+      - text: "A schema and a queue"
+        correct: false
+    explain: "The contract is the format plus the business logic under which the event is created; altering triggering logic is more dangerous because it changes the event's meaning."
+  - q: "Forward compatibility means…"
+    options:
+      - text: "Data produced with a newer schema can be read as if produced with an older one"
+        correct: true
+      - text: "Data produced with an older schema can be read with a newer one"
+        correct: false
+      - text: "Any version can read any version"
+        correct: false
+      - text: "Schemas can never change"
+        correct: false
+    explain: "Forward compatibility suits EDA's common pattern — the producer updates first. Backward compatibility is the reverse; full is the union of both."
+  - q: "The primary benefit of a schema registry is…"
+    options:
+      - text: "Reducing bytes on the wire by storing the schema once and shipping only a short ID"
+        correct: true
+      - text: "Making events human-readable"
+        correct: false
+      - text: "Eliminating the need for a broker"
+        correct: false
+      - text: "Encrypting events"
+        correct: false
+    explain: "The registry also provides discovery, write-path evolution validation, and downloadable schemas for code generation — but the headline win is not shipping the schema with every event."
+  - q: "When a breaking schema change is unavoidable, the most important step is…"
+    options:
+      - text: "Communicate early and clearly with downstream consumers and renegotiate the contract"
+        correct: true
+      - text: "Silently deploy the new schema"
+        correct: false
+      - text: "Force all consumers to upgrade the same day"
+        correct: false
+      - text: "Delete the old stream immediately"
+        correct: false
+    explain: "Technically the deploy is easy; the hard part is renegotiation and migration. Create a new stream, support both during a deprecation window, and let retention purge the old."
+takeaway: "Make the schema an explicit contract, prefer full(-transitive) compatibility, store it in a registry, and never break it without negotiating a migration to a new stream."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A schema is the legal contract attached to every shipment. Without it, the receiver guesses what's in the box and how to handle it — and quietly mis-handles it the day the sender changes the packing. With it, both sides agree in advance, and the rules for *amending* the contract are written down so neither party can surprise the other.
+</Callout>
+
+## The event is the message; the schema is the contract
+
+Bellemare frames communication with Claude Shannon: the fundamental problem is reproducing at one point a message selected at another, with content *and meaning* intact. The **data contract** is the format of the data plus the logic under which it is created. It has two parts:
+
+- **Data definition** — *what* is produced: fields, types, structures.
+- **Triggering logic** — *why* it is produced: the business logic that fired the event.
+
+Changing the data definition is common and manageable; changing triggering logic is more dangerous because it alters the *meaning* of the original event.
+
+<Callout type="go" title="The key insight">
+Any event communication lacking an *explicit* schema falls back to an *implicit* one — brittle, dependent on tribal knowledge, and prone to inconsistent interpretations of the single source of truth. Make the schema explicit so producers *cannot* serialize non-compliant data.
+</Callout>
+
+## Compatibility types: how schemas evolve safely
+
+A schema format must support evolution so producer and consumer can update independently. The rules are **compatibility types**:
+
+- **Forward compatibility** — data from a *newer* schema reads as if from an *older* one. Especially useful in EDA, where the producer typically updates first.
+- **Backward compatibility** — data from an *older* schema reads with a *newer* one (consumer ahead of producer, or reprocessing old data). Missing fields are filled by **default values applied at read time**.
+- **Full compatibility** — the union of both; the strongest guarantee. Use it whenever possible: you can always loosen later, but tightening is far harder. The data-mesh book adds **full-transitive** (any version to any version) as the ideal for data products.
+
+<Mermaid code={String.raw`graph TD
+  S["Schema change"] --> F["Forward<br/>new producer, old consumer"]
+  S --> B["Backward<br/>old producer, new consumer"]
+  S --> FU["Full = forward AND backward"]
+  FU --> FT["Full-transitive<br/>any version ↔ any version"]
+  F -.->|"most common in EDA"| NOTE["Producer updates first"]`} />
+
+## The schema registry
+
+Naively attaching the schema to every event is wasteful at scale. A **schema registry** stores each schema once and ships only a short **placeholder ID** (Confluent's prefix is 5 bytes). Beyond saving bandwidth, it provides data **discovery**, a **write-path validation hook** that throws on unauthorized evolution, auto-updated documentation, and downloadable schemas for **code generation** — turning a generic key/value map into a typed class with compiler checks and IDE support, which materially improves data quality.
+
+Bellemare recommends **Avro or Protobuf** and explicitly does **not** recommend JSON as the contract, because schemaless JSON lacks full-compatibility evolution. (JSON Schema, the validated variant, is a reasonable third choice and uniquely supports data-quality keywords like value ranges.)
+
+## Breaking changes
+
+Sometimes evolution isn't enough — for example, a `string address` must become a structured `Address`. The technical deploy is easy; the hard part is social. The procedure:
+
+1. **Design the new model** (hardest part — redefining domain boundaries).
+2. **Iterate** with existing consumers and governance.
+3. **Plan** release, migration, and deprecation (history migration works when fields are remodeled but falls short when *new* data is created, e.g., splitting one address into home/work — support both for roughly 8–12 weeks).
+4. **Execute**: run old and new in parallel, mark the old **deprecated** (grandfather existing consumers, block new ones), and let retention purge it. Never mix incompatible event types in one stream — create a **new stream** instead.
+
+<Mermaid code={String.raw`graph LR
+  P["Producer"] --> V1["Stream v1 (deprecated)<br/>existing consumers"]
+  P --> V2["Stream v2 (new model)<br/>new + migrated consumers"]
+  V1 -.->|"retention purges after 8-12 weeks"| Gone["removed"]`} />
+
+<Callout type="gotcha" title="Never push schema reconciliation onto consumers">
+For entities, the anti-pattern is producing both old and new schemas and letting consumers sort it out — they are never in a better position than the producer to resolve divergent schemas. Re-create entities in the new format via migration/replay, keeping the originals in their stream for forensics.
+</Callout>
+
+## See also
+
+- [Event notification vs. state transfer](/event-driven/event-notification-vs-state-transfer/) — the events the contract describes.
+- [Streams and the log](/event-driven/streams-and-the-log/) — where schematized events live.
+- [Data products](/event-driven/data-products/) — the schema as a product's API.

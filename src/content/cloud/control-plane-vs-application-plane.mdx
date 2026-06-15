@@ -1,0 +1,140 @@
+---
+title: "Control Plane vs. Application Plane"
+category: cld-saas
+kind: topic
+order: 8
+difficulty: "Intermediate"
+status: ready
+intent: "Every SaaS environment divides into a control plane that orchestrates all tenants and an application plane where the multi-tenant product features live."
+book: "Building Multi-Tenant SaaS Architectures (Tod Golding)"
+related:
+  - saas-foundations
+  - tenant-onboarding-and-identity
+  - tenant-isolation-models
+when_use:
+  - "Structuring a new SaaS solution or migration around the control plane as a forcing function"
+  - "Deciding where cross-cutting services (onboarding, identity, billing, metrics) belong"
+  - "Separating versioning and deployment lifecycles of operations vs. product"
+when_avoid:
+  - "Treating the two planes as rigid absolutes rather than a useful mental model"
+  - "Assuming control-plane services must themselves be multi-tenant"
+  - "Forcing the same technology stack across both planes"
+quiz:
+  - q: "What is the control plane?"
+    options:
+      - text: "The single pane of glass that orchestrates and operates the SaaS solution across all tenants"
+        correct: true
+      - text: "The plane where tenant product features run"
+        correct: false
+      - text: "The networking layer of the application"
+        correct: false
+      - text: "A per-tenant admin dashboard"
+        correct: false
+    explain: "The control plane hosts cross-cutting foundational services (onboarding, identity, billing, metrics, tenant management) and an admin app spanning all tenants."
+  - q: "Are the control plane's services themselves multi-tenant?"
+    options:
+      - text: "No — they span all tenants rather than being tenant-scoped"
+        correct: true
+      - text: "Yes, each is fully tenant-isolated"
+        correct: false
+      - text: "Only the billing service is"
+        correct: false
+      - text: "Only if infrastructure is shared"
+        correct: false
+    explain: "Control-plane services operate across all tenants; multi-tenant principles live in the application plane."
+  - q: "What lives in the application plane?"
+    options:
+      - text: "The SaaS product's features and the multi-tenant constructs (tenant context, isolation, partitioning, routing)"
+        correct: true
+      - text: "Onboarding and billing"
+        correct: false
+      - text: "The system admin console"
+        correct: false
+      - text: "Tenant management"
+        correct: false
+    explain: "The application plane is a 'blank canvas' with no single blueprint — where multi-tenant principles and the product features live."
+  - q: "Why does Golding say SaaS foundations often start with the control plane?"
+    options:
+      - text: "It acts as a forcing function to inject tenancy from the outset"
+        correct: true
+      - text: "It is the only part that can be shared"
+        correct: false
+      - text: "It is cheaper to build"
+        correct: false
+      - text: "Regulators require it first"
+        correct: false
+    explain: "Starting with the control plane forces tenancy into the design early instead of bolting it on later."
+takeaway: "Split SaaS into a control plane that orchestrates all tenants and an application plane holding the multi-tenant product — and start with the control plane as a forcing function."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+An apartment complex has a management office and the apartments themselves. The office (control plane) handles leases, keys, billing, and the master dashboard for every unit — but nobody *lives* there. The apartments (application plane) are where tenants actually live, each isolated behind its own locked door. Both are essential, and they run on different schedules.
+</Callout>
+
+## The two halves of every SaaS architecture
+
+Golding's most reusable mental model is that **every SaaS environment divides into a control plane and an application plane**. They have separate versioning, update, and deployment lifecycles, and an environment qualifies as multi-tenant as long as a control plane manages tenant environments through a unified experience — even if the application plane is fully dedicated or fully shared.
+
+<Mermaid code={String.raw`graph TD
+  subgraph CP["Control plane (spans ALL tenants — not multi-tenant itself)"]
+    ON["Onboarding<br/>(the front door)"]
+    ID["Identity<br/>(binds user to tenant)"]
+    ME["Metrics"]
+    BI["Billing"]
+    TM["Tenant Management<br/>(source of truth)"]
+    AC["System admin console"]
+  end
+  subgraph AP["Application plane (the product + multi-tenant principles)"]
+    TC["Tenant context (JWT 'passport')"]
+    ISO["Tenant isolation"]
+    DP["Data partitioning"]
+    RT["Tenant routing"]
+    DEP["Tenant-aware deployment"]
+  end
+  CP -- unified experience --> AP`} />
+
+## Inside the control plane
+
+The **control plane** is the "single pane of glass" that orchestrates and operates the SaaS solution, hosting cross-cutting foundational services and an admin application. Its common services are:
+
+- **Onboarding** — orchestrates introducing a new tenant and assigning a unique identifier ("the front door").
+- **Identity** — binds each user to a tenant, producing the **SaaS identity**.
+- **Metrics** — centralized capture and aggregation of tenant activity, with the tenant at the center.
+- **Billing** — integrates with homegrown or commercial billing, connected to onboarding and metering.
+- **Tenant Management** — the single source of truth for tenant state (identifier, plans, policies, identity config, active/inactive status).
+
+<Callout type="gotcha" title="The control plane is not multi-tenant">
+A common surprise: **the control plane's services are not themselves multi-tenant** — they span all tenants. Multi-tenancy lives in the application plane. Confusing the two leads teams to over-engineer tenant isolation into services that legitimately need a cross-tenant view.
+</Callout>
+
+## Inside the application plane
+
+The **application plane** is where the SaaS product's features and multi-tenant principles live — a "blank canvas" with no single blueprint, shaped by business, domain, and legacy considerations. Its cross-cutting constructs:
+
+- **Tenant context** — commonly packaged as a **JWT**, the "passport" that flows into routing, logging, metrics, and data access.
+- **Tenant isolation** — a key argument: *deploying a resource in a dedicated/siloed model does not equal isolation.* Dedicated deployment only makes isolation *easier*; every plane must add explicit constructs to enforce it (see [tenant isolation models](/cloud/tenant-isolation-models/)).
+- **Data partitioning** — dedicated vs. shared storage, often a per-service decision.
+- **Tenant routing** — multi-tenant-aware routing using tenant context at multiple levels.
+- **Multi-tenant application deployment** — DevOps must be tenant-aware, since a service may be deployed many times.
+
+## The gray area and the forcing function
+
+Some concepts sit between the planes: **tiering** (variations at different price points, reaching into routing, security, and throttling — Golding leans toward the control plane); the three user roles (**tenant admin**, ordinary **tenant users**, and **system admin** staff using a purpose-built console); and **tenant provisioning** (kept closest to the resources in the application plane, but as a standalone, encapsulated piece of onboarding).
+
+<Mermaid code={String.raw`graph TD
+  SA["System admin staff"] --> AC["System admin console<br/>(control plane)"]
+  TA["Tenant admin"] --> APP["SaaS product<br/>(application plane)"]
+  TU["Tenant users"] --> APP
+  AC -- operates across all tenants --> APP`} />
+
+<Callout type="go" title="Start with the control plane">
+SaaS foundations often *start* with the control plane because it acts as a **forcing function** — it injects tenancy from the outset and cascades into tenant-aware logs, metrics, partitioning, and isolation. But don't treat the planes as **absolutes**: technology need not match across them (e.g., a serverless control plane with a container application plane), they can be loosely coupled or share an environment, and the split is a useful model, not a rigid prescription.
+</Callout>
+
+## See also
+
+- [SaaS foundations](/cloud/saas-foundations/) — why the surrounding services come first.
+- [Tenant onboarding and identity](/cloud/tenant-onboarding-and-identity/) — the control plane's front door.
+- [Tenant isolation models](/cloud/tenant-isolation-models/) — enforcing boundaries in the application plane.

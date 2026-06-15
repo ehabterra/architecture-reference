@@ -1,0 +1,38 @@
+{
+  "name": "architecture-reference",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Architecture Reference — a visual guide to software architecture spanning foundations, styles, domain-driven design, microservices, event-driven and distributed systems, APIs, cloud & SaaS, process automation and the architect's career.",
+  "author": "Ehab Terra",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/ehabterra/architecture-reference#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ehabterra/architecture-reference.git"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build && node scripts/write-assetsignore.mjs",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^13.7.0",
+    "@astrojs/mdx": "^4.3.14",
+    "@astrojs/react": "^4.4.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "astro": "^5.18.2",
+    "mermaid": "^11.15.0",
+    "prismjs": "^1.30.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-simple-code-editor": "^0.14.1"
+  },
+  "devDependencies": {
+    "@types/prismjs": "^1.26.6",
+    "cheerio": "^1.2.0",
+    "wrangler": "^4.100.0"
+  }
+}

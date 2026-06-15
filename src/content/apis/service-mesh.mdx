@@ -1,0 +1,138 @@
+---
+title: "Service Mesh"
+category: api-management
+kind: topic
+order: 10
+difficulty: "Advanced"
+status: ready
+intent: "A pattern for managing all east–west service-to-service traffic — routing, reliability, observability, and mTLS — via sidecar proxies coordinated by a separate control plane."
+book: "Mastering API Architecture"
+related:
+  - api-gateways
+  - api-security
+  - choreography-and-async-communication
+when_use:
+  - "A polyglot, multi-team environment needs consistent routing, reliability, and security across many internal services."
+  - "You want transparent mTLS and L7 observability without per-language libraries."
+  - "You need traffic splitting/mirroring for canary releases between service versions."
+when_avoid:
+  - "A single-language stack where shared libraries already meet service-to-service needs."
+  - "Simple REST/RPC routing with no advanced cross-functional requirements (the mesh tax is not worth it)."
+quiz:
+  - q: "A service mesh manages which kind of traffic?"
+    options:
+      - text: "East–west (service-to-service) traffic within a distributed system"
+        correct: true
+      - text: "North–south ingress from external users"
+        correct: false
+      - text: "Only database queries"
+        correct: false
+      - text: "Only TLS certificate renewal"
+        correct: false
+    explain: "A mesh is optimized for east–west internal traffic, where the caller is typically a known internal service — the gateway handles north–south."
+  - q: "How are the control plane and data plane related in a service mesh?"
+    options:
+      - text: "They are always deployed separately; the data plane (proxies) does the work, the control plane coordinates"
+        correct: true
+      - text: "They are always the same process"
+        correct: false
+      - text: "There is no control plane in a mesh"
+        correct: false
+      - text: "The data plane only configures the control plane"
+        correct: false
+    explain: "In a mesh, control and data planes are always deployed separately; sidecar proxies are full proxies handling all client/server communication."
+  - q: "What capability does a mesh data plane add transparently to services?"
+    options:
+      - text: "mTLS, service identity, and authN/authZ without code changes"
+        correct: true
+      - text: "Automatic database sharding"
+        correct: false
+      - text: "Frontend rendering"
+        correct: false
+      - text: "Source code compilation"
+        correct: false
+    explain: "The data plane can manage service identities and certs to enable mutual TLS and service-level authN/authZ with no application code changes."
+  - q: "Which is a service-mesh anti-pattern?"
+    options:
+      - text: "Putting business logic / payload transformation into the mesh (mesh-as-ESB)"
+        correct: true
+      - text: "Enabling strict mTLS"
+        correct: false
+      - text: "Using a DestinationRule for load balancing"
+        correct: false
+      - text: "Collecting golden metrics"
+        correct: false
+    explain: "Mesh-as-ESB (business logic in the mesh), mesh-as-gateway, and too many networking layers are the named anti-patterns to avoid."
+takeaway: "A service mesh consistently handles east–west routing, reliability, observability, and mTLS via sidecars — adopt it for polyglot, multi-team, security-heavy estates, not simple stacks."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🚦 Analogy">
+If the API gateway is the building's reception desk, the service mesh is the internal mail and security system between every office. Each office gets a dedicated clerk (a sidecar) who stamps, logs, encrypts, and routes every memo — so the staff just write memos and the clerks handle delivery, identity checks, and retries consistently across the whole building.
+</Callout>
+
+## What a service mesh is
+
+A **service mesh** is a pattern for managing **all service-to-service (east–west) communication** in a distributed system: **traffic management** (routing), **resilience**, **observability**, and **security**. It is the east–west counterpart to the [API gateway](/apis/api-gateways/), with two key differences: it is optimized for traffic *within* a cluster, and the originator is typically a **known internal service**, not an external user. Its data-plane-to-service mapping is **one-to-one** — a mesh does not aggregate calls the way a gateway can.
+
+Like a gateway, it has a control plane and a data plane — but in a mesh they are **always deployed separately**.
+
+<Mermaid code={String.raw`graph TD
+  CP["Control plane<br/>(routes, policies, identity)"] -. configures .-> P1
+  CP -. configures .-> P2
+  subgraph Pod A
+    A["Attendee service"] --> P1["Sidecar proxy"]
+  end
+  subgraph Pod B
+    P2["Sidecar proxy"] --> S["Session service"]
+  end
+  P1 -->|"mTLS, retries, metrics"| P2`} />
+
+## The sidecar model
+
+The most common implementation runs a **sidecar proxy** alongside each service. All traffic flows transparently through these **full proxies** (they maintain both network stacks, handling all client↔server communication in both directions). The sidecar adds capabilities **without language-specific libraries**, which is why a mesh suits **polyglot** estates:
+
+- **mTLS and identity** — the data plane manages service identities (e.g. SPIFFE) and certificates, enabling strict mutual TLS and service-level authN/authZ with **no code changes**.
+- **Reliability patterns** — retries, timeouts, circuit breakers, bulkheads, fallbacks (from Nygard's *Release It!*). Because the mesh sits on every call, it is the ideal place to apply these consistently.
+- **Traffic shaping / splitting / mirroring** — gradually shift traffic between versions, the foundation for **canary** releases.
+- **Observability** — transparent L7/L4 golden metrics (request volume, success rate, latency).
+
+Reliability is non-negotiable because of the **8 fallacies of distributed computing** (the network is reliable, latency is zero, bandwidth is infinite, …) — all false in the long run.
+
+## Implementation options
+
+The mesh has evolved through four mechanisms, each with different upgrade and observability trade-offs:
+
+- **Libraries** (Finagle, Netflix OSS) — shared frameworks per language; tie you to a platform and force lock-step upgrades across a polyglot estate.
+- **Sidecar proxies** (Istio/Envoy, Linkerd, Consul) — the most common pattern today; resource cost per proxy plus added latency.
+- **Proxyless gRPC** — the gRPC library is the data plane, configured by an external control plane via xDS; gRPC-only.
+- **Sidecarless / eBPF** (Cilium) — push networking into the kernel; one Envoy per node, lower overhead, but upgrades mean kernel-program patching.
+
+<Mermaid code={String.raw`graph TD
+  Mesh["Mesh data plane"] --> Lib["Libraries<br/>per language, lock-step upgrades"]
+  Mesh --> Side["Sidecar proxies<br/>most common, per-proxy cost"]
+  Mesh --> Proxyless["Proxyless gRPC<br/>gRPC only, xDS config"]
+  Mesh --> EBPF["Sidecarless eBPF<br/>kernel, lower overhead"]`} />
+
+<Callout type="gotcha" title="The sidecar tax is real">
+At scale the proxies add up: 20 services × 5 pods × 3 nodes = 100 proxy containers. Even after tuning a proxy down to ~60–70 MB, that is roughly 2 GB per node just for the mesh. The control plane is the most vulnerable component and sits on the hot path — make it HA, secured, and monitored.
+</Callout>
+
+## When to adopt — and when not to
+
+Both libraries and meshes can satisfy service-to-service needs; the mesh scales better for **polyglot, multi-team, security-heavy** environments. If you run a single language with only simple REST/RPC routing, libraries may be enough. Always use the simplest solution with an eye to the near future, and adopt **only one** mesh in a stack — choosing a mesh is a **Type 1 (hard-to-reverse)** decision; generally adopt OSS or commercial rather than build.
+
+<Callout type="go" title="Avoid the named anti-patterns">
+Three to steer clear of: mesh-as-ESB (business logic or payload transformation in the mesh), mesh-as-gateway (paying mesh cost for a weaker ingress), and too many networking layers (header stripping, added latency, duplicated circuit breaking). Fix the last by coordinating all the teams whose layers stack up.
+</Callout>
+
+## Network segmentation
+
+A mesh can enforce **which services may communicate**. Consul "intentions" express service-to-service permissions by name (identity verified by the TLS client cert); the best practice is to flip the default to **deny all** via a wildcard, then explicitly allow each pair. OPA (Open Policy Agent) is a popular alternative.
+
+## See also
+
+- [API gateways](/apis/api-gateways/) — the north–south counterpart; avoid loopback by using a mesh internally.
+- [API security](/apis/api-security/) — how mTLS and service identity fit the wider security picture.
+- [Choreography and async communication](/apis/choreography-and-async-communication/) — loose coupling beyond synchronous calls.

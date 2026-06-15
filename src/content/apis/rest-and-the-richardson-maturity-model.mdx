@@ -1,0 +1,122 @@
+---
+title: "REST and the Richardson Maturity Model"
+category: api-rest
+kind: topic
+order: 4
+difficulty: "Beginner"
+status: ready
+intent: "REST's constraints and the four levels of the Richardson Maturity Model — and why Level 2 is the practical sweet spot for most HTTP APIs."
+book: "Mastering API Architecture; RESTful Web API Patterns and Practices Cookbook"
+related:
+  - api-styles-overview
+  - hypermedia-and-hateoas
+  - idempotency-and-safety
+when_use:
+  - "You want to assess or improve how RESTful an HTTP API actually is."
+  - "You are designing a resource model and choosing verbs deliberately."
+  - "You need a shared vocabulary to discuss REST maturity with a team."
+when_avoid:
+  - "The exchange is a high-performance internal call better served by gRPC."
+  - "You are tempted to chase Level 3 hypermedia where a fixed spec is simpler and sufficient."
+quiz:
+  - q: "Which is NOT one of Fielding's REST constraints?"
+    options:
+      - text: "Guaranteed exactly-once delivery"
+        correct: true
+      - text: "Statelessness"
+        correct: false
+      - text: "Cacheability"
+        correct: false
+      - text: "Uniform interface"
+        correct: false
+    explain: "REST requires resources, statelessness, cacheability, a uniform interface, and a layered system. Delivery guarantees are not a REST constraint."
+  - q: "What does Richardson Maturity Level 1 introduce?"
+    options:
+      - text: "Resources modelled in the URI (identity), e.g. GET /attendees/1"
+        correct: true
+      - text: "Hypermedia controls in responses"
+        correct: false
+      - text: "Multiple HTTP verbs per resource"
+        correct: false
+      - text: "A single URI with no verbs"
+        correct: false
+    explain: "Level 0 is HTTP-as-RPC (one URI, no verbs). Level 1 adds resources — Fowler's analogy is introducing 'identity' from object orientation."
+  - q: "Why does the book recommend Level 2 as the practical target?"
+    options:
+      - text: "It projects an understandable resource model with appropriate verbs, reduces coupling, and hides backing-service detail"
+        correct: true
+      - text: "It is the only level that uses HTTP"
+        correct: false
+      - text: "It guarantees the API is bug-free"
+        correct: false
+      - text: "It removes the need for status codes"
+        correct: false
+    explain: "Level 2 (resources + verbs) gives clear actions, reduces coupling, abstracts the backend, and that abstraction later helps with versioning."
+  - q: "What is the defining feature of Richardson Level 3?"
+    options:
+      - text: "Hypermedia controls (HATEOAS) — responses include the actions possible next and how to invoke them"
+        correct: true
+      - text: "Binary serialization"
+        correct: false
+      - text: "Mandatory OAuth2"
+        correct: false
+      - text: "A single endpoint"
+        correct: false
+    explain: "Level 3 is HATEOAS: responses embed the next possible actions, making the API navigable. It is the epitome of REST but rarely used in modern HTTP services."
+takeaway: "REST = resources + statelessness + cacheability + uniform interface + layering; aim for Richardson Level 2 (resources and verbs) as the practical default."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🪜 Analogy">
+The Richardson Maturity Model is a staircase, not a verdict. Level 0 is shouting one generic order at a single counter. Level 1 is having labelled aisles (resources). Level 2 is using the right action in each aisle — pick up, put back, remove. Level 3 hands you a map that updates as you walk. Most shops run perfectly well at Level 2.
+</Callout>
+
+## What makes an API RESTful
+
+**REST** (Representational State Transfer) is a set of architectural constraints from Roy Fielding's dissertation, most often applied over HTTP. To be RESTful, an API must:
+
+- Model a producer-to-consumer interaction where the producer exposes **resources**.
+- Be **stateless** — the producer caches no details of previous requests; the consumer sends all required context every time.
+- Be **cacheable** — the producer can provide caching hints (usually in HTTP headers).
+- Convey a **uniform interface** — consistent verbs, resources, and patterns.
+- Be a **layered system** — the consumer should not know or care whether it is hitting a database or other services.
+
+REST defines a **representation** in the body and representation **metadata** in headers: an `Accept` header states what the consumer wants, `Content-Type` describes what is returned, and **status codes** (200 OK, 201 Created, …) let the consumer interrogate the outcome.
+
+<Mermaid code={String.raw`graph LR
+  C["Consumer"] -->|"verb plus Accept header"| S["Producer"]
+  S -->|"status code"| Outcome["200, 201, 4xx, 5xx"]
+  S -->|"Content-Type plus body"| Repr["Representation"]`} />
+
+## The four levels
+
+Leonard Richardson's heuristics (QCon 2008; popularised by Martin Fowler) describe how far an API has adopted REST.
+
+<Mermaid code={String.raw`graph TD
+  L0["Level 0 — HTTP as RPC<br/>one URI, no verbs"] --> L1["Level 1 — Resources<br/>GET /attendees/1"]
+  L1 --> L2["Level 2 — Verbs<br/>GET / PUT / DELETE per resource"]
+  L2 --> L3["Level 3 — Hypermedia (HATEOAS)<br/>responses carry next actions"]`} />
+
+- **Level 0 — HTTP/RPC.** One URI, no verbs to express intent (`/attendees` as a single endpoint). Essentially RPC tunnelled over HTTP.
+- **Level 1 — Resources.** Resources modelled in the URI (`GET /attendees/1`). Fowler's analogy: introducing *identity* from object orientation.
+- **Level 2 — Verbs.** Multiple resource URIs accessed by different HTTP verbs based on their effect on server state — adding `PUT /attendees/1`, `DELETE /attendees/1`, with the guarantee that GET never mutates state. See [idempotency and safety](/apis/idempotency-and-safety/).
+- **Level 3 — Hypermedia controls (HATEOAS).** Responses include the actions now possible on the returned object and how to invoke them, making the API navigable. This is [HATEOAS](/apis/hypermedia-and-hateoas/) — the epitome of REST.
+
+## Why Level 2 is the practical target
+
+The book's rule of thumb: moving toward **Level 2** projects an understandable resource model with appropriate actions, **reduces coupling**, and **hides backing-service detail** — and that abstraction later helps with [versioning](/apis/api-versioning-and-evolution/). It is the natural home for most HTTP APIs.
+
+<Callout type="gotcha" title="Level 3 is rarely the right place to live">
+HATEOAS is the textbook ideal, yet rarely used in modern RESTful HTTP services: it is a 'chatty' experience, doesn't suit interservice calls, and is often short-circuited by agreeing the full set of interactions up front via a specification. It earns its keep in flexible, UI-style systems — not everywhere.
+</Callout>
+
+<Callout type="go" title="REST is a loose standard">
+Because REST leaves error formats, naming, and pagination to you, conform to an agreed API standard (e.g. the Microsoft REST API Guidelines using RFC-2119 MUST/SHOULD language) for consistency across all your APIs.
+</Callout>
+
+## See also
+
+- [Hypermedia and HATEOAS](/apis/hypermedia-and-hateoas/) — what Level 3 really looks like.
+- [Idempotency and safety](/apis/idempotency-and-safety/) — the verb semantics behind Level 2.
+- [API styles overview](/apis/api-styles-overview/) — when REST is the wrong tool entirely.

@@ -1,0 +1,115 @@
+---
+title: "What Is Serverless?"
+category: cld-serverless
+kind: guide
+order: 1
+difficulty: "Start here"
+status: ready
+intent: "Serverless is not just FaaS — it is an ecosystem of fully managed services you compose rather than program, billed per use and scaled to zero."
+book: "Serverless Development on AWS (Brisals & Hedger)"
+related:
+  - serverless-first-design
+  - event-driven-serverless-patterns
+when_use:
+  - "You want to outsource undifferentiated heavy lifting (patching, scaling, HA) to the cloud provider"
+  - "Workloads are spiky or unpredictable and benefit from scale-to-zero and pay-per-use"
+  - "You can compose a solution from managed services instead of running your own infrastructure"
+when_avoid:
+  - "Compute-heavy/HPC or low-level OS/network programs that need dedicated hardware"
+  - "Long-running batch jobs that exceed the 15-minute function timeout and cannot be split"
+  - "Ultra-fast, consistent sub-10ms responses ~100% of the time, or durable proprietary-protocol connections"
+quiz:
+  - q: "What is the most accurate definition of serverless?"
+    options:
+      - text: "Using fully managed cloud services to do the undifferentiated heavy lifting, abstracting away server maintenance"
+        correct: true
+      - text: "Running code without any servers existing anywhere"
+        correct: false
+      - text: "Another name for AWS Lambda and FaaS"
+        correct: false
+      - text: "Deploying containers without orchestration"
+        correct: false
+    explain: "Servers still exist — the provider runs them. Serverless means you stop managing infrastructure and compose managed services; FaaS is only one part of that ecosystem."
+  - q: "What does 'scale to zero' mean?"
+    options:
+      - text: "Idle execution environments are reclaimed so you pay nothing when there is no traffic"
+        correct: true
+      - text: "Functions can never scale beyond a fixed cap"
+        correct: false
+      - text: "Storage is automatically deleted after inactivity"
+        correct: false
+      - text: "Errors automatically scale down concurrency"
+        correct: false
+    explain: "Managed services reclaim warm environments after inactivity, so you pay only for use. 'Infinite' scaling is bounded by account concurrency limits."
+  - q: "Which is a key serverless trade-off (gotcha)?"
+    options:
+      - text: "Cold starts — latency to provision a new execution environment"
+        correct: true
+      - text: "You must patch the operating system yourself"
+        correct: false
+      - text: "You always pay for idle capacity"
+        correct: false
+      - text: "Functions cannot be triggered by events"
+        correct: false
+    explain: "A new execution environment must be provisioned on first invocation; cold-start latency depends on package size, runtime, memory, and init work."
+takeaway: "Serverless is composing fully managed services — not just Lambda — billed per use and scaled to zero; code is a liability, the system is the asset."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Owning a car means buying it, insuring it, fuelling it, and parking it whether you drive or not. Serverless is ride-hailing: you summon a ride, pay only for the trip, and someone else owns, maintains, and parks the fleet. You stop managing the vehicle and start focusing on where you want to go.
+</Callout>
+
+## Serverless is an ecosystem, not a technology
+
+The single biggest misconception is that **serverless equals FaaS equals AWS Lambda**. Brisals and Hedger argue the opposite: serverless is a complete **technology ecosystem** of fully managed services, architectural patterns, organizational practices, and cultural habits. **FaaS (function as a service)** — running function code without provisioning hardware — is only *one part* of it.
+
+The defining idea is **undifferentiated heavy lifting**: the patching, scaling, capacity planning, and high-availability work that gives your business no competitive advantage. You let the provider do it and you **compose** solutions from managed services rather than programming everything yourself. Two of the book's maxims capture the mindset: **"code is a liability; the system is the asset,"** and "the code you write today is legacy tomorrow."
+
+## Managed vs. fully managed
+
+Not every cloud service is serverless. The book draws a sharp line:
+
+- **Managed services** still leave operational work to you. Amazon RDS, for example, runs the database engine but still requires you to set up a VPC, security groups, and instances.
+- **Fully managed / serverless services** abstract all of that away — Amazon **DynamoDB** and **S3** have no servers to size or patch.
+
+<Mermaid code={String.raw`graph TD
+  C["Cloud services"] --> MS["Managed<br/>(you still operate)"]
+  C --> FM["Fully managed / serverless<br/>(nothing to size or patch)"]
+  MS --> RDS["Amazon RDS<br/>(VPC, security groups, instances)"]
+  FM --> DDB["DynamoDB"]
+  FM --> S3["S3"]`} />
+
+<Mermaid code={String.raw`graph TD
+  E["Event source<br/>(API, queue, schedule, S3 upload)"] --> B["Event bus / trigger"]
+  B --> F["Function (FaaS)<br/>transform, not transport"]
+  F --> D["Fully managed data<br/>(DynamoDB, S3)"]
+  F --> O["Other managed services<br/>(SQS, EventBridge, Step Functions)"]
+  D --> X["Pay only for what you store/read"]
+  F --> Y["Pay only per invocation + memory"]`} />
+
+## The serverless characteristics
+
+- **Pay-per-use** — you pay per invocation plus memory, and for data you pay per volume stored per month. No paying for a whole idle disk or array.
+- **Autoscaling and scale to zero** — services scale up and down automatically; idle environments are reclaimed. "Infinite" scaling is really bounded by **account concurrency limits**; **provisioned concurrency** keeps environments warm.
+- **High availability out of the box** — redundancy across **Availability Zones** avoids single points of failure.
+- **Granular, per-resource control** — configure each Lambda, SQS queue, or DynamoDB table independently (memory, timeout, concurrency, retention).
+
+<Callout type="gotcha" title="Cold starts and timeouts">
+A function's first invocation pays a **cold start** — the latency to provision a fresh execution environment (an isolated Firecracker MicroVM). It is shaped by package size, language runtime, allocated memory, and static initialization. Functions also have a hard **15-minute maximum timeout**, which rules out long-running jobs that cannot be split into chunks.
+</Callout>
+
+## When serverless is the wrong fit
+
+Serverless is "not a silver bullet." Poor-fit workloads include compute-heavy/HPC tasks (use HPC-optimized instances), long-running batch beyond the function timeout, low-level OS/processor/network programs, ultra-fast consistent-response needs (~10ms, ~100% of the time), and durable connections over proprietary protocols. For these, consider a hybrid container-plus-serverless design — see [serverless-first design](/cloud/serverless-first-design/), which frames serverless as a *first* choice, not a *must*.
+
+<Callout type="go" title="Key insight">
+Adopting serverless successfully is as much about people, process, and culture as technology. The goal is to let the provider do the undifferentiated heavy lifting so your teams deliver business value faster — operating at a granular, per-resource level.
+</Callout>
+
+## See also
+
+- [Serverless-first design](/cloud/serverless-first-design/) — the X-first disciplines that precede choosing serverless.
+- [Event-driven serverless patterns](/cloud/event-driven-serverless-patterns/) — how managed services are composed.
+- [Observability and cost](/cloud/observability-and-cost/) — operating pay-per-use systems in production.

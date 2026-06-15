@@ -1,0 +1,148 @@
+---
+title: "Communication and Consistency: CAP and the Models"
+category: ds-foundations
+kind: topic
+order: 2
+difficulty: "Beginner"
+status: ready
+intent: "What CAP really forces you to choose, and the spectrum from eventual to strict serializability — so you pick a consistency model on purpose, not by accident."
+book: "Foundations of Scalable Systems (Ian Gorton)"
+related:
+  - fallacies-of-distributed-computing
+  - distributed-databases
+  - consensus-and-coordination
+when_use:
+  - "When a system replicates data and you must decide what clients see during and after a write."
+  - "When availability under a network partition is a business requirement."
+  - "When deciding whether an interaction tolerates a stale read or demands the latest value."
+  - "When tuning per-operation guarantees (N/W/R quorums, write/read concerns) instead of one model for the whole database."
+  - "When concurrent writes to the same key are possible and you must pick a conflict-resolution strategy."
+when_avoid:
+  - "For single-node, single-replica data where there is nothing to keep consistent."
+  - "Reaching for strict serializability everywhere when eventual consistency would do — it costs latency and availability."
+  - "Using Last Writer Wins for mutable, business-critical data where a silently dropped update is unacceptable."
+  - "Assuming the CAP choice applies when the network is healthy — it only bites during a partition."
+  - "Expecting W=N ('immediate consistency') to give you serializable transactions — it does not."
+quiz:
+  - q: "Under the CAP theorem, what must a replicated database choose during a network partition?"
+    options:
+      - text: "Between consistency (return an error) and availability (accept a temporary inconsistency)"
+        correct: true
+      - text: "Between performance and security"
+        correct: false
+      - text: "Between SQL and NoSQL"
+        correct: false
+      - text: "Nothing — it can always provide both"
+        correct: false
+    explain: "CAP only bites during a partition: a CP system sacrifices availability (errors out) to stay consistent; an AP system stays available but may serve stale data. When the network is healthy a system can be both."
+  - q: "In tunable consistency with N replicas, which condition guarantees a read sees the latest write?"
+    options:
+      - text: "R + W > N (read and write quorums overlap)"
+        correct: true
+      - text: "R = 1 and W = 1"
+        correct: false
+      - text: "R + W < N"
+        correct: false
+      - text: "Only N = 1"
+        correct: false
+    explain: "When the read set and write set must overlap by at least one replica, a quorum read is guaranteed to include a replica holding the latest quorum write."
+  - q: "What does 'Read Your Own Writes' (RYOW) guarantee?"
+    options:
+      - text: "A client's own subsequent reads reflect its own updates"
+        correct: true
+      - text: "All clients immediately see every write"
+        correct: false
+      - text: "Writes are never lost"
+        correct: false
+      - text: "Reads always go to the nearest replica"
+        correct: false
+    explain: "RYOW is a per-client guarantee. It is commonly implemented by routing the client's reads to the leader, or via bookmarks/tokens, without forcing global strong consistency."
+  - q: "Why is Last Writer Wins (LWW) conflict resolution risky?"
+    options:
+      - text: "Cross-node timestamps are unreliable, so concurrent updates can be silently discarded"
+        correct: true
+      - text: "It is too slow for production"
+        correct: false
+      - text: "It requires a network partition to function"
+        correct: false
+      - text: "It only works with SQL databases"
+        correct: false
+    explain: "Clock drift makes timestamps from different nodes meaningless to compare, so LWW can silently drop a genuinely concurrent update — the shared-playlist data-loss problem."
+takeaway: "CAP forces a consistency-vs-availability choice only during partitions; tune N/W/R so R+W>N when you need fresh reads, and accept staleness elsewhere."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Imagine two bank branches that can't phone each other for an hour. They can refuse all transactions until the line is back (consistent but unavailable), or keep letting people withdraw and reconcile later (available but possibly inconsistent — two withdrawals might overdraw). There is no third option that is both perfectly correct *and* always open during the outage. That is CAP in one sentence.
+</Callout>
+
+Once data lives on more than one replica, you must answer a sharp question: **what do clients see while an update is propagating, and after a failure?** This is the heart of consistency, and it trades directly against availability and latency.
+
+## The CAP theorem
+
+Brewer's **CAP theorem** says that **under a network partition** a replicated database must choose between **Consistency** and **Availability**:
+
+- **CP** — return an error rather than serve possibly-stale data (consistency preserved, availability sacrificed).
+- **AP** — keep serving, accepting temporary inconsistency (availability preserved, consistency relaxed).
+
+<Mermaid code={String.raw`graph TD
+  P{"Network partition<br/>between replicas"}
+  P --> CP["CP: return an error<br/>(stay consistent, lose availability)"]
+  P --> AP["AP: keep serving stale<br/>(stay available, lose consistency)"]
+  Healthy["Network healthy"] -.->|"can be both C and A"| Both["No trade-off"]`} />
+
+The often-missed nuance: **when the network is healthy, a system can be both consistent and available.** CAP only forces the choice during a partition. And the AP/CP labels are rarely absolute — most real databases let you **tune toward either** per operation.
+
+## The inconsistency window
+
+In an **eventually consistent** system, a write is acknowledged after reaching *some* replicas and propagates to the rest asynchronously. The **inconsistency window** is how long that takes, lengthened by three factors:
+
+- **Number of replicas** to update.
+- **Operational environment** — transient failures, lost packets, heavy load.
+- **Distance between replicas** — sub-millisecond on a LAN, tens of milliseconds across continents.
+
+With asynchronous propagation there is **no knowable upper bound** on the window. A useful middle ground is **Read Your Own Writes (RYOW)**: a per-client guarantee that *your* later reads reflect *your* updates — implemented by routing your reads to the leader, or via bookmarks/tokens that only up-to-date replicas honour.
+
+## Tunable consistency: N, W, R
+
+Leaderless systems (from Amazon's Dynamo lineage) expose three dials:
+
+- **N** — number of replicas.
+- **W** — replicas that must confirm before a write returns.
+- **R** — replicas read before returning a value.
+
+<Mermaid code={String.raw`graph LR
+  W1["W = N<br/>(CP-leaning)"] -->|"slow, failure-prone writes"| CONS["Favors consistency"]
+  W2["W = 1<br/>(AP-leaning)"] -->|"fast writes"| AVAIL["Favors availability,<br/>inconsistency window"]
+  Q["Quorum:<br/>R + W &gt; N"] -->|"read & write sets overlap"| FRESH["Reads see latest write"]`} />
+
+With N=3, setting **W=3** gives "immediate consistency" (slow, fragile writes); **W=1** maximises availability but opens an inconsistency window. The key result is the **quorum** rule: set W and R so that **R + W > N** and the read majority necessarily overlaps the write majority, guaranteeing a quorum read sees the latest quorum write. (Some systems use a **sloppy quorum** with **hinted handoff** to keep writing during failures, which can still serve stale reads.)
+
+## The strong-consistency end of the spectrum
+
+At the far end sit **strongly consistent** systems delivering ACID guarantees. Two distinct ideas hide under the term:
+
+- **Transactional consistency** — the "C" in ACID: agreement across partitions within a transaction.
+- **Replica consistency** — all clients see the same value regardless of which replica they hit.
+
+Both are solved with **consensus** (see [consensus and coordination](/distributed-systems/consensus-and-coordination/)). The strongest model, **strict serializability / external consistency**, combines **serializability** (concurrent transactions behave like *some* serial order) with **linearizability** (single-object reads always reflect the most recent write, ordered by wall-clock time). Google Spanner achieves this globally using its **TrueTime** service plus a **commit wait**.
+
+<Callout type="gotcha" title="⚠️ Conflicts silently lose data">
+With concurrent writes to the same key on different replicas, <strong>Last Writer Wins (LWW)</strong> resolves by timestamp — but clock drift makes cross-node timestamps meaningless, so a genuinely concurrent update can be <em>silently discarded</em> (the shared-playlist example). Safer alternatives are <strong>version vectors</strong> (detect concurrency as a conflict) and <strong>CRDTs</strong> (types that converge regardless of order).
+</Callout>
+
+<Callout type="tip" title="🛠️ Match the model to the interaction">
+Not every operation needs the same guarantee. A dinner-photo reaching some followers seconds late is fine (eventual, AP). A bank balance or a final auction bid needs the latest value (strong, CP). Most systems are <em>mixed</em> — tune per operation rather than picking one model for the whole database.
+</Callout>
+
+## Choosing deliberately
+
+Eventual consistency enables simple, partitionable, highly available models but **inevitably permits stale reads and conflicting concurrent writes**. Strong consistency removes that application complexity at the cost of extra coordination, latency, and reduced availability under partition. The architect's job is to know which the business actually needs — see [distributed databases](/distributed-systems/distributed-databases/) for how real engines expose these knobs.
+
+## See also
+
+- [The fallacies of distributed computing](/distributed-systems/fallacies-of-distributed-computing/) — why these trade-offs exist at all.
+- [Consensus and coordination](/distributed-systems/consensus-and-coordination/) — how strong consistency is achieved.
+- [Distributed databases](/distributed-systems/distributed-databases/) — replication, sharding, and tunable consistency in practice.
+- [Time and ordering](/distributed-systems/time-and-ordering/) — why LWW timestamps can't be trusted.

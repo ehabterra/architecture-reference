@@ -1,0 +1,135 @@
+---
+title: "Serving Patterns: Replicated, Sharded, Scatter/Gather"
+category: ds-patterns
+kind: topic
+order: 11
+difficulty: "Advanced"
+status: ready
+intent: "The three multi-node serving topologies — replicate to scale requests, shard to scale data, scatter/gather to scale time — plus the readiness, hot-sharding, and straggler realities that govern them."
+book: "Designing Distributed Systems (Brendan Burns)"
+related:
+  - single-node-patterns
+  - load-balancing
+  - caching
+when_use:
+  - "Replicated: stateless services that scale by adding identical replicas behind a load balancer."
+  - "Sharded: stateful services or caches whose data is too large for one machine."
+  - "Scatter/gather: a single request needing large, mostly independent parallel processing."
+when_avoid:
+  - "Scatter/gather with high fan-out when tail latency or per-leaf failure would dominate every request."
+  - "Sharding stateless workloads that replicate perfectly well, adding routing complexity for no gain."
+quiz:
+  - q: "What does each serving pattern primarily scale?"
+    options:
+      - text: "Replicated scales requests/second, sharded scales data size, scatter/gather scales time (per-request latency via parallelism)"
+        correct: true
+      - text: "They all scale the same dimension"
+        correct: false
+      - text: "Replicated scales data, sharded scales requests, scatter/gather scales cost"
+        correct: false
+      - text: "Only scatter/gather scales anything"
+        correct: false
+    explain: "Replication adds identical replicas to serve more requests; sharding splits data across machines; scatter/gather farms one request out to many leaves to finish it faster."
+  - q: "How does a readiness probe differ from a liveness/health probe?"
+    options:
+      - text: "Readiness tells the load balancer when an instance is ready to serve (DB connected, files loaded); liveness only checks it is alive"
+        correct: true
+      - text: "They are identical"
+        correct: false
+      - text: "Readiness checks the database, liveness checks the network only"
+        correct: false
+      - text: "Liveness is for sharded services only"
+        correct: false
+    explain: "An instance can be alive but not yet ready (still loading plugins or connecting to databases). The readiness probe gates traffic until it can actually serve."
+  - q: "Why does naive `hash % N` re-sharding behave like a total cache failure when N changes?"
+    options:
+      - text: "Changing the modulus remaps most keys to different shards; consistent hashing remaps only ~#keys/#shards"
+        correct: true
+      - text: "It deletes all data"
+        correct: false
+      - text: "It doubles memory usage"
+        correct: false
+      - text: "It only affects writes"
+        correct: false
+    explain: "Going from %10 to %11 moves nearly every key, invalidating the cache. Consistent hashing limits movement to roughly #keys/#shards (e.g. under 10% going 10→11)."
+  - q: "What is the straggler problem in scatter/gather?"
+    options:
+      - text: "The root must wait for the slowest leaf, so high fan-out makes tail latency hit nearly every request"
+        correct: true
+      - text: "Leaves return before the root is ready"
+        correct: false
+      - text: "The root crashes under load"
+        correct: false
+      - text: "Replicas drift out of sync"
+        correct: false
+    explain: "A 99th-percentile leaf latency scattered to 5 leaves affects ~5% of requests; scattered to 100 leaves, essentially every request hits it. The same logic makes per-leaf failure compound — so P99 matters most."
+takeaway: "Replicate to scale requests, shard to scale data, scatter/gather to scale time — use consistent hashing, replicate each shard, and watch tail latency at high fan-out."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A restaurant scales three ways. To serve more diners it hires identical cooks (replication). When the menu outgrows one kitchen it splits stations — grill, pastry, salad — each owning part of the work (sharding). To plate one giant banquet order faster, every station works on it at once and a head chef assembles the plates (scatter/gather). Same kitchen, three different dimensions of "more."
+</Callout>
+
+**Serving patterns** are multi-node, loosely coupled topologies for long-running serving systems. Built from [single-node patterns](/distributed-systems/single-node-patterns/), they decouple services behind formal APIs so each scales independently. Three patterns cover most needs, each scaling a different dimension.
+
+## Replicated load-balanced services — scale requests
+
+The simplest and most familiar pattern: every server is **identical** and can serve every request, with a [load balancer](/distributed-systems/load-balancing/) in front of a scalable number of replicas.
+
+- **Stateless services** need no saved state — requests can even go to separate instances. They replicate for redundancy and scale. Burns' availability argument: a "three-nines" SLA leaves only ~1.4 minutes of downtime per day, so a single instance would have to upgrade in under 1.4 minutes — instead, run two replicas behind a load balancer so users are served during rollouts and crashes.
+- **Readiness probes** are distinct from liveness probes: readiness tells the load balancer an instance is *ready* (databases connected, files loaded), not merely *alive*.
+- **Session-tracked services** route a user's requests to the same replica (for in-memory caching), typically by hashing source+destination IP — but IP tracking fails across NAT, so use cookies or headers.
+- **Caching layer** — add a few large cache replicas (e.g. two with 5 GB) as a separate tier above many small web replicas, rather than a per-server sidecar (which would scale cache and web together and lower the hit rate). Reverse proxies like Varnish add **rate limiting / DoS defense** (returning HTTP 429) and, fronted by nginx, **SSL termination** — yielding a three-tier stack: nginx (SSL) → Varnish (cache) → web app.
+
+## Sharded services — scale data
+
+Where replicated services are homogeneous, in **sharded services** each replica (a **shard**) serves only a subset of requests, and a load-balancing **root** routes each request to the right shard. Replicated suits stateless workloads; sharded suits stateful ones, primarily because **state is too large for one machine** (see the [caching](/distributed-systems/caching/) discussion of effective cache size).
+
+<Mermaid code={String.raw`graph TD
+  ROOT["Root / shard router"] -->|"Shard = hash(key) % N"| S0["Shard 0 (+ replicas)"]
+  ROOT --> S1["Shard 1 (+ replicas)"]
+  ROOT --> S2["Shard 2 (+ replicas)"]
+  HOT["Hot shard A"] -. "autoscale independently" .-> ROOT`} />
+
+- **Sharding functions** — `Shard = ShardingFunction(Req)`, with two essential properties: **determinism** (same input → same shard) and **uniformity** (even load). Typically `hash(Req) % N`.
+- **Selecting the key** — hashing the whole request is usually wrong. For a cache, hash `request.path` (so requests differing only in time/IP share a shard); if locale matters, `shard(country(request.ip), request.path)` is the right granularity — neither too general nor too specific.
+- **Replicated, sharded** — implement each shard as a replicated service so it survives failures and rollouts, and supports **hot sharding** (a viral item makes its shard hot; replicate that shard and consolidate cool ones).
+
+<Callout type="gotcha" title="⚠️ Use consistent hashing or lose everything on resize">
+Naive <code>hash % N</code> re-sharding (10→11 shards changes <code>%10</code> to <code>%11</code>) remaps <em>most</em> keys — effectively a total cache failure. <strong>Consistent hashing</strong> guarantees only ~<code>#keys / #shards</code> remap (under 10% going 10→11). Always shard with a consistent hash function (e.g. nginx <code>hash $request_uri consistent</code>).
+</Callout>
+
+## Scatter/gather — scale time
+
+Where replication scales requests/second and sharding scales data size, **scatter/gather** scales **time** by parallelizing a *single* request. A tree (root + leaves) farms one request out to **all** leaves simultaneously; each returns a partial result, and the root combines them.
+
+<Mermaid code={String.raw`graph TD
+  REQ["Single request"] --> ROOT["Root"]
+  ROOT -->|"scatter"| L0["Leaf 0<br/>partial result"]
+  ROOT -->|"scatter"| L1["Leaf 1<br/>partial result"]
+  ROOT -->|"scatter"| L2["Leaf 2<br/>partial result"]
+  L0 -->|"gather"| ROOT
+  L1 -->|"gather"| ROOT
+  L2 -->|"gather"| ROOT
+  ROOT --> OUT["Combined result"]`} />
+
+- **Root distribution (replicated leaves)** — for "embarrassingly parallel" work. The document-search example farms "cat" to one leaf and "dog" to another, then the root **intersects** the returned document sets.
+- **Leaf sharding** — when data exceeds one machine, shard documents across leaves; a request goes to *all* shards and the root takes the **union** of results.
+- **Scale for reliability** — replicate each shard so the root can load-balance each leaf across healthy replicas, masking failures and enabling under-load upgrades.
+
+<Callout type="gotcha" title="⚠️ More leaves is not always faster — the straggler problem">
+The root waits for the <em>slowest</em> leaf. A 99th-percentile leaf latency of 2 s scattered to 5 leaves hits ~5% of requests; scattered to 100 leaves, essentially <strong>every</strong> request takes 2 s. Per-leaf failure compounds the same way (100 leaves at 1% failure ≈ every request fails). Conclusions: parallelism has diminishing returns from per-leaf overhead, and <strong>P99 performance matters far more</strong> because each request fans out into many.
+</Callout>
+
+<Callout type="go" title="💡 Real systems combine all three">
+These patterns aren't mutually exclusive — a production system layers them: replicated SSL/cache/web tiers in front, sharded (and replicated) storage behind, scatter/gather for parallel queries. Picking patterns from a shared catalog makes such systems easier to design and debug because the lessons transfer.
+</Callout>
+
+## See also
+
+- [Single-node patterns](/distributed-systems/single-node-patterns/) — the building blocks these compose from.
+- [Load balancing](/distributed-systems/load-balancing/) — the root/LB that fronts replicated and sharded services.
+- [Caching](/distributed-systems/caching/) — replicated vs sharded cache economics.
+- [Batch computational patterns](/distributed-systems/batch-computational-patterns/) — the batch counterpart to these serving topologies.

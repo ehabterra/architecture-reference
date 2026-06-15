@@ -1,0 +1,150 @@
+---
+title: "Microkernel Architecture"
+category: sty-monolithic
+kind: topic
+order: 6
+difficulty: "Intermediate"
+status: ready
+intent: "The plug-in style — a minimal core plus independent plug-ins, ideal for product-based and customizable apps, and the only style that can be technical OR domain partitioned."
+book: "Software Architecture Patterns (2nd ed.); Fundamentals of Software Architecture"
+related:
+  - layered-architecture
+  - pipeline-architecture
+  - technical-vs-domain-partitioning
+  - comparing-the-styles
+when_use:
+  - "You are building a product-based or customizable app with planned extensions over time."
+  - "You have many per-client or per-jurisdiction configurations that should not pollute the core."
+  - "You want evolutionary, incremental delivery: ship a minimal core, add features as plug-ins."
+when_avoid:
+  - "You need high scalability, elasticity, or fault tolerance — every request funnels through the core."
+  - "Most changes land in the core system rather than in plug-ins, so you aren't leveraging the model."
+quiz:
+  - q: "What are the two component types in a microkernel architecture?"
+    options:
+      - text: "A core system and plug-in modules"
+        correct: true
+      - text: "Producers and consumers"
+        correct: false
+      - text: "Presentation and persistence layers"
+        correct: false
+      - text: "Processing units and a data grid"
+        correct: false
+    explain: "Application logic is split between a basic core system and independent plug-in modules that add specialized or volatile functionality."
+  - q: "What is the plug-in registry for?"
+    options:
+      - text: "So the core knows which plug-ins exist and how to reach them (name, contract, access details)"
+        correct: true
+      - text: "To store plug-in source code"
+        correct: false
+      - text: "To replicate data across plug-ins"
+        correct: false
+      - text: "To load-balance requests across cores"
+        correct: false
+    explain: "The registry holds each plug-in's name, contract details, format, and access protocol so the core can discover and invoke it."
+  - q: "What makes microkernel unique among all the styles?"
+    options:
+      - text: "It is the only style that can be either technically OR domain partitioned"
+        correct: true
+      - text: "It is the only distributed style"
+        correct: false
+      - text: "It is the only style with five-star scalability"
+        correct: false
+      - text: "It is the only style with no database"
+        correct: false
+    explain: "Plug-ins as adapters/configuration make it technical; plug-ins that add functionality make it domain partitioned — a duality no other style has."
+  - q: "Why does microkernel have weak fault tolerance and scalability?"
+    options:
+      - text: "Every request must pass through the single core, which is a bottleneck and single point of failure"
+        correct: true
+      - text: "Plug-ins cannot be tested"
+        correct: false
+      - text: "It uses too many network calls"
+        correct: false
+      - text: "It has no registry"
+        correct: false
+    explain: "All requests flow through the core, so the core bottlenecks scalability and its failure takes everything down."
+takeaway: "A minimal core plus independent plug-ins gives product-grade extensibility cheaply — but every request through the core caps scalability and fault tolerance."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A microkernel is a web browser. The browser itself does a few core things — render pages, manage tabs — and everything else (ad blockers, password managers, dev tools) arrives as plug-ins you snap in or remove. The core never needs to know what any extension does; it just exposes the sockets they plug into.
+</Callout>
+
+## Topology
+
+The **microkernel** (a.k.a. **plug-in**) architecture splits application logic between a **core system** and independent **plug-in modules**. It is a natural fit for **product-based applications** but is equally common for custom internal business apps. Many operating systems implement it — the origin of the name.
+
+<Mermaid code={String.raw`graph TD
+  Core["Core system<br/>(minimal / happy-path logic)"]
+  Reg["Plug-in registry<br/>(name, contract, access)"]
+  Core --- Reg
+  Core --> P1["Plug-in: Jurisdiction A rules"]
+  Core --> P2["Plug-in: Jurisdiction B rules"]
+  Core --> P3["Plug-in: Audit-risk checker"]`} />
+
+- **Core system** — the minimal functionality to run, or the general "happy path" with little custom processing. It can be tiny (early Eclipse was barely a text editor) or full-featured (Chrome). Push cyclomatic complexity — a big `if/else` over device types or jurisdictions — *out* of the core into plug-ins.
+- **Plug-in modules** — standalone, independent components holding specialized processing, additional features, adapter logic, or custom code. They should not depend on each other, and inter-plug-in communication should be minimized to avoid tangled dependencies.
+- **Plug-in registry** — so the core knows which plug-ins exist and how to reach them: each plug-in's name, contract (input/output), format (e.g., XML), and access protocol. It can be as simple as an in-memory map or as rich as ZooKeeper/Consul.
+
+## Connecting plug-ins
+
+- **Point-to-point** — plug-ins as libraries (JAR/DLL) invoked via method calls/interfaces, managed by frameworks like **OSGi, Jigsaw, Penrose, or Prism**. Deployment stays **monolithic** and the system remains a single quantum.
+- **Single codebase** — plug-ins as namespaces/packages, e.g., `app.plugin.assessment.iphone12`.
+- **Remote services** — plug-ins accessed via REST or messaging, which turns the microkernel into a **distributed** architecture (every request still flows through the core).
+
+<Mermaid code={String.raw`graph TD
+  C["Core system"]
+  C -->|"in-process method call"| L["Library plug-in (JAR/DLL)<br/>= monolithic, one quantum"]
+  C -->|"REST / messaging"| R["Remote plug-in service<br/>= distributed"]
+  C -->|"foreign contract"| A["Adapter"] --> TP["Third-party plug-in"]`} />
+
+For third-party plug-ins that bring their own contract, use an **adapter** so the core needs no specialized code.
+
+<Callout type="go" title="The only dual-partition style">
+Microkernel is the **only** style that can be technically **or** domain partitioned. Plug-ins used as adapters or configuration make it technical; plug-ins that add functionality or extensions make it domain partitioned. See [Technical vs domain partitioning](/styles/technical-vs-domain-partitioning/).
+</Callout>
+
+## Examples
+
+- **Product software:** Eclipse, Chrome/Firefox, PMD, Jira, Jenkins.
+- **Business applications:** **insurance claims processing**, where each jurisdiction has different rules. Rather than one giant rules engine that becomes a big ball of mud, the core holds the basic, rarely-changing claims logic and **plug-ins** hold jurisdiction-specific rules — added, removed, or changed with little effect on the core or other plug-ins. The same applies to **tax preparation** (each form/worksheet a plug-in; the 1040 is the core).
+
+<Callout type="gotcha" title="Don't fight the model">
+If most of your changes keep landing in the core rather than in plug-ins, you are not leveraging the plug-in model and the style does not fit. The whole payoff — isolation, extensibility, evolutionary delivery — depends on volatile and customizable logic living in plug-ins.
+</Callout>
+
+## Characteristics
+
+| Characteristic | Rating |
+|---|---|
+| Partitioning | Domain or Technical |
+| Overall cost | $ (low) |
+| Simplicity | 4 / 5 |
+| Performance | 3 / 5 |
+| Agility | 3 / 5 |
+| Extensibility | 3 / 5 |
+| Scalability | 1 / 5 |
+| Fault tolerance | 1 / 5 |
+
+Strengths: **simplicity** and **cost** (like layered), plus the best **extensibility** of the monolithic options. Weaknesses: **scalability, elasticity, and fault tolerance** are poor because all requests funnel through the core. It is excellent for **evolutionary design and incremental development** — ship a minimal core, then add features over time.
+
+## When to use it
+
+- A **product-based** or custom app with **planned extensions**, especially when releasing features over time or gating which users get which features.
+- Apps with **multiple configurations** per client environment (e.g., a cloud-agnostic core with per-cloud adapter plug-ins).
+- **Tight budget and time** constraints.
+
+## When to avoid it
+
+- Highly **scalable, elastic, or fault-tolerant** systems — the core is a bottleneck and single point of failure.
+- When most changes land **in the core** rather than in plug-ins.
+
+## See also
+
+- [Layered architecture](/styles/layered-architecture/) — the other cheap, simple monolith.
+- [Pipeline architecture](/styles/pipeline-architecture/) — extensibility via filters instead of plug-ins.
+- [Technical vs domain partitioning](/styles/technical-vs-domain-partitioning/) — why microkernel can go either way.
+- [Comparing the styles](/styles/comparing-the-styles/) — microkernel on the full scorecard.

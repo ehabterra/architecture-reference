@@ -1,0 +1,130 @@
+---
+title: "The Architect Elevator"
+category: path-elevator
+kind: guide
+order: 1
+difficulty: "Start here"
+status: ready
+intent: "The architect's job is to ride between the penthouse (business strategy) and the engine room (where software is built), translating in both directions and keeping the floors in sync."
+book: "The Software Architect Elevator (Gregor Hohpe)"
+related:
+  - the-architects-many-roles
+  - architecting-for-change-and-options
+  - what-is-technology-strategy
+when_use:
+  - "When business decisions translate almost instantly into technical ones and the two keep drifting apart."
+  - "When decision makers lack technical information while the people who have it lack authority."
+  - "When you need to connect strategy and implementation in a large, layered enterprise."
+  - "When a 'telephone game' through middle management keeps distorting strategy on the way down and reality on the way up."
+  - "When IT is treated as a cost center and you need to reframe it as a source of competitive advantage."
+when_avoid:
+  - "In a flat 'bungalow' digital company where business and IT are already inseparable and a few stairs suffice."
+  - "When you would only ride up to harvest buzzwords and sell them as your own (the 'lift boy' anti-pattern)."
+  - "When you only want the view from the top without living with the consequences below (authority without responsibility)."
+  - "When you would ride one way only — and reveal it with the telltale phrase 'I used to be technical.'"
+  - "When the real fix is removing organizational floors wholesale — blowing up the building leaves only rubble."
+quiz:
+  - q: "What does the 'architect elevator' metaphor describe?"
+    options:
+      - text: "Riding between the penthouse (business strategy) and the engine room (implementation), translating in both directions"
+        correct: true
+      - text: "A career ladder that promotes architects upward into management"
+        correct: false
+      - text: "A tool for measuring how senior an architect has become"
+        correct: false
+      - text: "A way to escape the engine room and stay in the boardroom permanently"
+        correct: false
+    explain: "The elevator connects the floors of the corporate building so business and technical decisions stay synchronized; the architect's value is the linkage, not the destination."
+  - q: "How is an architect's value measured in this model?"
+    options:
+      - text: "By how many floors they span, not how high they travel"
+        correct: true
+      - text: "By how many architecture decisions they make"
+        correct: false
+      - text: "By how senior their title sounds"
+        correct: false
+      - text: "By how much time they spend in the penthouse"
+        correct: false
+    explain: "Value comes from connecting the floors. An architect who only reaches the top but never returns to the engine room loses the feedback that makes the linkage useful."
+  - q: "What is the 'telephone game' problem the elevator solves?"
+    options:
+      - text: "Messages get distorted as they pass up and down through the floors, so decision makers and implementers end up out of sync"
+        correct: true
+      - text: "Engineers refuse to answer phone calls from management"
+        correct: false
+      - text: "Business strategy is too simple to communicate"
+        correct: false
+      - text: "There are too many meetings"
+        correct: false
+    explain: "Like children whispering a message down a line, communication through many layers distorts intent; the architect rides the elevator to carry the essence intact."
+  - q: "Who tends to see the architect as a threat?"
+    options:
+      - text: "The middle floors (middle management) whose livelihood the linkage may disrupt"
+        correct: true
+      - text: "The board, who fear losing control"
+        correct: false
+      - text: "Junior developers, who fear extra work"
+        correct: false
+      - text: "External vendors, who fear losing sales"
+        correct: false
+    explain: "Hohpe's 'hourglass of appreciation': the top values you and the engine room is glad to be understood, but the middle floors block you at every level."
+takeaway: "Ride the elevator both ways: span the floors between strategy and implementation, carry the essence intact, and live with the consequences below."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🛗 Analogy">
+A skyscraper is too tall to run by shouting up the stairwell. Even old steamboats had a speaking tube echoing commands from the bridge to the boiler room — if the bridge orders "reverse" but the engines run "full ahead," disaster is preprogrammed. The architect is that pipe between the penthouse and the engine room.
+</Callout>
+
+Gregor Hohpe's central metaphor reframes the enterprise architect from an "ivory-tower resident" who draws diagrams into a hands-on **change agent**. The corporate building has many floors. At the top — the **penthouse** — the board sets business strategy. At the bottom — the **engine room** — software is actually built. As the digital economy collapses the distance between business and technical decisions, someone has to ride up and down to keep the two synchronized. That someone is the architect.
+
+## Penthouse and engine room
+
+The two floors speak different languages and rarely meet. Left disconnected, the organization plays a **telephone game**: a strategy whispered down through layers of management arrives at the engine room distorted, and engineering reality reported upward arrives equally garbled. The worst case is structural: **decision makers lack the information, and the people with the information lack the authority.**
+
+<Mermaid code={String.raw`graph TD
+  P["Penthouse<br/>(board, business strategy)"] -->|"strategy translated down"| E["Engine room<br/>(where software is built)"]
+  E -->|"feedback rides back up"| P
+  M["Middle floors<br/>(middle management)"]
+  P -.->|"telephone game distorts"| M
+  M -.->|"distortion continues"| E
+  A["Architect rides the elevator<br/>both directions"] --- P
+  A --- E`} />
+
+The architect's job is to ride the elevator, carrying **the essence of the message** without losing it on either trip. Riding *both* ways matters: going down without coming back up creates "authority without responsibility" — an architect who enjoys the view but never lives with the consequences. Hohpe's litmus phrase for the one-way rider is **"I used to be technical."** His retort: "Why did you stop? Were you no good at it?"
+
+<Callout type="go" title="🔑 Key insight">
+Value = floors spanned, not height reached. An architect who connects the boardroom to the build pipeline is worth more than one who simply ascends and stays.
+</Callout>
+
+## Why the elevator now runs express
+
+Business and IT linkage has become almost direct. Faster time-to-market needs elastic cloud, which needs stateless scaling. Targeted content needs analytical models, which need big-data tooling. Each business goal translates into a chain of technical decisions in days, not years. So the architect must ride faster — and shift from a **consumer** of vendor roadmaps to a **definer** with their own IT worldview.
+
+This is why **multispeed (bimodal) IT** — separating fast "systems of engagement" from stable "systems of record" — usually disappoints. It falsely assumes you go faster by compromising quality, and change rarely localizes: a new field on an engagement screen often forces a change in a record system. As Hohpe puts it, "digital companies only know one speed: fast."
+
+## The resistance you will meet
+
+The elevator provokes opposition. Hohpe describes an **hourglass of appreciation**: the top values you as a transformation enabler and the engine room is glad to finally be understood — but the **middle floors see you as a threat** to their livelihood and block you at every floor.
+
+<Mermaid code={String.raw`graph TD
+  TOP["Top floors<br/>value you as transformation enabler"] -->|"appreciation"| AR["The architect"]
+  ENG["Engine room<br/>glad to be understood"] -->|"appreciation"| AR
+  MID["Middle floors<br/>see you as a threat"] -.->|"block at every floor"| AR`} />
+
+<Callout type="gotcha" title="⚠️ Pitfall: the lift boy">
+Some people ride the elevator only to harvest buzzwords downstairs and sell them upstairs as their own ideas. "We don't call these people architects." Maintain elevator silence; carry meaning, not slogans.
+</Callout>
+
+You cannot fix this by removing floors — middle management holds critical knowledge, and "blowing up the building leaves only rubble." Instead, **flatten it little by little**, loosening things up with faster feedback loops until the distance between strategy and implementation shrinks on its own.
+
+<Callout type="tip" title="💡 Bungalow vs. skyscraper">
+Flat digital companies "live in a bungalow" — a few stairs connect everyone, and they barely need an elevator. Classic enterprises are skyscrapers too tall for one elevator, so a technical architect and an enterprise architect meet in the middle. Know which building you are in before you design your ride.
+</Callout>
+
+## See also
+
+- [The architect's many roles](/strategy/the-architects-many-roles/) — gardener, guide, glue, and why no single archetype is enough.
+- [Architecting for change and options](/strategy/architecting-for-change-and-options/) — why architects "live in the first derivative."
+- [What is technology strategy?](/strategy/what-is-technology-strategy/) — the strategist half of the architect-strategist.

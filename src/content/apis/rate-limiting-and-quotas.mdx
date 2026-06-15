@@ -1,0 +1,130 @@
+---
+title: "Rate Limiting and Quotas"
+category: api-management
+kind: topic
+order: 12
+difficulty: "Intermediate"
+status: ready
+intent: "Protect APIs from overuse and abuse: rate limiting rejects on per-request properties, load shedding rejects on system state — using fixed/sliding window or token/leaky bucket algorithms."
+book: "Mastering API Architecture"
+related:
+  - api-gateways
+  - api-security
+  - service-mesh
+when_use:
+  - "You must protect backends from denial-of-service, runaway clients, or cost blowouts."
+  - "You offer tiered plans (free vs paying) needing different request budgets."
+  - "You need to shed load gracefully when a downstream resource is at capacity."
+when_avoid:
+  - "Genuine volumetric DDoS — offload that to a specialist provider or CDN, not just your gateway."
+  - "Internal trusted traffic where the overhead outweighs the risk (but still monitor it)."
+quiz:
+  - q: "What is the difference between rate limiting and load shedding?"
+    options:
+      - text: "Rate limiting rejects based on individual request properties; load shedding rejects based on overall system state"
+        correct: true
+      - text: "They are the same thing"
+        correct: false
+      - text: "Rate limiting only applies to GET; load shedding only to POST"
+        correct: false
+      - text: "Load shedding rejects per-user; rate limiting rejects on DB capacity"
+        correct: false
+    explain: "Rate limiting acts on properties like too many requests from a user/app/location; load shedding acts when the system itself (e.g. the DB) is at capacity."
+  - q: "Which is NOT a named rate-limiting algorithm in the book?"
+    options:
+      - text: "Round-robin window"
+        correct: true
+      - text: "Fixed window"
+        correct: false
+      - text: "Sliding window"
+        correct: false
+      - text: "Token bucket"
+        correct: false
+    explain: "The strategies covered are fixed window, sliding window, token bucket, and leaky bucket."
+  - q: "Where is rate limiting best applied?"
+    options:
+      - text: "At the API gateway, the centralized point all ingress flows through"
+        correct: true
+      - text: "In the database trigger"
+        correct: false
+      - text: "Only in the client SDK"
+        correct: false
+      - text: "In DNS"
+        correct: false
+    explain: "The gateway is the single ingress point, making it the natural place to rate-limit; volumetric DDoS is best handled by specialist providers/CDNs."
+  - q: "What is the difference between 'fail open' and 'fail closed'?"
+    options:
+      - text: "Fail open permits access under failure (e.g. emergency services); fail closed blocks it (e.g. financial APIs)"
+        correct: true
+      - text: "Fail open logs errors; fail closed ignores them"
+        correct: false
+      - text: "They describe TLS versions"
+        correct: false
+      - text: "Fail open is for GET, fail closed for POST"
+        correct: false
+    explain: "The default behaviour under failure must match your requirements — availability-critical systems may fail open, security-critical ones fail closed."
+takeaway: "Rate-limit on per-request properties and shed load on system state, at the gateway, using window or bucket algorithms — and offload real DDoS to a specialist."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🎢 Analogy">
+Rate limiting is the theme-park ride operator counting riders per hour per ticket — no single guest can hog the queue. Load shedding is closing the gate entirely when the ride itself is over capacity, regardless of who is waiting. One looks at the person in front; the other looks at the state of the machine.
+</Callout>
+
+## Two distinct controls
+
+Protecting APIs from overuse and abuse uses two related but different mechanisms, central to mitigating the **Denial of Service** category of [STRIDE](/apis/api-security/):
+
+- **Rate limiting** rejects requests based on **individual request properties** — too many from a given user, app, or location.
+- **Load shedding** rejects requests based on **overall system state** — for example, the database is at capacity, so new work is turned away regardless of who sent it.
+
+Both are best applied at the [API gateway](/apis/api-gateways/), the centralized point through which all ingress flows. Genuine volumetric **DDoS** is better handled by specialist providers or CDNs.
+
+<Mermaid code={String.raw`graph TD
+  R["Incoming request"] --> RL{"Rate limit?<br/>(per user/app/IP)"}
+  RL -->|over budget| Rej1["429 Too Many Requests"]
+  RL -->|within budget| LS{"System at capacity?<br/>(load shedding)"}
+  LS -->|overloaded| Rej2["503 / shed load"]
+  LS -->|healthy| Backend["Backend service"]`} />
+
+## The four algorithms
+
+The book names four rate-limiting strategies:
+
+- **Fixed window** — count requests in a fixed time bucket (e.g. per minute); simple but allows bursts at window edges.
+- **Sliding window** — a rolling window smooths the edge-burst problem.
+- **Token bucket** — tokens refill at a steady rate; each request spends one; allows controlled bursts up to the bucket size.
+- **Leaky bucket** — requests drain at a fixed rate, smoothing output regardless of input spikes.
+
+For tiered plans, the gateway can use the **service identity or request-header metadata** as the fingerprint — a free tier and a paying tier get different budgets (this is **traffic shaping** when the [service mesh](/apis/service-mesh/) applies it east–west).
+
+## Fail open vs fail closed
+
+When a protective control itself fails, its default behaviour matters:
+
+- **Fail open** permits access under failure — desirable when **availability is paramount** (medical emergency services).
+- **Fail closed** blocks access — the right default for most **financial** or government APIs.
+
+<Mermaid code={String.raw`graph TD
+  F["Rate-limit control fails"] --> Q{"What matters most?"}
+  Q -->|"availability paramount"| Open["Fail open<br/>permit access<br/>e.g. emergency services"]
+  Q -->|"security paramount"| Closed["Fail closed<br/>block access<br/>e.g. financial, government"]`} />
+
+<Callout type="gotcha" title="Rate-limit internal calls too">
+Evolving systems can create circular dependencies — infinite internal call loops — causing a 'friendly-fire' denial of service. Rate-limit and monitor internal calls, not just external ones.
+</Callout>
+
+<Callout type="go" title="Context turns metrics into signals">
+Don't blindly apply RED metrics. A burst of 403s could indicate a malicious actor; a spike of 401s could mean a stolen token or a compromised vendor. Establish a baseline, alert when outside the expected range, and read these status-code patterns as security signals, not just noise.
+</Callout>
+
+<Callout type="tip" title="A worked DREAD example">
+Mastering API Architecture scores a no-rate-limiting DDoS against the gateway at Damage 8, Reproducibility 8, Exploitability 5, Affected Users 10, Discoverability 10 → 8.2 — the highest priority — mitigated precisely by rate limiting and load shedding.
+</Callout>
+
+## See also
+
+- [API gateways](/apis/api-gateways/) — where rate limiting and load shedding are enforced.
+- [API security](/apis/api-security/) — rate limiting as a DoS mitigation in STRIDE.
+- [Service mesh](/apis/service-mesh/) — traffic shaping and policing for east–west traffic.

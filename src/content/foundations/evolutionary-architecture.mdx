@@ -1,0 +1,125 @@
+---
+title: "Evolutionary Architecture"
+category: fnd-evolution
+kind: topic
+order: 12
+difficulty: "Intermediate"
+status: ready
+intent: "Architecture that supports guided, incremental change across multiple dimensions — and why evolvability is the meta-characteristic that protects all the others."
+book: "Building Evolutionary Architectures; Fundamentals of Software Architecture"
+related:
+  - fitness-functions
+  - incremental-change-and-data
+  - connascence
+when_use:
+  - "When business needs and the technology ecosystem will keep shifting under the system"
+  - "When you want to escape the definition of architecture as 'the parts that are hard to change'"
+  - "When planning for unknown unknowns rather than a fixed five-year design"
+when_avoid:
+  - "When the system is a Big Ball of Mud — rework may exceed a rewrite"
+  - "When another characteristic dominates, you intend a sacrificial design, or the business is closing soon"
+quiz:
+  - q: "How do the authors define an evolutionary architecture?"
+    options:
+      - text: "One that supports guided, incremental change across multiple dimensions"
+        correct: true
+      - text: "One that uses microservices"
+        correct: false
+      - text: "One with no upfront design"
+        correct: false
+      - text: "One that never changes"
+        correct: false
+    explain: "The definition is precise: guided (fitness functions) + incremental (small build and deploy) + multiple dimensions (technical, data, security, operational)."
+  - q: "What makes change 'guided' rather than just frequent?"
+    options:
+      - text: "Fitness functions steer the architecture toward chosen characteristics and prevent their degradation"
+        correct: true
+      - text: "A change advisory board approves it"
+        correct: false
+      - text: "It is scheduled monthly"
+        correct: false
+      - text: "Developers vote on it"
+        correct: false
+    explain: "Guided change uses fitness functions, borrowed from evolutionary computing, to keep the system fit for its characteristics as it changes."
+  - q: "Why do the authors reject 'emergent architecture'?"
+    options:
+      - text: "Agility means no useless architecture, not no architecture (the dog house vs skyscraper)"
+        correct: true
+      - text: "Emergence is illegal"
+        correct: false
+      - text: "Architecture cannot change"
+        correct: false
+      - text: "It requires too many diagrams"
+        correct: false
+    explain: "You can throw together a dog house with no architecture, but not a 50-storey building; agility removes useless architecture, not architecture itself."
+  - q: "Evolvability is best described as…"
+    options:
+      - text: "A meta-characteristic — an architectural wrapper that protects all the other characteristics as the system changes"
+        correct: true
+      - text: "Just another -ility like performance"
+        correct: false
+      - text: "A deployment tool"
+        correct: false
+      - text: "A synonym for scalability"
+        correct: false
+    explain: "Treating evolvability as a meta-characteristic lets the architecture protect every other characteristic over time."
+takeaway: "An evolutionary architecture supports guided, incremental change across multiple dimensions — build changeability in so 'hard to change' stops being a self-fulfilling prophecy."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🚲 Analogy">
+Picture a unicyclist constantly rebalancing while you keep tossing boxes onto their load. That's the software ecosystem — tools, frameworks, and practices in constant dynamic equilibrium. A fixed five-year architectural plan assumes the rider will hold still. An evolutionary architecture assumes they won't, and builds in the ability to rebalance.
+</Callout>
+
+## The definition
+
+*Building Evolutionary Architectures* defines an **evolutionary architecture** as one that supports **guided**, **incremental** change across **multiple dimensions**. Each word carries weight:
+
+<Mermaid code={String.raw`graph TD
+  E["Evolutionary architecture"] --> G["Guided change<br/>(fitness functions steer it)"]
+  E --> I["Incremental change<br/>(small build + small deploy)"]
+  E --> M["Multiple dimensions<br/>(technical · data · security · operational)"]`} />
+
+- **Guided** — [fitness functions](/foundations/fitness-functions/), borrowed from evolutionary computing, steer the architecture toward chosen characteristics and prevent their degradation.
+- **Incremental** — software is built in small increments *and* deployed incrementally (a new service version runs alongside the old; others migrate at their leisure; the unused version is garbage-collected).
+
+<Mermaid code={String.raw`graph LR
+  C["Consumers"] --> R["Router"]
+  R -->|"most traffic"| V1["Service v1"]
+  R -->|"canary"| V2["Service v2"]
+  V1 -. "drained, then GC'd" .-> X["retired"]
+  V2 -->|"becomes default"| D["v2 only"]`} />
+- **Multiple dimensions** — evolution must consider not just *technical* architecture but **data**, **security**, and **operational** dimensions too. "There are no separate systems" (Donella Meadows).
+
+## Why "evolutionary"?
+
+The term beats the alternatives. *Adaptable* implies jury-rigged patches that accrete complexity (a service bus that keeps adding parallel layers). *Emergent* is rejected outright: **agility means no *useless* architecture, not *no* architecture** — you can throw together a dog house with no design, but not a 50-storey building. "Evolutionary" captures both the *incremental* and the *guided* nature of genuine, fit-for-purpose change.
+
+## Evolvability is a meta-characteristic
+
+The old definition of architecture as "the parts that are hard to change later" is a self-fulfilling prophecy you can escape — by building **changeability into** the architecture. Treat **evolvability** as a **meta-characteristic**: an architectural wrapper that protects all the other characteristics as the system evolves.
+
+The book unifies two previously separate disciplines to achieve this: the **engineering practices** of Continuous Delivery (deployment pipelines, automation) and the **structural design** decisions that control coupling, cohesion, and reuse.
+
+## Structure determines evolvability
+
+No architectural style inherently controls evolvability — the **coupling characteristics** a design supports do. The goal is *appropriate* coupling: restrict implementation coupling to the tightest scope to avoid brittleness (see [connascence](/foundations/connascence/) and the [architecture quantum](/foundations/identifying-component-boundaries/)). Microservices partition along the *domain* dimension, so a domain concept like *Checkout* doesn't smear across layers — giving each bounded context real evolvability.
+
+<Callout type="tip" title="Two recurring questions answered">
+*How is long-term planning possible when everything changes?* — Build changeability in, so the architecture can absorb shifts. *How do I stop an architecture from degrading?* — Protect it with fitness functions. Together these turn "hard to change" from a fate into a choice.
+</Callout>
+
+<Callout type="gotcha" title="⚠️ When NOT to evolve">
+You can't easily evolve a **Big Ball of Mud** (rework may exceed a rewrite — the neglected "-ility" here is *feasibility*). Skip evolutionary investment when another characteristic dominates, you intend a **sacrificial architecture**, or you're planning to close the business soon.
+</Callout>
+
+<Callout type="go" title="💡 Key insight">
+"All architectures become iterative because of unknown unknowns; agile just recognises this sooner." Prefer evolvable over predictable — you cannot design for what you can't yet foresee, so build the system to absorb the surprise.
+</Callout>
+
+## See also
+
+- [Fitness functions](/foundations/fitness-functions/) — the mechanism that guides change.
+- [Incremental change and data](/foundations/incremental-change-and-data/) — evolving deployments and schemas safely.
+- [Connascence](/foundations/connascence/) — the coupling vocabulary evolvability depends on.

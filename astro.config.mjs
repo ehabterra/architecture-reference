@@ -1,0 +1,49 @@
+// @ts-check
+import { defineConfig } from 'astro/config';
+import mdx from '@astrojs/mdx';
+import react from '@astrojs/react';
+import cloudflare from '@astrojs/cloudflare';
+
+// https://astro.build/config
+export default defineConfig({
+  // Update to your custom domain once attached to the Worker.
+  site: 'https://architecture-reference.workers.dev',
+  integrations: [mdx(), react()],
+  adapter: cloudflare({
+    // Expose wrangler.jsonc bindings (D1) under `astro dev` via Miniflare.
+    platformProxy: { enabled: true },
+  }),
+  markdown: {
+    shikiConfig: {
+      // Dual-theme output: colors come as --shiki-light/--shiki-dark CSS
+      // vars (defaultColor:false), switched by [data-theme] in global.css.
+      themes: { light: 'github-light', dark: 'github-dark-default' },
+      defaultColor: false,
+      wrap: false,
+    },
+  },
+  vite: {
+    resolve: {
+      // @astrojs/react imports the bare `react-dom/server`, which resolves to
+      // the `server.browser` build under workerd — that build references
+      // `MessageChannel`, which the Workers runtime doesn't expose, so SSR
+      // crashes at startup. Force the Web-Streams `server.edge` build instead.
+      //
+      // Build-only: `server.edge.js` is CommonJS and loads correctly under
+      // workerd, but `astro dev` runs SSR in Node, where its `require` calls
+      // throw "require is not defined". In dev we let `react-dom/server`
+      // resolve to its Node build as usual.
+      alias: process.argv.includes('build')
+        ? { 'react-dom/server': 'react-dom/server.edge' }
+        : {},
+    },
+    server: {
+      fs: {
+        // pnpm symlinks packages through the shared store, which may resolve
+        // into a sibling project's node_modules. Allow the parent directory
+        // so Vite can serve those files during `astro dev`.
+        allow: ['/Users/ehab/Documents'],
+      },
+    },
+  },
+});

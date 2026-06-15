@@ -1,0 +1,131 @@
+---
+title: "Communication Styles: Sync vs Async"
+category: ms-communication
+kind: topic
+order: 8
+difficulty: "Intermediate"
+status: ready
+intent: "Choose the communication style before the technology — request-response vs event-driven, synchronous vs asynchronous — and understand temporal coupling, cascading failures, and what goes in an event."
+book: "Building Microservices, 2nd ed. (Sam Newman)"
+related:
+  - choreography-vs-orchestration
+  - sagas
+  - resilience
+when_use:
+  - "You are deciding how two services should talk to each other."
+  - "You want to reduce temporal coupling or avoid cascading failures."
+  - "You need to decide what to put inside an event."
+when_avoid:
+  - "You have already picked a style and need a specific technology comparison."
+  - "You are designing a whole distributed workflow — see sagas."
+quiz:
+  - q: "What is Newman's main thesis about communication?"
+    options:
+      - text: "Choose the style of communication you need before choosing a technology"
+        correct: true
+      - text: "Always use REST"
+        correct: false
+      - text: "Asynchronous messaging is always best"
+        correct: false
+      - text: "gRPC is the only correct choice"
+        correct: false
+    explain: "Teams pick a technology before deciding what style they need; the chapter builds a vocabulary of styles first, deliberately setting technology aside."
+  - q: "What problem does synchronous blocking communication create?"
+    options:
+      - text: "Temporal coupling and risk of cascading failures in long call chains"
+        correct: true
+      - text: "Loss of all data"
+        correct: false
+      - text: "Inability to use HTTP"
+        correct: false
+      - text: "Guaranteed message loss"
+        correct: false
+    explain: "A synchronous call requires the callee to be up at the same time; slow downstreams can cascade failures back up the chain."
+  - q: "What does Newman recommend putting in an event?"
+    options:
+      - text: "Fully detailed events (with the caveat to watch event size, PII, and that event data becomes part of your contract)"
+        correct: true
+      - text: "Always just an ID"
+        correct: false
+      - text: "Nothing — events should be empty signals"
+        correct: false
+      - text: "The entire database row including secrets"
+        correct: false
+    explain: "Fully detailed events make consumers self-sufficient and provide a historical record; 'just an ID' causes a barrage of callbacks and adds coupling — but beware size, PII, and contract implications."
+  - q: "What fixed the 2006 bank pricing system's catastrophic failover?"
+    options:
+      - text: "A maximum retry limit plus a dead letter queue (message hospital)"
+        correct: true
+      - text: "Switching to synchronous calls"
+        correct: false
+      - text: "Removing all monitoring"
+        correct: false
+      - text: "Adding more worker threads"
+        correct: false
+    explain: "A poison message kept crashing each worker that picked it up; a max retry limit and dead letter queue stopped the loop."
+takeaway: "Pick the communication style before the technology: synchronous is simple but couples in time and cascades; async events decouple at the cost of complexity — and prefer fully detailed events with retry limits and a dead letter queue."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A phone call is synchronous: both people must be available at once, and if the other end is slow you're stuck holding the line. A letter or a posted notice is asynchronous: you drop it in the box and carry on; the recipient reads it whenever they're free. Neither is "better" — you choose by whether you need an answer right now or can decouple in time.
+</Callout>
+
+## Style before technology
+
+Newman's thesis: teams pick a *technology* (REST, gRPC, Kafka) before deciding what *style* of communication they need. Set technology aside and build a vocabulary. Moving from in-process to inter-process calls, three things change: **performance** (network calls can't be inlined; payload and serialization now matter), **changing interfaces** (provider and consumers deploy separately, so backward-incompatible changes force lockstep or phased rollouts), and **error handling** (new failure modes — crash, omission, timing, response, and arbitrary/Byzantine failures; HTTP status codes model rich semantics, e.g. a retryable `503` vs a pointless-to-retry `404`).
+
+## The model of styles
+
+<Mermaid code={String.raw`graph TD
+  Start{"What do you need?"}
+  Start -->|"a reply / something done"| RR["Request-response"]
+  Start -->|"emit a fact, don't care who acts"| EV["Event-driven"]
+  RR --> SB["Synchronous blocking<br/>(keep connection open)"]
+  RR --> AB["Asynchronous nonblocking<br/>(via queue/broker)"]
+  EV --> ASYNC["Nonblocking asynchronous only"]`} />
+
+First choose **request-response** vs **event-driven**; if request-response, choose **synchronous** vs **asynchronous**; event-driven is limited to nonblocking asynchronous. **Mix and match is the norm.**
+
+A poison message shows why async needs a safety valve — without a retry cap a single bad message can take down the whole pool:
+
+<Mermaid code={String.raw`graph LR
+  Q["Queue"] --> W["Worker"]
+  W -->|"crash, requeue"| Q
+  W -->|"retries exceed limit"| DLQ["Dead letter queue<br/>(message hospital)"]
+  DLQ --> H["Human / automated triage"]`} />
+
+- **Synchronous blocking** — simple and familiar, but creates **temporal coupling**, susceptibility to slow downstreams, and **cascading failures** in long call chains (MusicCorp's fraud example). Remedies: restructure interactions (move fraud detection off the critical path) or go nonblocking.
+- **Asynchronous nonblocking** — temporal decoupling, good for long-running work (a warehouse dispatch taking hours or days), at the cost of complexity and choice. (Note: `await` is still *blocking* from the code's perspective.)
+- **Communication through common data** — one service writes to a known location (file, store) that others later consume (data lakes for loose coupling, warehouses for tighter). Simple, ubiquitous, great for large volumes and interoperability — but usually high-latency (polling).
+
+## Request-response: a "request" beats a "command"
+
+For fetching data or ensuring something is done, prefer a **request** (examinable, rejectable) over a **command**. **Synchronous** keeps a connection open; **asynchronous** routes via a queue/broker (buffering benefits, but you must correlate and route the response). All forms need **time-out handling**.
+
+## Event-driven: emit facts, don't issue orders
+
+A service *emits events* — factual statements that something happened — without knowing who consumes them, greatly reducing coupling. An **event** is a fact (the payload); a **message** is the medium. Implement via **message brokers** ("keep the middleware dumb, the smarts in the endpoints").
+
+**What's in an event?**
+- *Just an ID* — causes a barrage of callbacks and re-adds coupling.
+- *Fully detailed events* — Newman's preference: self-sufficient consumers and a historical record useful for event sourcing. **But** watch event size, **PII leakage**, and the fact that event data becomes part of your **contract**.
+
+<Callout type="tip" title="💡 Choreography vs orchestration is next">
+Once services emit and react to events, you're choosing between letting them react independently or having one service direct the flow. That trade-off is covered in [choreography vs orchestration](/microservices/choreography-vs-orchestration/) and applied to workflows in [sagas](/microservices/sagas/).
+</Callout>
+
+<Callout type="gotcha" title="⚠️ The poison message and catastrophic failover">
+A 2006 bank pricing system suffered a **catastrophic failover**: a crashing worker requeued a **poison message** that crashed the next worker that picked it up, repeatedly, taking the whole pool down. The fix was a **maximum retry limit** and a **dead letter queue / message hospital**. With async messaging you also need **correlation IDs** and good monitoring — the decoupling buys scalability at a real cost in operational complexity.
+</Callout>
+
+<Callout type="go" title="🔑 Key insight">
+There is rarely one right option; expect a mix. Synchronous is simplest but couples you in time; asynchronous events give the loosest coupling but demand correlation, monitoring, and careful failure handling. Choose per interaction, deliberately.
+</Callout>
+
+## See also
+
+- [Choreography vs orchestration](/microservices/choreography-vs-orchestration/) — who drives a multi-service process.
+- [Sagas](/microservices/sagas/) — coordinating state changes without distributed transactions.
+- [Resilience](/microservices/resilience/) — timeouts, retries, and circuit breakers for synchronous calls.

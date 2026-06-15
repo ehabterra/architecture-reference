@@ -1,0 +1,172 @@
+---
+title: "Layered Architecture"
+category: sty-monolithic
+kind: topic
+order: 4
+difficulty: "Beginner"
+status: ready
+intent: "The n-tier default monolith — horizontal layers, closed-vs-open isolation, the sinkhole anti-pattern, and why it is cheap and simple but hard to scale."
+book: "Software Architecture Patterns (2nd ed.); Fundamentals of Software Architecture"
+related:
+  - technical-vs-domain-partitioning
+  - pipeline-architecture
+  - microkernel-architecture
+  - comparing-the-styles
+when_use:
+  - "You have a tight budget or timeline and need a familiar, low-cost structure."
+  - "Most changes are isolated to a single technical layer (UI restyle, database swap)."
+  - "Your teams are technically partitioned (UI, backend, DBA) and you are unsure which style fits."
+  - "You are building a small/simple app or website where simplicity outweighs operational power."
+  - "You want a starting point you can later migrate — keep reuse minimal and inheritance shallow."
+when_avoid:
+  - "You need high scalability, elasticity, or fault tolerance — a fatal error brings down everything."
+  - "Most changes are domain-level and ripple through every layer."
+  - "You have cross-functional domain teams that fight the technical partition."
+  - "Deployability and testability matter — a three-line change forces a full redeploy."
+  - "The app is large and growing — maintainability and agility degrade as the monolith swells."
+quiz:
+  - q: "What are the four standard layers of a layered architecture?"
+    options:
+      - text: "Presentation, business, persistence, database"
+        correct: true
+      - text: "Frontend, API, cache, storage"
+        correct: false
+      - text: "Producer, transformer, tester, consumer"
+        correct: false
+      - text: "Core, plug-in, registry, contract"
+        correct: false
+    explain: "The standard four layers are presentation, business, persistence, and database; business and persistence are sometimes merged into three for smaller apps."
+  - q: "What does a CLOSED layer enforce?"
+    options:
+      - text: "Requests must pass through it to reach the layer below, preserving layers of isolation"
+        correct: true
+      - text: "Nothing can ever access it"
+        correct: false
+      - text: "It can be bypassed for speed"
+        correct: false
+      - text: "It must be deployed separately"
+        correct: false
+    explain: "Closed layers force traversal so a change in one layer doesn't ripple into others — the layers-of-isolation principle. Open layers may be bypassed."
+  - q: "What is the architecture sinkhole anti-pattern?"
+    options:
+      - text: "Requests passing through layers as pure pass-through with little or no business logic"
+        correct: true
+      - text: "A layer that crashes the whole system"
+        correct: false
+      - text: "Too many open layers"
+        correct: false
+      - text: "A database that grows without bound"
+        correct: false
+    explain: "The 80-20 rule guides it: roughly 20% pass-through requests is healthy; if most requests are pass-through, the style is wrong or layers should be opened."
+  - q: "Why does layered score 1/5 on scalability?"
+    options:
+      - text: "It is monolithic, so 100% of functionality must scale together by load-balancing whole copies"
+        correct: true
+      - text: "It uses too many network calls"
+        correct: false
+      - text: "Its layers cannot be closed"
+        correct: false
+      - text: "It has no database"
+        correct: false
+    explain: "As a single deployment unit, scaling means replicating the entire application even if only one small part is under load — inefficient and costly."
+  - q: "Which anti-pattern describes 'just start coding' with no deliberate style, producing accidental layering?"
+    options:
+      - text: "Architecture by implication (the accidental architecture)"
+        correct: true
+      - text: "The architecture sinkhole"
+        correct: false
+      - text: "Stamp coupling"
+        correct: false
+      - text: "The fast-lane reader"
+        correct: false
+    explain: "Layered is so familiar it often emerges by default when teams skip deliberate design — the accidental-architecture / architecture-by-implication anti-pattern. The sinkhole is about excessive pass-through, not how the style was chosen."
+takeaway: "Layered is the cheap, simple, familiar default — use it for small apps and unclear futures, but expect poor scalability and fault tolerance."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A layered architecture is like a corporate org chart of departments. A request flows down — the front desk (presentation) hands it to operations (business), which asks the records room (persistence), which opens the filing cabinet (database) — and the answer flows back up. Each department only knows how to talk to the one directly below it, which keeps everyone's job simple but makes any cross-cutting request slow.
+</Callout>
+
+## Topology
+
+The **layered (n-tier)** architecture is the most common style and the de facto default, largely because it mirrors traditional IT team structures (presentation, backend, and database teams). Components are organized into **horizontal layers**, each an abstraction over the work needed to satisfy a request. Most use four standard layers: **presentation, business, persistence, database**.
+
+<Mermaid code={String.raw`graph TD
+  P["Presentation layer<br/>(screens, controllers)"] --> B["Business layer<br/>(domain logic)"]
+  B --> Pe["Persistence layer<br/>(DAOs, SQL)"]
+  Pe --> D["Database layer"]`} />
+
+It is a **technically partitioned** architecture: any one domain (e.g., *customer*) is spread across all layers (`app.presentation.customer`, `app.business.customer`, `app.persistence.customer`). The repeated `customer` node is the signature — see [Technical vs domain partitioning](/styles/technical-vs-domain-partitioning/). The defining virtue is **separation of concerns**: each layer deals only with its own logic, making the system easy to develop, test, and maintain when contracts between layers are well defined. The cost of that separation is **agility** — clean roles do not make change cheap.
+
+Most layered architectures use four standard layers, but the business and persistence layers are sometimes **merged** (SQL embedded in business components) for a three-layer design, and large systems may grow to **five or more**.
+
+## Components and request flow
+
+Each layer is an **abstraction** over the work below it: the presentation layer knows *how to display* customer data but not *how it is fetched*; the business layer knows *how to retrieve and apply rules* but not *how data is formatted for display*. A canonical request retrieving customer info flows down then back up:
+
+1. The **customer screen** (presentation) accepts input and displays results.
+2. It forwards to a **customer delegate** (presentation) that knows which business module to call and the contract.
+3. The **customer object** (business) aggregates everything needed and applies rules.
+4. It invokes the **customer DAO** and **order DAO** (persistence), which run SQL against the **database**.
+5. Data flows back up, is re-aggregated by the customer object, and returns to the screen.
+
+## Closed and open layers
+
+- A **closed** layer forces a request to pass through it to reach the layer below (presentation → business → persistence → database). Forbidding shortcuts gives you **layers of isolation**.
+- **Layers of isolation** means a change in one layer generally does not affect others. You can refactor the UI from Angular to React without touching the business layer, or swap a relational DB for NoSQL affecting only persistence — *as long as contracts stay stable*.
+- Sometimes a layer should be **open** so requests can bypass it. Example: adding a **shared services layer** (utility/logging/auditing) below the business layer. To avoid forcing the business layer to route *through* services to reach persistence, mark the services layer **open** so it can be bypassed.
+
+<Mermaid code={String.raw`graph TD
+  P["Presentation (closed)"] --> B["Business (closed)"]
+  B --> S["Shared Services (OPEN)"]
+  B -->|"may bypass the open layer"| Pe["Persistence (closed)"]
+  S --> Pe
+  Pe --> D["Database (closed)"]`} />
+
+<Callout type="go" title="Document open vs closed — and why">
+Every open/closed decision changes the architecture's change-isolation guarantees. Allowing presentation to reach the database directly would make a SQL change ripple into both business *and* presentation, producing a brittle, expensive system. Write down which layers are open or closed and the reason.
+</Callout>
+
+## The sinkhole anti-pattern
+
+The **architecture sinkhole anti-pattern** is requests that pass through layers as simple pass-through with little or no logic per layer. Every layered architecture has some; the **80-20 rule** is the guide — roughly 20% pass-through and 80% with real business logic is healthy. If the ratio reverses, either the style is wrong or you should open some layers (faster, but you lose change isolation).
+
+<Callout type="gotcha" title="Domain changes are expensive here">
+Because the architecture is technically partitioned, a single domain change — adding an expiration date to a "My Movie List" — touches the DB schema, persistence SQL, business rules and contracts, *and* the presentation screens. That can mean coordinating three or four teams for one small feature.
+</Callout>
+
+## Characteristics
+
+| Characteristic | Rating |
+|---|---|
+| Partitioning | Technical |
+| Overall cost | $ (low) |
+| Simplicity | 5 / 5 |
+| Performance | 3 / 5 |
+| Agility | 1 / 5 |
+| Scalability | 1 / 5 |
+| Fault tolerance | 1 / 5 |
+| Extensibility | 1 / 5 |
+
+Its superpowers are **simplicity** and **cost**; its weaknesses are the operational characteristics. It is monolithic, so a fatal error anywhere brings down all functionality, and scaling means replicating the entire app. **MTTR** and **MTTS** are measured in minutes, which also hurts elasticity.
+
+## When to use it
+
+- Tight **budget or time** constraints — no remote-access, contract-management, or distributed-computing complexity.
+- Most changes are **isolated to specific layers** (UI restyle, business-only change, database-type migration).
+- Teams are **technically partitioned**, aligning with Conway's Law — and it is a sound general-purpose **starting point** when the right style is unclear.
+
+## When to avoid it
+
+- High **operational concerns** (scalability, elasticity, fault tolerance) — it is none of these.
+- Most changes are at the **domain level** rather than technical.
+- Teams are **cross-functional domain-based**, misaligned with the technical partition.
+
+## See also
+
+- [Pipeline architecture](/styles/pipeline-architecture/) — the other simple, technically partitioned monolith.
+- [Microkernel architecture](/styles/microkernel-architecture/) — a monolith built for extensibility.
+- [Technical vs domain partitioning](/styles/technical-vs-domain-partitioning/) — why layered struggles with domain change.
+- [Comparing the styles](/styles/comparing-the-styles/) — layered next to every other style.

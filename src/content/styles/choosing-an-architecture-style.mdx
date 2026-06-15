@@ -1,0 +1,134 @@
+---
+title: "Choosing an Architecture Style"
+category: sty-choosing
+kind: topic
+order: 12
+difficulty: "Advanced"
+status: ready
+intent: "The decision process — monolith vs distributed via the quantum, where data lives, sync vs async — plus worked monolith and distributed case studies."
+book: "Fundamentals of Software Architecture; Software Architecture Patterns (2nd ed.)"
+related:
+  - comparing-the-styles
+  - technical-vs-domain-partitioning
+  - microservices-architecture
+  - fallacies-of-distributed-computing
+when_use:
+  - "You are at the top-level structural decision for a new system or a migration."
+  - "You need a repeatable method instead of choosing a style by fashion."
+  - "Different parts of the system seem to need different characteristics."
+when_avoid:
+  - "You haven't yet identified the system's driving architecture characteristics."
+  - "You are looking for a universal 'best' style — there isn't one."
+quiz:
+  - q: "What drives the monolith-vs-distributed decision?"
+    options:
+      - text: "The number of architecture quanta — one set of characteristics means monolith; differing characteristics across parts means distributed"
+        correct: true
+      - text: "The number of developers on the team"
+        correct: false
+      - text: "Whether the company uses the cloud"
+        correct: false
+      - text: "The programming language chosen"
+        correct: false
+    explain: "If the whole system needs one set of characteristics, a single-quantum monolith suffices; differing characteristics across parts (e.g., auctioneer vs bidder) call for distributed."
+  - q: "What is the recommended default for communication style?"
+    options:
+      - text: "Synchronous by default, asynchronous when necessary"
+        correct: true
+      - text: "Always asynchronous"
+        correct: false
+      - text: "Always synchronous"
+        correct: false
+      - text: "It doesn't matter"
+        correct: false
+    explain: "Sync is more convenient but can hurt scalability/reliability; async helps performance/scale but adds data-sync, deadlock, and debugging pain — so default to sync and reach for async only when needed."
+  - q: "Why did the Going, Going, Gone case study choose microservices over event-driven?"
+    options:
+      - text: "Its parts differ by operational characteristics, which microservices separates; event-driven separates by communication style"
+        correct: true
+      - text: "Event-driven cannot scale"
+        correct: false
+      - text: "Microservices is always better"
+        correct: false
+      - text: "Event-driven has no fault tolerance"
+        correct: false
+    explain: "The auctioneer, bidder, and streamer needed different availability/scalability, so the domain-partitioned, quantum-rich microservices style fit better than EDA's communication-based separation."
+  - q: "What is the goal of a style decision, per the book?"
+    options:
+      - text: "The least worst set of trade-offs — there is no single correct or best design"
+        correct: true
+      - text: "The design with the most five-star characteristics"
+        correct: false
+      - text: "The cheapest possible design"
+        correct: false
+      - text: "The most modern style available"
+        correct: false
+    explain: "Choosing is trade-off analysis; the output is the least worst design for the system's most important goals, recorded as ADRs and protected with fitness functions."
+takeaway: "Let the number of quanta pick monolith vs distributed, decide where data lives, default to sync — then record the least-worst trade-offs as ADRs."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Choosing a style is like an architect siting a building. You don't start with "I want a skyscraper" — you start with the plot, the budget, the climate, and who will live there, then the right structure becomes obvious. Pick the style first and you get a skyscraper on a beach: technically impressive, wrong for the conditions.
+</Callout>
+
+## There is no universal best
+
+Style choice is the culmination of trade-off analysis across characteristics, domain, data, and strategic goals. The answer is always "it depends," and architectural fashion shifts for real reasons — past pain points, ecosystem changes (Kubernetes appeared from nothing), new capabilities (Docker), domain changes (M&A), and external factors like licensing cost. Know the trends so you can decide *when to follow them and when to make exceptions*.
+
+## The decision criteria
+
+Be comfortable with: the **domain** (especially operational characteristics), the **characteristics that impact structure**, the **data architecture** (collaborate with DBAs), **organizational factors** (cloud cost, M&A), **process/team/operations maturity** (Agile maturity gates some styles), and **domain/architecture isomorphism** — matching topology to the problem (microkernel for customizability, space-based for many discrete operations).
+
+## Three determinations the architect must make
+
+<Mermaid code={String.raw`graph TD
+  Start["Identify driving characteristics"] --> Q{"How many quanta?<br/>One set of characteristics<br/>or many?"}
+  Q -->|"One"| Mono["Monolith<br/>(layered, microkernel,<br/>modular monolith)"]
+  Q -->|"Many"| Dist["Distributed<br/>(service-based, EDA,<br/>microservices, space-based)"]
+  Mono --> Data["Where does data live?"]
+  Dist --> Data
+  Data --> Comm["Communication:<br/>sync by default,<br/>async when necessary"]
+  Comm --> Out["Topology + ADRs +<br/>fitness functions"]`} />
+
+1. **Monolith vs distributed** — via the **architecture quantum** (an independently deployable artifact with high functional cohesion and synchronous coupling). One set of characteristics across the system → a single-quantum **monolith**. Differing characteristics across parts → **distributed**.
+2. **Where should data live?** — a monolith assumes one or a few relational databases; a distributed system must decide which services persist and how data flows. Consider structure *and* behavior, and iterate.
+3. **Communication style — sync or async?** Sync is convenient but can hurt scalability/reliability; async helps performance/scale but brings data sync, deadlocks, race conditions, and debugging pain.
+
+<Callout type="go" title="Default to synchronous">
+The book's tip: use **synchronous by default, asynchronous only when necessary**. Async is powerful but expensive in complexity — reach for it to decouple operational characteristics (e.g., buffering a fast producer against a slow payment service), not by habit.
+</Callout>
+
+## Worked case study — Silicon Sandwiches (monolith)
+
+A national sandwich franchise wants online ordering. A **single quantum suffices** (simple, low budget), so the choice is between two monoliths:
+
+- **Modular monolith** — domain-centric components + single relational DB + single web UI; separate DB tables per domain to ease future distribution. Customization handled via an `Override` endpoint each domain references — a perfect fitness function.
+- **Microkernel** — core domain components + single DB; each customization a plug-in (common + local), matching the *customizability* characteristic through domain/architecture isomorphism. Synchronous communication suffices (no extreme performance or elasticity needs).
+
+## Worked case study — Going, Going, Gone (distributed)
+
+A real-time auction platform where parts have **different characteristics**: the auctioneer needs far higher availability and reliability than any single bidder; the streamer is read-only and optimizable; scale and elasticity are bursty near the close. **Microservices** is chosen over event-driven because EDA separates by *communication style* while this problem separates by *operational characteristics*. The design resolves to **five quanta** — Payment, Auctioneer, Bidder, Bidder Streams, Bid Tracker — with async communication chosen mainly to accommodate the differing characteristics (e.g., Payment processes one payment per 500 ms; a queue buffers it against bursty bids).
+
+<Mermaid code={String.raw`graph TD
+  GGG["Going, Going, Gone"] --> Q1["Auctioneer<br/>(high availability)"]
+  GGG --> Q2["Bidder<br/>(bursty elasticity)"]
+  GGG --> Q3["Bidder Streams<br/>(read-only, optimizable)"]
+  GGG --> Q4["Bid Tracker"]
+  GGG --> Q5["Payment<br/>(1 / 500ms — queue buffered)"]`} />
+
+<Callout type="gotcha" title="Aim for least worst, not best">
+The book is blunt: this is "not the correct or only or best design — but the least worst set of trade-offs." Hunting for a perfect architecture is the Vasa-warship trap: over-specify and you capsize. Pick the fewest characteristics that matter, choose the structure that least compromises them, and design to stay iterative.
+</Callout>
+
+## Record and govern the decision
+
+The output is an architecture topology (plus hybrids where one style can't satisfy conflicting needs), **ADRs** capturing the *why* for the hardest decisions, and **fitness functions** to protect the principles and characteristics over time — because changing an architecture once it is in place is very hard and expensive.
+
+## See also
+
+- [Comparing the styles](/styles/comparing-the-styles/) — the scorecard you weigh in this process.
+- [Technical vs domain partitioning](/styles/technical-vs-domain-partitioning/) — a determination folded into the choice.
+- [Microservices architecture](/styles/microservices-architecture/) — the Going, Going, Gone outcome.
+- [Fallacies of distributed computing](/styles/fallacies-of-distributed-computing/) — the costs of going distributed.

@@ -1,0 +1,136 @@
+---
+title: "Event Processing Topologies"
+category: ed-patterns
+kind: topic
+order: 8
+difficulty: "Advanced"
+status: ready
+intent: "Stateless and stateful stream processing — transformations, repartitioning and copartitioning, materialized state, changelogs, windowing, and handling out-of-order and late events."
+book: "Building Event-Driven Microservices (Adam Bellemare)"
+related:
+  - streams-and-the-log
+  - schemas-and-evolution
+  - the-outbox-and-idempotency
+when_use:
+  - "You must filter, map, join, or aggregate streams into new streams or state"
+  - "A consumer needs a local materialized view to answer queries or detect transitions"
+  - "Time-based grouping (windows) over event-time data is required"
+when_avoid:
+  - "Deterministic event scheduling is required but you only have basic clients (BPC/FaaS)"
+  - "You would share one materialized state store across services (tight coupling)"
+  - "A global state store would drive event-driven output (it produces nondeterministic duplicates)"
+quiz:
+  - q: "Copartitioning is required when…"
+    options:
+      - text: "Keyed events from different streams must be colocated for a streaming join — same partition count and partitioner"
+        correct: true
+      - text: "You want to compress the log"
+        correct: false
+      - text: "A single stateless filter runs"
+        correct: false
+      - text: "You need global ordering"
+        correct: false
+    explain: "Joins need same-key records on the same instance; copartitioning aligns partition counts and partitioners so the assignor can coassign them."
+  - q: "A changelog in stateful streaming is…"
+    options:
+      - text: "A broker-stored, compacted record of all state-store changes, enabling rebuild and serving as a recovery checkpoint"
+        correct: true
+      - text: "An application log file"
+        correct: false
+      - text: "A list of consumer offsets only"
+        correct: false
+      - text: "A schema version history"
+        correct: false
+    explain: "The changelog is the stream side of table-stream duality for internal state; a recovering instance restores from it instead of reprocessing all input."
+  - q: "Why can a global state store NOT drive event-driven logic?"
+    options:
+      - text: "Every instance holds a full copy, so the same input would produce duplicate, nondeterministic output"
+        correct: true
+      - text: "It is too slow"
+        correct: false
+      - text: "It cannot be compacted"
+        correct: false
+      - text: "It has no schema"
+        correct: false
+    explain: "Global stores are fine for small lookup/dimension tables, but driving output from them yields duplicates across instances. Use partitioned internal state for event-driven output."
+  - q: "Handling a late-arriving event is fundamentally…"
+    options:
+      - text: "A business decision made before engineering — drop, wait, or use a grace period"
+        correct: true
+      - text: "Always a drop"
+        correct: false
+      - text: "Always a wait"
+        correct: false
+      - text: "Impossible"
+        correct: false
+    explain: "You can never be sure you've received all events, so the service must eventually give up. Whether it drops, waits, or re-emits during a grace period is set by the business, often tied to the SLA."
+takeaway: "Compose stateless transforms freely; for stateful work, partition on the key, back state with a changelog, copartition for joins, and decide late-event policy (drop/wait/grace) up front."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A processing topology is an assembly line. Stateless stations (filter, relabel, reshape) handle each item on its own and need no memory. Stateful stations (count running totals, join two belts together) need a workbench beside them holding partial results — and if that worker is replaced mid-shift, the workbench has to be rebuilt from a logbook.
+</Callout>
+
+## A topology is a pipeline of transforms
+
+Most stream-sourced microservices follow three steps: **consume** an event, **process** it, **produce** output — committing offsets *after* producing yields **at-least-once** processing. The `processEvent` function is the entry point to the **processing topology**, which you compose from primitives:
+
+- **filter** — emits zero or one event.
+- **map** — changes key and/or value (a key change may require repartitioning).
+- **mapValue** — value only, no repartitioning.
+- **branch / merge** — route by a predicate (e.g., to a **dead-letter stream** on error) or combine streams.
+- **custom transforms** — lookups, even a synchronous external call.
+
+This is familiar to anyone who knows functional programming and map-reduce.
+
+## Stateless: repartitioning and copartitioning
+
+A purely **stateless** processor rarely needs to repartition except to increase parallelism. But it often repartitions to *prepare* for a downstream stateful step.
+
+- **Repartitioning** produces a new stream with a different partition count, key, or partitioner.
+- **Copartitioning** aligns a stream to share another's partition count *and* partitioner, so same-key records from both land together — the prerequisite for **streaming joins**.
+
+The **partition assignor** must coassign all copartitioned partitions to the *same single instance*; good practice is to verify equal partition counts and throw on inequality. Recovering a failed stateless instance is identical to adding one — no state to restore, so it resumes as soon as partitions are assigned.
+
+<Mermaid code={String.raw`graph TD
+  IN["Input stream"] --> F["filter"]
+  F --> M["map / mapValue"]
+  M --> RP{"Need a join?"}
+  RP -->|Yes| CP["copartition both streams"]
+  CP --> J["join → state store"]
+  RP -->|No| OUT["produce output stream"]
+  J --> CL["changelog (broker, compacted)"]
+  J --> OUT`} />
+
+## Stateful: materialized state and changelogs
+
+**Materialized state** is a projection of events from a source stream into a mutable **state store**. State may live **internally** (same container; high-performance stores like RocksDB) or **externally** (a separate service over the network). Every state-store change is recorded in a **changelog** — stored in the broker, compacted, and used to rebuild state and as a recovery checkpoint so a recovering processor avoids reprocessing all input.
+
+Each **internal** instance materializes only its assigned partitions, keeping each partition's data logically separate so revoked-partition state can simply be dropped on rebalance. **Hot replicas** give highly available state: on leader termination, replica-holders get priority to claim ownership and resume immediately.
+
+<Callout type="go" title="The key insight">
+A **global state store** (every instance holds all partitions) is great for small lookup/dimension tables but **cannot drive event-driven logic** — driving output from it produces duplicate, nondeterministic results across instances. Drive output from *partitioned* internal state.
+</Callout>
+
+## Time: windows, out-of-order, and late events
+
+Stateful processing over time needs **windowing**: **tumbling** (fixed, non-overlapping), **sliding** (fixed size, incremental slide), and **session** (dynamically sized, terminated by inactivity).
+
+<Mermaid code={String.raw`graph TD
+  Tum["Tumbling<br/>[0-5)[5-10)[10-15) — no overlap"]
+  Sli["Sliding<br/>[0-5)[1-6)[2-7) — overlapping"]
+  Ses["Session<br/>activity... gap... new session"]`} /> Events are scheduled by **event time** (producer-assigned, preferred), interleaved across partitions by picking the oldest timestamp. Frameworks track progress with **watermarks** (Spark/Flink) or **stream time** (Kafka Streams), declaring everything earlier as processed.
+
+An event is **out of order** when its timestamp isn't ≥ those ahead of it (a key cause: multiple producers writing to multiple partitions, each with its own unsynchronized stream time). An event is **late** only relative to a consumer's deadline.
+
+<Callout type="gotcha" title="Late-event policy is a business decision, set first">
+You can never be sure you've received all events, so the service must eventually give up waiting. Decide **drop** (lowest latency), **wait** (more determinism, more latency), or **grace period** (emit on close, re-emit as late events arrive) *before* engineering — ideally tied to the product's SLA. Don't bolt it on after.
+</Callout>
+
+## See also
+
+- [Streams and the log](/event-driven/streams-and-the-log/) — partitions, offsets, and data locality.
+- [The outbox and idempotency](/event-driven/the-outbox-and-idempotency/) — effectively-once and deduplication.
+- [Schemas and evolution](/event-driven/schemas-and-evolution/) — the contracts these transforms read and write.

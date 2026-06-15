@@ -1,0 +1,143 @@
+---
+title: "Scalability Fundamentals"
+category: ds-scalability
+kind: topic
+order: 5
+difficulty: "Beginner"
+status: ready
+intent: "What scaling actually means — scale up vs out vs down, the twin principles of replication and optimization, statelessness, and why Amdahl's law caps your gains."
+book: "Foundations of Scalable Systems (Ian Gorton)"
+related:
+  - load-balancing
+  - caching
+  - distributed-databases
+when_use:
+  - "When growth in requests, data, or analytical value threatens response times or cost."
+  - "When deciding between buying bigger hardware and adding more instances."
+  - "When designing a service so it can be replicated behind a load balancer."
+when_avoid:
+  - "Day one of most products — premature scaling adds complexity and development inertia."
+  - "When a single optimization (an index, a faster algorithm) removes the bottleneck more cheaply."
+quiz:
+  - q: "What are the two basic design principles for scaling in Gorton's framing?"
+    options:
+      - text: "Replication (add resources) and optimization (do each unit of work faster/cheaper)"
+        correct: true
+      - text: "Encryption and compression"
+        correct: false
+      - text: "Caching and sharding only"
+        correct: false
+      - text: "Monoliths and microservices"
+        correct: false
+    explain: "Throughput rises either by replicating processing resources (more lanes/instances) or by optimizing existing ones (faster algorithms, indexes). These two principles recur throughout the book."
+  - q: "Why is statelessness essential for scaling out a service?"
+    options:
+      - text: "Any replica can handle any request, so the load balancer can keep all replicas equally busy and failed requests can be reissued"
+        correct: true
+      - text: "It makes responses encrypted by default"
+        correct: false
+      - text: "It removes the need for a database"
+        correct: false
+      - text: "It guarantees exactly-once delivery"
+        correct: false
+    explain: "Stateless services hold no per-client conversational state, so requests route freely; session state (e.g. a cart) is externalized to a session store. Sticky sessions, by contrast, cause load imbalance."
+  - q: "What does Amdahl's law tell us about scaling with more hardware?"
+    options:
+      - text: "The serial fraction of work caps the maximum speedup no matter how many cores you add"
+        correct: true
+      - text: "Doubling cores always doubles throughput"
+        correct: false
+      - text: "Latency always falls linearly with cost"
+        correct: false
+      - text: "Serial code runs faster on more cores"
+        correct: false
+    explain: "If 5% of work is serial there is no benefit beyond ~2,048 cores; at 50% serial, none beyond ~8 cores. The non-parallelizable portion bounds the gain — measure before paying."
+  - q: "What defines a 'hyperscale' system?"
+    options:
+      - text: "Capability grows exponentially while cost grows only linearly"
+        correct: true
+      - text: "It uses only NoSQL databases"
+        correct: false
+      - text: "It runs entirely serverless"
+        correct: false
+      - text: "It never scales down"
+        correct: false
+    explain: "Hyperscale systems exhibit exponential growth in capability with merely linear cost growth — the economic prize that good scalability architecture buys."
+takeaway: "Scale by replication and optimization; keep services stateless so any replica serves any request — and remember Amdahl's law caps hardware gains."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A bridge gets more traffic across in two ways: build more lanes (replication) or run reversible-lane scheduling so existing lanes carry more at rush hour (optimization). Software is the same — and unlike a bridge, software can also *remove* lanes off-peak to save money. That last trick, scaling down, is the cloud's secret weapon.
+</Callout>
+
+**Scalability** is a system's capability to handle growth in some operational dimension by adding resources — more simultaneous requests, more data, more analytical value, all while keeping response times stable. Because software is amorphous (just a stream of bits), *what* scales must be made explicit, dimension by dimension.
+
+## Scale up, scale out, scale down
+
+- **Scale up** — bigger hardware for one node (e.g. AWS `t3.xlarge` → `t3.2xlarge`). Simple, but hits a single-node ceiling and exponential cost.
+- **Scale out** — replicate the service across many nodes behind a [load balancer](/distributed-systems/load-balancing/). Aggregate capacity is the sum of replicas.
+- **Scale down** — uniquely, software can *contract* to save cost. Netflix's diurnal load (far more viewers at 9 p.m. than 5 a.m.) lets it shrink compute and data-center power within seconds.
+
+<Mermaid code={String.raw`graph TD
+  N["One node"] -->|"scale UP: bigger box"| Big["Larger instance (ceiling + cost)"]
+  N -->|"scale OUT: more nodes"| Many["N replicas behind LB"]
+  Many -->|"scale DOWN off-peak"| Few["Fewer replicas (save cost)"]`} />
+
+## The two principles: replication and optimization
+
+Every scaling move is one of two things:
+
+- **Replication** — add processing resources (more service instances, more lanes). Trivial in the cloud.
+- **Optimization** — make each unit of work faster or cheaper (faster algorithms, added indexes, a faster language). Facebook's HipHop compiled PHP to C++ for up to 6x faster page generation.
+
+<Callout type="go" title="💡 Cost and scalability are inseparable">
+A system that must grow from 100 to 1,000 concurrent requests might be fixed by a 15-hour server upgrade — or might need a 10,000-hour rewrite. Architecture that isn't built to scale incurs enormous downstream cost (HealthCare.gov's $2B+; Oregon's $303M failed exchange). The prize is a <strong>hyperscale</strong> system: exponential capability for linear cost.
+</Callout>
+
+## Statelessness: the linchpin of scaling out
+
+To scale out, services must be **stateless** — holding no per-client conversational state, so any replica can handle any request:
+
+<Mermaid code={String.raw`graph TD
+  LB["Load balancer"] --> S1["Service replica 1 (stateless)"]
+  LB --> S2["Service replica 2 (stateless)"]
+  LB --> S3["Service replica 3 (stateless)"]
+  S1 --> SS["External session store<br/>(Redis / memcached)"]
+  S2 --> SS
+  S3 --> SS
+  S1 --> DB["Database"]
+  S2 --> DB
+  S3 --> DB`} />
+
+Statelessness pays off three ways: the load balancer can keep replicas **equally busy**; a failed request can simply be **reissued elsewhere**; and **availability** rises by removing the single point of failure. Genuine session state (a shopping cart) is **externalized** to a session store. **Stateful services** with sticky sessions are tempting under light load but scale poorly — sessions last varying durations, so some replicas overload while others idle. This is why large sites like Netflix run stateless.
+
+## The standard scaling progression
+
+Real systems evolve through a recognisable sequence:
+
+1. **Multitier monolith** — client, app-service, and database tiers; scale up first.
+2. **Scale out** — stateless replicas behind a load balancer; the single database becomes the bottleneck.
+3. **Cache** — query the database as little as possible via [distributed caching](/distributed-systems/caching/); serving ~80%+ of reads from cache buys huge headroom.
+4. **Distribute the database** — partition/shard and replicate across nodes (see [distributed databases](/distributed-systems/distributed-databases/)).
+5. **More tiers and async** — chain services (an Amazon page calls 100+), add patterns like Backend-for-Frontend, and move non-urgent writes to [asynchronous messaging](/distributed-systems/asynchronous-messaging-at-scale/).
+
+## The hardware ceiling: Amdahl's law
+
+Buying bigger boxes has a hard limit. **Amdahl's law** shows the **serial fraction** of work caps parallel speedup: at 5% serial there is no benefit beyond ~2,048 cores; at 50% serial, none beyond ~8 cores. A benchmark of scaling up an RDS database shows throughput rising with hardware but with diminishing — eventually negligible — returns ("more bucks, no bang"), plus overload dips at high concurrency.
+
+<Callout type="gotcha" title="⚠️ Systems degrade well before 100% utilization">
+Context switching and garbage collection mean throughput sags long before CPUs hit 100%. Set an application-specific <strong>utilization target</strong> and tune thread-pool and connection-pool sizes to it — and always <em>measure</em> before paying for more hardware, because the gain may not be there.
+</Callout>
+
+## Scalability as a trade-off
+
+Scalability is one quality attribute among many. It is highly compatible with **availability** (via replication), generally *opposes* **security** (TLS handshakes, encryption add 5–10% overhead), can conflict with raw **performance** (in-memory state optimizations sometimes reduce scalability), and always raises **manageability** cost (more components to observe). Favour it deliberately, tuned to requirements.
+
+## See also
+
+- [Load balancing](/distributed-systems/load-balancing/) — distributing requests across replicas.
+- [Caching](/distributed-systems/caching/) — buying capacity by not asking the database.
+- [Distributed databases](/distributed-systems/distributed-databases/) — scaling the data tier.
+- [Asynchronous messaging at scale](/distributed-systems/asynchronous-messaging-at-scale/) — decoupling for elastic throughput.

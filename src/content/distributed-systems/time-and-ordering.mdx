@@ -1,0 +1,134 @@
+---
+title: "Time and Ordering in Distributed Systems"
+category: ds-foundations
+kind: topic
+order: 3
+difficulty: "Intermediate"
+status: ready
+intent: "Why wall-clock timestamps can't order events across machines, and how logical clocks, version vectors, and anti-entropy reason about order instead."
+book: "Foundations of Scalable Systems (Ian Gorton)"
+related:
+  - fallacies-of-distributed-computing
+  - communication-and-consistency
+  - consensus-and-coordination
+when_use:
+  - "When you need to determine which of two events on different nodes happened first."
+  - "When detecting and resolving concurrent updates to replicated data."
+  - "When designing replica repair / anti-entropy for an eventually consistent store."
+when_avoid:
+  - "For ordering events within a single node, where a monotonic clock suffices."
+  - "When a strongly consistent store already linearizes writes for you."
+quiz:
+  - q: "Why can't you compare timestamps from two different nodes to order their events?"
+    options:
+      - text: "Node clocks drift independently and time services can even move a clock backward"
+        correct: true
+      - text: "Timestamps are always in different time zones"
+        correct: false
+      - text: "TCP strips timestamps from packets"
+        correct: false
+      - text: "Only NTP servers may read the time"
+        correct: false
+    explain: "Clocks drift (10–20 s/day is common) and resets can move time backward, so cross-node timestamp comparison is meaningless for ordering. Logical clocks capture causality instead."
+  - q: "What relation do Lamport clocks capture?"
+    options:
+      - text: "The happens-before (causal) partial ordering of events"
+        correct: true
+      - text: "The exact wall-clock time an event occurred"
+        correct: false
+      - text: "The total order of all events across all nodes"
+        correct: false
+      - text: "The network latency between two nodes"
+        correct: false
+    explain: "Lamport clocks give a partial order consistent with causality (happens-before). They alone cannot detect concurrent conflicts — that needs version vectors."
+  - q: "What is a version vector used for?"
+    options:
+      - text: "Detecting concurrent updates as conflicts by tracking a logical clock per replica"
+        correct: true
+      - text: "Compressing replicated data"
+        correct: false
+      - text: "Synchronizing physical clocks across nodes"
+        correct: false
+      - text: "Routing reads to the nearest replica"
+        correct: false
+    explain: "A version vector is an array of per-replica logical clocks; a write is accepted only if every incoming element is >= the local one, so divergence shows up as a detectable conflict."
+  - q: "How do Merkle trees make passive anti-entropy efficient?"
+    options:
+      - text: "Replicas exchange root hashes and descend only into mismatched branches to find stale data"
+        correct: true
+      - text: "They encrypt all data before comparison"
+        correct: false
+      - text: "They store every object twice for redundancy"
+        correct: false
+      - text: "They replace TCP with UDP"
+        correct: false
+    explain: "A Merkle tree hashes objects at the leaves and parents up to a root. Two replicas compare roots; if equal they are in sync, otherwise they recurse only into differing branches — avoiding a full scan."
+takeaway: "Never order cross-node events by wall-clock time; use logical clocks for causality and version vectors to catch concurrent conflicts."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Two historians in different cities each date letters by their own wristwatch. One watch runs fast, the other was reset last week. If they later argue over which letter was written first, the timestamps prove nothing — only the *content* ("this letter replies to that one") establishes order. Distributed systems are exactly that: causality, not the clock, is the source of truth.
+</Callout>
+
+Ordering sounds trivial until you cross a machine boundary. The single most consequential fact from *Foundations of Scalable Systems* is blunt: **timestamps of events on different nodes cannot be meaningfully compared to determine ordering.** Everything in this page follows from accepting that.
+
+## Why physical clocks fail
+
+Every node has two clocks. The **time-of-day clock** can be read and *reset* (and a reset can move time **backward**). The **monotonic clock** only moves forward but is meaningful only within that one node. Clocks **drift** — 10–20 seconds per day is common — and time services correct them periodically:
+
+- **NTP** — a global hierarchy of time servers.
+- **Chrony** — higher-accuracy correction.
+- **Amazon Time Sync** — backed by GPS and atomic clocks.
+
+Even with correction, two nodes' clocks are never perfectly equal, and a correction can jump time backward. So comparing `nodeA.timestamp` to `nodeB.timestamp` to decide which event came first is unsound.
+
+## Logical clocks and happens-before
+
+The escape is to stop measuring *when* and start measuring *causality*. Lamport's **happens-before** relation says event A happened before event B if A could have *caused* B (same node in sequence, or a message sent then received). **Lamport clocks** assign counters that respect happens-before, giving a **partial order**:
+
+<Mermaid code={String.raw`graph TD
+  A1["Node A: event a1 (clock 1)"] --> A2["Node A: send msg (clock 2)"]
+  A2 -->|"message carries clock 2"| B2["Node B: receive (clock = max(local,2)+1)"]
+  B1["Node B: event b1 (clock 1)"] --> B2
+  B2 --> B3["Node B: event b3 (clock 4)"]`} />
+
+Lamport clocks tell you that the receive *happened after* the send. But they **cannot detect concurrency** — two events with no causal link may get any counters, so a clash can't be flagged as a conflict on counters alone.
+
+## Version vectors: detecting concurrent conflicts
+
+To catch genuinely concurrent updates, each replica keeps a **version vector** — an array of per-replica logical clocks, incremented on each local write. A write carries the version it read; it is accepted only if **every incoming element is ≥ the local element**. If neither version dominates the other, the updates are **concurrent** and the system flags a **conflict** (reread, or store both as **siblings**, as Riak does).
+
+This is what makes version vectors stronger than [Last Writer Wins](/distributed-systems/communication-and-consistency/): LWW resolves by timestamp and **silently loses** a concurrent update; version vectors refuse to hide the conflict.
+
+<Callout type="gotcha" title="⚠️ LWW can erase data without telling you">
+Last Writer Wins picks the update with the newer timestamp — but with unsynchronised cross-node clocks, "newer" is fiction. Two users editing a shared playlist at the same moment can have one edit vanish with no error. Use LWW only for immutable objects under unique keys; otherwise prefer version vectors or CRDTs.
+</Callout>
+
+## Anti-entropy: repairing replica drift
+
+Even with conflict detection, replicas **drift** as updates propagate unevenly. Two repair strategies fix this:
+
+- **Active (read) repair** runs *on reads*: the coordinator compares replicas — cheaply via **digest reads** (hashes) as in Cassandra/ScyllaDB — and refreshes stale ones, blocking or in the background.
+- **Passive repair** runs *periodically* using **Merkle trees**: a binary hash tree whose leaves hash individual objects and whose root represents the whole collection. Two replicas exchange root hashes; if they match, they are in sync; if not, they descend **only into mismatched branches** to pinpoint stale leaves — avoiding a full scan. It is CPU- and memory-intensive, so it is scheduled during low load (Riak, Cassandra).
+
+<Mermaid code={String.raw`graph TD
+  R["Root hash"] --> L["Left subtree hash"]
+  R --> Rt["Right subtree hash"]
+  L --> L1["leaf: hash(obj1)"]
+  L --> L2["leaf: hash(obj2)"]
+  Rt --> R1["leaf: hash(obj3)"]
+  Rt --> R2["leaf: hash(obj4)"]
+  R -. "compare roots; recurse only on mismatch" .-> R`} />
+
+<Callout type="go" title="💡 The one rule to remember">
+Within a node, trust the monotonic clock. Across nodes, trust <em>causality</em> — logical clocks for ordering, version vectors for conflict detection, and anti-entropy to converge. Reach for wall-clock comparison only when a strongly consistent store has already linearized writes for you.
+</Callout>
+
+## See also
+
+- [The fallacies of distributed computing](/distributed-systems/fallacies-of-distributed-computing/) — clock drift as a core fallacy.
+- [Communication and consistency](/distributed-systems/communication-and-consistency/) — where conflicts and quorums come from.
+- [Consensus and coordination](/distributed-systems/consensus-and-coordination/) — agreeing on a single order.
+- [Distributed databases](/distributed-systems/distributed-databases/) — replication and repair in real engines.

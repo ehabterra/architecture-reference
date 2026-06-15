@@ -1,0 +1,156 @@
+---
+title: "Consensus and Coordination"
+category: ds-foundations
+kind: topic
+order: 4
+difficulty: "Advanced"
+status: ready
+intent: "How nodes agree on one value despite failures — two-phase commit, Raft, Paxos, and the ownership-election primitives that make leaders safe."
+book: "Foundations of Scalable Systems (Ian Gorton); Designing Distributed Systems (Brendan Burns)"
+related:
+  - communication-and-consistency
+  - time-and-ordering
+  - distributed-databases
+when_use:
+  - "When replicas must apply updates in the same order or a transaction must commit atomically across partitions."
+  - "When exactly one replica must own a task (a leader/master) and survive failure."
+  - "When you need a distributed lock or lease that auto-releases if its holder dies."
+when_avoid:
+  - "When a single replica with orchestrator restart gives an acceptable SLA — don't add consensus you don't need."
+  - "Implementing Paxos/Raft yourself instead of using etcd, ZooKeeper, or consul."
+quiz:
+  - q: "What is the serious weakness of two-phase commit (2PC)?"
+    options:
+      - text: "If the coordinator fails after participants vote to commit, they must block holding locks until it recovers"
+        correct: true
+      - text: "It cannot commit on a single node"
+        correct: false
+      - text: "It requires UDP"
+        correct: false
+      - text: "It never holds locks"
+        correct: false
+    explain: "2PC is consensus but not fault-tolerant: a coordinator crash leaves prepared participants blocked, hurting availability. The fix is to replicate coordinator state via a fault-tolerant consensus algorithm."
+  - q: "In Raft, when does a candidate win an election?"
+    options:
+      - text: "When a majority of followers vote for it, given a higher term and a log at least as up to date"
+        correct: true
+      - text: "When it has the lowest node id"
+        correct: false
+      - text: "When all nodes including itself vote unanimously"
+        correct: false
+      - text: "When its election timer is the shortest"
+        correct: false
+    explain: "A follower votes only if the candidate's term is greater and its log is at least as up to date, and a majority is required — guaranteeing the elected leader holds all committed entries."
+  - q: "Which two primitives from a consensus key-value store make distributed locks safe?"
+    options:
+      - text: "Compare-and-swap and TTL (time-to-live)"
+        correct: true
+      - text: "Round-robin and sticky sessions"
+        correct: false
+      - text: "Gzip and chunking"
+        correct: false
+      - text: "Sharding and replication"
+        correct: false
+    explain: "Compare-and-swap atomically sets a value only if it matches the expected one; TTL auto-clears a key so a crashed lock holder doesn't deadlock everyone. Resource versions close the slow-holder race."
+  - q: "Why does Spanner run its two-phase commit *as a Paxos group*?"
+    options:
+      - text: "So a participant can take over a failed coordinator, eliminating 2PC's blocking weakness"
+        correct: true
+      - text: "To avoid using transactions at all"
+        correct: false
+      - text: "To remove the need for replication"
+        correct: false
+      - text: "To make reads slower but writes faster"
+        correct: false
+    explain: "By replicating the coordinator's state across a Paxos group, a new coordinator can be elected if the original fails, so prepared participants are never permanently blocked."
+takeaway: "Use Raft/Paxos (via etcd/ZooKeeper) — never hand-rolled — for agreement; secure leaders with compare-and-swap locks that carry a TTL and resource version."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A jury must return a single verdict even if a juror falls ill mid-deliberation. They can't poll everyone forever, so they agree on a rule: a majority decides, and any new foreperson must already know the case. Distributed consensus is that majority rule, formalized so the system keeps agreeing even as members fail and rejoin.
+</Callout>
+
+Consensus is the act of getting independent, possibly-failing nodes to **agree on a single value or order**. It underpins both flavours of strong consistency from [communication and consistency](/distributed-systems/communication-and-consistency/): for **transactions** all participants must agree to commit or abort; for **replicas** all must agree on update order.
+
+## Two-phase commit (2PC)
+
+The classic atomic-commit protocol uses a **coordinator** that assigns a globally unique transaction id:
+
+<Mermaid code={String.raw`sequenceDiagram
+  participant C as Coordinator
+  participant P1 as Participant 1
+  participant P2 as Participant 2
+  C->>P1: Prepare
+  C->>P2: Prepare
+  P1-->>C: Vote commit (can commit durably)
+  P2-->>C: Vote commit
+  C->>P1: Commit
+  C->>P2: Commit
+  Note over C,P2: If any vote is abort, coordinator tells all to abort`} />
+
+In the **prepare phase**, a participant that prepares guarantees it can commit durably and can no longer abort. In the **resolve phase**, if all can commit, all commit; otherwise all abort. **Participant failure** is recoverable (consult the coordinator's log on restart). The serious weakness is **coordinator failure**: participants that voted commit must **block**, holding locks, until the coordinator recovers — hurting availability and risking cascading failures. 2PC *is* consensus, but it is **not fault-tolerant**.
+
+## Replicated state machines and the consensus properties
+
+Replica consistency requires applying updates in the **same order everywhere** — built on **atomic / total-order broadcast** over **replicated state machines**. A correct consensus algorithm provides:
+
+- **Safety** — all replicas agree on the same value.
+- **Liveness** — a value is *eventually* chosen, even with failures (fault tolerance).
+- **Validity** — the chosen value was actually proposed.
+
+Fault tolerance requires operating on a **quorum** (majority) and handling leader/follower failure via elections.
+
+## Raft
+
+Raft is the deliberately "understandable" leader-based algorithm. Clusters are odd-sized (3 or 5); nodes are **leader**, **follower**, or **candidate**.
+
+- The leader sends **heartbeats** (~300–500 ms) and owns a monotonically increasing **term** (a logical clock — one leader per term, persisted by all).
+- Updates go to the leader, which orders them, appends them as **uncommitted**, sends `AppendEntries`, and marks them **committed** once a **majority** acknowledges.
+- **Leader election:** each follower runs a randomized **election timer**; on expiry it becomes a candidate, increments the term, votes for itself, and sends `RequestVote`. A follower votes only if the incoming term is greater **and** the candidate's log is at least as up to date — guaranteeing any elected leader already holds all committed entries.
+
+<Mermaid code={String.raw`stateDiagram-v2
+  [*] --> Follower
+  Follower --> Candidate: election timer expires
+  Candidate --> Leader: wins majority vote
+  Candidate --> Follower: sees higher term
+  Candidate --> Candidate: split vote, new election
+  Leader --> Follower: sees higher term`} />
+
+Raft powers Neo4j, YugabyteDB, etcd, and Hazelcast. **Paxos** (Lamport) is the leaderless ancestor, notoriously hard; **Multi-Paxos** (leader-based, like Raft) underpins Spanner.
+
+<Callout type="go" title="💡 Consensus makes 2PC safe">
+Google Spanner runs its multi-split <strong>2PC itself as a Paxos group</strong>: the coordinator's state is replicated, so if it fails a participant takes over — eliminating 2PC's blocking weakness. The lesson generalizes: layer 2PC on top of a fault-tolerant consensus group rather than trusting a single coordinator.
+</Callout>
+
+## Ownership election: the practical face of consensus
+
+Brendan Burns frames a common need: **exactly one replica owns a task** (a scheduler, a shard's master), with automatic re-election on failure. His advice is emphatic:
+
+<Callout type="gotcha" title="⚠️ Don't roll your own consensus">
+Implementing Paxos or Raft by hand is like implementing locks on raw compare-and-swap — interesting academically, rarely worthwhile, and easy to get subtly wrong. Use a key-value store that already implements consensus: <strong>etcd, ZooKeeper, or consul</strong>.
+</Callout>
+
+These stores expose two essential primitives:
+
+- **Compare-and-swap** — atomically write a new value only if the current value matches the expected one.
+- **TTL** — a key auto-clears when its time-to-live expires.
+
+A **distributed lock** is compare-and-swap against `nil`, written **with a TTL** so a holder that crashes mid-lock doesn't deadlock everyone. **Ownership (a lease)** is a renewable lock: the owner renews it every `ttl/2` seconds, and on loss simply terminates so the orchestrator restarts it as a standby.
+
+Two classic races and their fixes:
+
+- A **slow holder** can lose the lock on TTL expiry, then its late `unlock` releases the *new* owner's lock. Fix: `unlock`/`renew` perform compare-and-swap against both the value **and** the **resource version** recorded at lock time.
+- A delayed request `R1` from a deposed-then-reinstated master could be wrongly accepted after a newer `R2`. Fix: send the **resource version** with every request and have the *called system* double-check that the requester is still the current owner, rejecting on any version mismatch.
+
+## Do you even need it?
+
+Burns is equally clear that consensus is often unnecessary. A **single replica** with orchestrator auto-restart yields roughly **two-to-four nines** depending on crash and reschedule times. "Deciding when the distributed part is unnecessarily complex is a key skill." Reach for elected leaders only when you genuinely need four-plus nines.
+
+## See also
+
+- [Communication and consistency](/distributed-systems/communication-and-consistency/) — the consistency models consensus enables.
+- [Time and ordering](/distributed-systems/time-and-ordering/) — terms and logical clocks underpinning Raft.
+- [Distributed databases](/distributed-systems/distributed-databases/) — Raft/Paxos inside real engines.
+- [Serving patterns](/distributed-systems/serving-patterns/) — where ownership election fits the bigger picture.

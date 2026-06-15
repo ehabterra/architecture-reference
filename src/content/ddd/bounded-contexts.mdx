@@ -1,0 +1,117 @@
+---
+title: "Bounded Contexts"
+category: ddd-strategic
+kind: topic
+order: 3
+difficulty: "Intermediate"
+status: ready
+intent: "Divide the ubiquitous language into smaller, internally consistent models — each its own model, physical, and ownership boundary."
+book: "Learning Domain-Driven Design (Vlad Khononov)"
+related:
+  - ubiquitous-language
+  - context-mapping
+  - business-domains-and-subdomains
+when_use:
+  - "When the same term carries conflicting meanings across departments or experts."
+  - "When you need to form a new team, decouple lifecycles, or scale a part independently."
+  - "Whenever an enterprise-wide model is becoming a 'jack of all trades, master of none'."
+when_avoid:
+  - "Don't fragment coherent use cases operating on the same data across contexts."
+  - "Don't force a one-to-one subdomain-to-context mapping when multiple models of one subdomain are useful."
+  - "Don't start with the smallest possible contexts when the domain is poorly understood."
+quiz:
+  - q: "What is a bounded context?"
+    options:
+      - text: "The consistency boundary of a ubiquitous language"
+        correct: true
+      - text: "A database schema"
+        correct: false
+      - text: "A subdomain discovered from business strategy"
+        correct: false
+      - text: "A microservice, always"
+        correct: false
+    explain: "A bounded context is the consistency boundary of a ubiquitous language: within it every term has a single meaning, while across contexts the same term may differ."
+  - q: "How do subdomains differ from bounded contexts?"
+    options:
+      - text: "Subdomains are discovered; bounded contexts are designed"
+        correct: true
+      - text: "They are the same thing"
+        correct: false
+      - text: "Bounded contexts are discovered; subdomains are designed"
+        correct: false
+      - text: "Subdomains are physical; contexts are logical"
+        correct: false
+    explain: "Subdomains are defined by business strategy and identified through analysis; bounded contexts are a strategic design decision about how to divide the domain."
+  - q: "What is the ownership rule for a bounded context?"
+    options:
+      - text: "Exactly one team owns a context, though one team may own many contexts"
+        correct: true
+      - text: "Many teams share one context"
+        correct: false
+      - text: "Every developer owns their own context"
+        correct: false
+      - text: "Contexts have no owners"
+        correct: false
+    explain: "Ownership is one-directional: a context has one owning team, but a team may own several contexts. This forces explicit integration contracts — 'good fences make good neighbors'."
+  - q: "Consistency of the language identifies which boundary?"
+    options:
+      - text: "The widest possible boundary — you may decompose further but never wider"
+        correct: true
+      - text: "The narrowest possible boundary"
+        correct: false
+      - text: "The team boundary only"
+        correct: false
+      - text: "The database boundary"
+        correct: false
+    explain: "Consistency sets the widest valid boundary; you can split a context into smaller ones, but you should never make it wider than where the language stays consistent."
+takeaway: "A ubiquitous language is consistent only within its bounded context — discover subdomains, but design contexts."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A tomato is a *fruit* in botany, a *vegetable* in the kitchen and tax law, and "a feedback mechanism" to a stage performer. Nobody is wrong — each field has its own area of meaning. A bounded context is exactly that: the boundary inside which a word means one specific thing.
+</Callout>
+
+## The tension this solves
+
+The ubiquitous language must be **consistent** (one meaning per term), yet at organizational scale different experts hold *inconsistent* mental models of the same concept. In a telemarketing company, *lead* means to **marketing** a notification that someone is interested (contact details), but to **sales** a complex, long-running entity spanning the whole sales lifecycle. A single enterprise-wide model trying to satisfy both becomes a wall-spanning ERD "suitable for everything but effective for nothing."
+
+DDD's answer is the **bounded context**: split the language into multiple smaller languages, each with an explicit boundary inside which it stays consistent.
+
+<Mermaid code={String.raw`graph TD
+  L["Term: 'Lead'"] --> M["Marketing context<br/>Lead = prospect's contact details"]
+  L --> S["Sales context<br/>Lead = full sales-process entity"]
+  M --> MT["Owned by Marketing team"]
+  S --> ST["Owned by Sales team"]`} />
+
+Two tempting alternatives both fail: a single enterprise model (the giant ERD), and prefixing terms (*marketing lead* / *sales lead*) — which adds cognitive load and diverges from how people actually speak.
+
+## A context is three boundaries at once
+
+- **Model boundary** — A model cannot exist without a boundary, or it expands until it becomes a copy of the real world. The context defines the *applicability* of a ubiquitous language: it is ubiquitous only *within* its bounded context, not universally.
+- **Physical boundary** — Each context is an individual service/project, implemented, evolved, and versioned independently, possibly with its own tech stack.
+- **Ownership boundary** — Exactly one team maintains a context. The relationship is one-directional: a team may own several contexts, but two teams never share one.
+
+<Mermaid code={String.raw`graph TD
+  BC["One bounded context"] --> MB["Model boundary<br/>(one consistent language)"]
+  BC --> PB["Physical boundary<br/>(own service, stack, lifecycle)"]
+  BC --> OB["Ownership boundary<br/>(exactly one team)"]`} />
+
+<Callout type="go" title="Discovered vs designed">
+This is the key distinction: **subdomains are discovered** (they come from business strategy — you analyze to *identify* them), while **bounded contexts are designed** (you *decide* how to divide the domain). A context may contain several subdomains as logical modules inside it.
+</Callout>
+
+## Sizing a bounded context
+
+Models should be *useful*, not necessarily big or small. A wider boundary makes the language harder to keep consistent; smaller boundaries add integration overhead. Extract finer-grained contexts to form new teams, to address nonfunctional requirements (decoupling lifecycles), or to scale independently.
+
+<Callout type="gotcha" title="Keep coherent use cases together">
+Consistency identifies the *widest* possible boundary — you may decompose further but never wider. The pitfall is splitting coherent functionality that operates on the same data across contexts, which creates chatty, fragile integrations. A one-to-one subdomain-to-context mapping is fine sometimes but not mandatory; forcing it forbids using *multiple models of the same subdomain* for different problems.
+</Callout>
+
+## See also
+
+- [Ubiquitous language](/ddd/ubiquitous-language/) — what a context keeps consistent.
+- [Context mapping](/ddd/context-mapping/) — how contexts integrate with each other.
+- [Business domains and subdomains](/ddd/business-domains-and-subdomains/) — what gets divided.

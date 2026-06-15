@@ -1,0 +1,115 @@
+---
+title: "Value Objects"
+category: ddd-tactical
+kind: topic
+order: 5
+difficulty: "Beginner"
+status: ready
+intent: "Immutable types identified by the composition of their values — data plus behavior that cure primitive obsession."
+book: "Learning Domain-Driven Design (Vlad Khononov)"
+related:
+  - entities-and-aggregates
+  - ubiquitous-language
+  - business-logic-and-architecture-patterns
+when_use:
+  - "For properties of other objects — IDs, names, phone numbers, emails, colors, statuses."
+  - "Especially for money, where primitive types invite precision and rounding bugs."
+  - "Whenever validation or manipulation logic for a concept is scattered and duplicated."
+when_avoid:
+  - "When a concept genuinely needs a distinct identity that persists through changes — use an entity instead."
+  - "Don't over-model trivial supporting-subdomain data into elaborate value objects when CRUD suffices."
+quiz:
+  - q: "What identifies a value object?"
+    options:
+      - text: "The composition of its values — no explicit identity field is needed"
+        correct: true
+      - text: "An explicit ID field"
+        correct: false
+      - text: "Its memory address"
+        correct: false
+      - text: "A database primary key"
+        correct: false
+    explain: "A value object is identified by the combination of all its values; two value objects with the same values are equal, so no identity field is required."
+  - q: "Why are value objects immutable?"
+    options:
+      - text: "Because their identity is their values, changing a value would make it a different object"
+        correct: true
+      - text: "Because immutability is always faster"
+        correct: false
+      - text: "Because the database requires it"
+        correct: false
+      - text: "They are not immutable"
+        correct: false
+    explain: "Since a value object is its values, any 'mutation' is conceptually a different value — so mutating operations return a new instance rather than changing the existing one."
+  - q: "What code smell do value objects cure?"
+    options:
+      - text: "Primitive obsession — representing domain concepts with bare strings and ints"
+        correct: true
+      - text: "Long methods"
+        correct: false
+      - text: "God classes"
+        correct: false
+      - text: "Magic numbers only"
+        correct: false
+    explain: "Primitive obsession scatters and duplicates validation across the codebase; a value object validates on construction and centralizes its manipulation logic in one place."
+takeaway: "Wrap domain concepts in immutable value objects identified by their values — use them whenever you can, especially for money."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A $10 bill is interchangeable with any other $10 bill — you don't care *which* note you hold, only its value. Contrast that with your passport, which is uniquely yours. Value objects are the $10 bills of your model: identified entirely by what they *are*, not by a serial number.
+</Callout>
+
+## Identified by value
+
+A **value object** is an object identified by the **composition of its values**; it needs no explicit identity field. Because its identity *is* its values, it is **immutable** — any operation that would change a value returns a *new* instance instead. A value object models both **data and behavior**, centralizes the logic that manipulates it, overrides equality to compare by value, and speaks the **ubiquitous language**.
+
+<Mermaid code={String.raw`graph TD
+  P["Person (entity)"] --> Id["PersonId (value object)"]
+  P --> Name["Name (value object)"]
+  P --> Phone["PhoneNumber (value object)"]
+  P --> Email["EmailAddress (value object)"]
+  P --> H["Height (value object)"]
+  Phone --> V["Validates + parses on construction"]
+  H --> Beh["Behavior: Metric(180), unit conversion"]`} />
+
+## Curing primitive obsession
+
+**Primitive obsession** is the smell of representing domain concepts with primitive types — a phone number as a `string`, a height as an `int`. The validation and conversion logic then scatters across the codebase, gets duplicated, and drifts out of sync. A value object fixes this: it **validates on construction**, so an invalid instance can never exist, and it hosts its own behavior.
+
+<Mermaid code={String.raw`graph TD
+  subgraph Prim["Primitive obsession"]
+    S["phone: string"] --> V1["validate in controller"]
+    S --> V2["validate in service"]
+    S --> V3["re-validate in repo (drifts)"]
+  end
+  subgraph VO["Value object"]
+    PN["PhoneNumber"] --> One["validate + parse once,<br/>on construction"]
+  end`} />
+
+A `Person` built from all-string primitives becomes far richer when rebuilt from value objects: `PersonId`, `Name`, `PhoneNumber`, `EmailAddress`, and `Height`, each with rich behavior — `Height.Metric(180)`, `PhoneNumber.Parse(...)`, `Color.FromRGB(...).MixWith(green)`.
+
+```text
+Color(red=255, green=0, blue=0)         // identified by its three values
+Color.FromRGB(255,0,0) == Color.FromRGB(255,0,0)   // true — value equality
+Color.FromRGB(255,0,0).MixWith(green)   // returns a NEW Color
+```
+
+<Callout type="tip" title="Use them whenever you can">
+Reach for value objects for almost every property of other objects — especially **money**, where bare floats invite precision and rounding disasters. Some languages make this nearly free: a C# 9 `record` gives value-based equality out of the box.
+</Callout>
+
+<Callout type="go" title="Behavior belongs with the data">
+A value object keeps all the logic for manipulating a concept inside its boundary. That prevents the logic from leaking and duplicating in the application layer — the same principle that makes [aggregates](/ddd/entities-and-aggregates/) and the whole domain model effective.
+</Callout>
+
+<Callout type="gotcha" title="Don't add a redundant identity">
+A bug source is giving a value object an identity it doesn't need — e.g. a `ColorId` on a `Color`. If two instances with identical values should be considered the same thing, it's a value object; adding an ID turns it into something it isn't and breaks value equality.
+</Callout>
+
+## See also
+
+- [Entities and aggregates](/ddd/entities-and-aggregates/) — objects that *do* need explicit identity.
+- [Ubiquitous language](/ddd/ubiquitous-language/) — value objects should speak it.
+- [Business logic and architecture patterns](/ddd/business-logic-and-architecture-patterns/) — where the domain model fits.

@@ -1,0 +1,140 @@
+---
+title: "Thinking in Events"
+category: ed-foundations
+kind: guide
+order: 1
+difficulty: "Start here"
+status: ready
+intent: "Events versus commands versus messages — and why a durable, replayable event is a different medium that decouples who owns data from who consumes it."
+book: "Building Event-Driven Microservices (Adam Bellemare); Flow Architectures (James Urquhart)"
+related:
+  - event-first-design
+  - coupling-and-asynchrony-tradeoffs
+  - streams-and-the-log
+when_use:
+  - "Many independent consumers need the same business facts without coupling to the producer"
+  - "You want the history of what happened to be durable, replayable, and the single source of truth"
+  - "Teams and services must evolve independently, on their own schedules"
+  - "Consumers need to build and re-build their own local read models from a stream alone"
+  - "The data communication structure is weak and services keep absorbing scope just to source data"
+when_avoid:
+  - "A single caller needs an immediate, synchronous answer (authentication, a price quote)"
+  - "The organization is too small to pay the broker, CMS, and tooling overhead (the microservice tax)"
+  - "Strong read-after-write consistency is required inside one transaction boundary"
+  - "The interaction is purely point-to-point with no current or future downstream consumers"
+  - "You only need at-most-once fire-and-forget signalling that no one must replay"
+quiz:
+  - q: "What is the defining difference between an event broker and a message broker?"
+    options:
+      - text: "An event broker keeps an immutable, replayable log read via per-consumer offsets; a message broker deletes each message once it is consumed"
+        correct: true
+      - text: "An event broker is faster"
+        correct: false
+      - text: "A message broker supports more languages"
+        correct: false
+      - text: "There is no real difference; the terms are interchangeable"
+        correct: false
+    explain: "Because events are not destroyed on consumption, any number of consumers can read the same stream at their own pace — that is what makes the stream a single source of truth."
+  - q: "An 'entity event' is best described as…"
+    options:
+      - text: "A keyed event describing an entity's state at a point in time, where only the latest event per key is needed for current state"
+        correct: true
+      - text: "A singular statement of fact with no key"
+        correct: false
+      - text: "A command instructing a service to do something"
+        correct: false
+      - text: "A message that is deleted after one read"
+        correct: false
+    explain: "Entity events are keyed on a unique ID; applying them in order and upserting the latest per key materializes current state — the basis of table-stream duality."
+  - q: "Why does Bellemare emphasize the often-missing 'data communication structure'?"
+    options:
+      - text: "When data cannot move freely between implementations, the implementation structure is forced to do double duty, encouraging monolithic scope creep"
+        correct: true
+      - text: "It is the only structure that matters"
+        correct: false
+      - text: "It replaces the need for teams"
+        correct: false
+      - text: "It is a synonym for the network topology"
+        correct: false
+    explain: "Per Conway's Law, weak data communication makes services absorb extra responsibility just to source data, blurring boundaries and tightening coupling."
+  - q: "A command differs from an event because a command…"
+    options:
+      - text: "Is an instruction directed at a specific handler expecting an action; an event is an immutable statement of fact addressed to no one in particular"
+        correct: true
+      - text: "Cannot be put on a stream"
+        correct: false
+      - text: "Is always synchronous"
+        correct: false
+      - text: "Is never logged"
+        correct: false
+    explain: "Commands say 'do this' (imperative, often expecting a response); events say 'this happened' (declarative fact). Conflating them re-introduces coupling."
+  - q: "What distinguishes a microservice topology from a business topology?"
+    options:
+      - text: "A microservice topology is one service's internal processing logic; a business topology is the graph of services, streams, and APIs that fulfill a complex business function"
+        correct: true
+      - text: "A microservice topology is the network diagram; a business topology is the org chart"
+        correct: false
+      - text: "They are two names for the same thing"
+        correct: false
+      - text: "A business topology only exists in monoliths"
+        correct: false
+    explain: "Topology has two senses: the per-service ingest/transform/materialize/emit logic, and the larger composition of many services and streams that together deliver business value."
+takeaway: "An event is a durable, replayable statement of fact — publish facts to a log so any consumer can read them at its own pace, decoupling data ownership from consumption."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A command is a phone call: you dial a specific person and wait for them to act. A message is a letter dropped in one mailbox and removed when read. An **event** is an entry in the public ledger of record — once written, it stays there forever, and anyone, now or years from now, can read the same page and reach the same conclusion.
+</Callout>
+
+Marshall McLuhan said "the medium is the message." Adam Bellemare opens *Building Event-Driven Microservices* with that line because the **event** has been transformed by modern technology: events can now be persisted indefinitely at large scale and re-read by any service as often as needed. That single change — durability plus replay — turns events from throwaway notifications into the **single source of truth** for an organization.
+
+## Events vs. commands vs. messages
+
+These three are routinely confused, and conflating them quietly re-introduces the coupling event-driven design is meant to remove.
+
+- **Command** — an *imperative instruction* aimed at a specific handler: "charge this card." It expects something to happen and often a response. It is point-to-point and couples the sender to the receiver.
+- **Event** — a *declarative statement of fact* about something that already happened: "payment was captured." It is addressed to no one in particular; producers do not know who consumes it.
+- **Message** — a transport-level envelope. In a classic **message broker** each message lands in a *queue*, is consumed *once*, and is *deleted*. That makes it impossible to communicate state to multiple consumers.
+
+<Callout type="go" title="The key insight">
+Events are **not destroyed on consumption**. An **event broker** maintains a single immutable, replayable ledger; each consumer tracks its own **offset**. This is why a stream can serve as the single source of truth while a queue cannot.
+</Callout>
+
+## The shape of an event
+
+Events use a **key/value** structure. Bellemare distinguishes three kinds:
+
+- **Unkeyed event** — a singular statement of fact (a user opens a book).
+- **Entity event** — keyed on a unique ID, describing an entity's state at a point in time. Only the *latest* event per key is needed for current state.
+- **Keyed event** — has a key but is not an entity; used mainly for partitioning and **data locality**.
+
+Applying entity events in order and upserting each into a key/value table — latest-per-key wins — **materializes state**. The reverse, emitting a stream from table changes, is equally valid. This **table-stream duality** lets any consumer build its own local state store from a stream alone, with no direct coupling to the producer.
+
+<Mermaid code={String.raw`graph LR
+  S["Stream of entity events<br/>k1=v1, k2=v2, k1=v3"] -->|"upsert latest per key"| T["Table<br/>k1=v3, k2=v2"]
+  T -->|"emit on change"| S2["Stream"]
+  S2 -.->|"same data, two forms"| S`} />
+
+<Mermaid code={String.raw`graph TD
+  P["Producer<br/>(single writer)"] -->|"appends facts"| L["Event stream<br/>(immutable log)"]
+  L -->|"offset A"| C1["Consumer A<br/>materializes its own view"]
+  L -->|"offset B"| C2["Consumer B<br/>aggregates"]
+  L -->|"offset C"| C3["Consumer C<br/>replays history"]`} />
+
+## Why the medium reshapes the organization
+
+Bellemare names three communication structures: the **business** structure (teams), the **implementation** structure (a service and its database), and the frequently-missing **data communication** structure (how data actually moves between implementations). Invoking Conway's Law, he shows that when the data structure is weak, the implementation structure is forced to do **double duty** — services absorb extra scope just to source data they need, blurring boundaries and breeding distributed monoliths.
+
+Publishing all shareable data to event streams inverts this. Producers are limited to producing well-defined facts; consumers each take their own copy and do their own modeling and querying. Core domain data becomes accessible independent of any one implementation — which is what makes teams and services free to change. See [coupling and asynchrony trade-offs](/event-driven/coupling-and-asynchrony-tradeoffs/) for the costs of this freedom.
+
+<Callout type="gotcha" title="Don't use events as semaphores">
+An event that merely signals "something happened" without carrying the *result* creates two sources of truth: consumers must call back to find out what actually changed. Tell the truth, the whole truth, and nothing but the truth — the event should carry enough that a consumer never needs another data source.
+</Callout>
+
+## See also
+
+- [Event-first design](/event-driven/event-first-design/) — making the stream the first place data lands.
+- [Coupling and asynchrony trade-offs](/event-driven/coupling-and-asynchrony-tradeoffs/) — what you give up for decoupling.
+- [Streams and the log](/event-driven/streams-and-the-log/) — partitions, offsets, retention, and replay.

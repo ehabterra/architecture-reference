@@ -1,0 +1,122 @@
+---
+title: "Designing Good APIs: API-as-a-Product"
+category: api-design
+kind: topic
+order: 2
+difficulty: "Beginner"
+status: ready
+intent: "Design from the consumer's perspective, adopt a standard early, and treat the API as a long-lived product — because the API is the contract."
+book: "Mastering API Architecture; RESTful Web API Patterns and Practices Cookbook"
+related:
+  - api-styles-overview
+  - api-versioning-and-evolution
+  - api-rest
+when_use:
+  - "You own an API consumed by teams or partners you cannot redeploy on demand."
+  - "You are setting conventions (errors, naming, collections) before the API grows."
+  - "You want to reduce accidental breaking changes and support burden."
+when_avoid:
+  - "A throwaway internal prototype with a single consumer you fully control."
+  - "You would over-engineer standards for an API that will never be exposed."
+quiz:
+  - q: "What does 'API-First' (consumer-centric) design mean?"
+    options:
+      - text: "Design the API from the perspective of its consumers, not around a single internal function"
+        correct: true
+      - text: "Build the database schema first and expose it directly"
+        correct: false
+      - text: "Write the client SDK before the server"
+        correct: false
+      - text: "Always ship version 1 before gathering requirements"
+        correct: false
+    explain: "API-First means considering functionality from the consumer's viewpoint (mobile app, partner, service) and abstracting the underlying representation to reduce coupling."
+  - q: "Why should you wrap a collection in an object rather than returning a raw array from the start?"
+    options:
+      - text: "So you can later add pagination metadata (like @nextLink) without breaking consumers"
+        correct: true
+      - text: "Because arrays are not valid JSON"
+        correct: false
+      - text: "To make the response smaller"
+        correct: false
+      - text: "Because REST forbids arrays"
+        correct: false
+    explain: "Converting a top-level array into an object later is a breaking change; nesting the array in an object (with a value array and @nextLink) keeps the response evolvable."
+  - q: "What does RFC-2119 terminology (MUST, SHOULD, MUST NOT) bring to an API standard?"
+    options:
+      - text: "It marks which requirements are mandatory versus optional, giving shared expectations"
+        correct: true
+      - text: "It encrypts the specification"
+        correct: false
+      - text: "It generates client code automatically"
+        correct: false
+      - text: "It versions the API for you"
+        correct: false
+    explain: "The Microsoft REST API Guidelines use RFC-2119 keywords so every team reads the same requirement the same way — mandatory or optional."
+  - q: "According to the Cookbook, what is the 'Hippocratic Oath of APIs'?"
+    options:
+      - text: "Take nothing away; don't redefine things; make additions optional"
+        correct: true
+      - text: "Always version with /v2/ when in doubt"
+        correct: false
+      - text: "Never publish a public API"
+        correct: false
+      - text: "Encrypt every field by default"
+        correct: false
+    explain: "Once published, a URL/format/property can't be removed or redefined, and new inputs/outputs must be optional — 'first, do no harm'."
+takeaway: "The API is the contract: design it consumer-first, adopt a standard early, and treat it as a long-lived product you must never casually break."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🏬 Analogy">
+A good API is a shopfront, not a stockroom. Customers should see a clean, consistent counter where they can ask for what they need in familiar terms — they should never have to know how the warehouse is organised, where the shelves are, or how the till is wired. When you reorganise the back, the shopfront must keep working.
+</Callout>
+
+## Design from the consumer's perspective
+
+The durable part of an API is not how fast you can stand it up — most frameworks make that trivial — but its **design and structure**. *Mastering API Architecture* calls this **API-First** (consumer-centric) design: model functionality from the viewpoint of the people who call it (a mobile app, another service, an external partner) rather than around one internal function. Abstract the underlying representation so you can refactor behind the scenes without breaking compatibility. This is the **information hiding** that comes from an API that is both highly **cohesive** and loosely **coupled**.
+
+Crucially, the API is a **contract**. Treat it as unbreakable: *"your data model is not your object model is not your resource model is not your representation model."* Keep the internal (storage) model independent of the external (message) model so storage technology never leaks to consumers.
+
+<Mermaid code={String.raw`graph LR
+  Data["Data model<br/>(storage)"] --> Object["Object model<br/>(code)"]
+  Object --> Resource["Resource model<br/>(API design)"]
+  Resource --> Repr["Representation model<br/>(wire format)"]
+  Data -.->|"kept independent"| Repr`} />
+
+## Adopt a standard early
+
+REST's basic rules leave error formats, pagination, naming, and compatibility up to you. Adopting a shared standard — for example the open-sourced **Microsoft REST API Guidelines**, which use **RFC-2119** keywords (MUST / SHOULD / MUST NOT) — gives every team the same expectations. Adopt it *early*: retrofitting conventions later usually breaks compatibility. Build a common **domain data dictionary** and reuse widely known terminology — names are part of the contract, and renaming a field is a breaking change.
+
+<Mermaid code={String.raw`graph LR
+  P["Producer<br/>(API team)"] -->|"consumer-first design"| API["API contract<br/>(stable interface)"]
+  API --> C1["Mobile app<br/>(close team)"]
+  API --> C2["External partner<br/>(loose coupling)"]
+  Store["Internal storage model"] -. "hidden / decoupled" .-> API`} />
+
+## Design for compatibility from day one
+
+A handful of decisions made up front keep an API evolvable:
+
+- **Wrap collections in an object.** Return `{ "value": [...], "@nextLink": "..." }`, never a bare array — so you can add [pagination](/apis/pagination-and-filtering/) later without breaking parsers.
+- **Plan filtering** along the standard (e.g. an OData-style `?$filter=` expression) even before implementing all of it.
+- **Make errors consistent.** Use accurate status codes (2xx success, 4xx client, 5xx server) so a developer can write *one* piece of code to handle errors; never leak stack traces to external consumers.
+- **Keep PII out of URLs** — paths and query strings get cached and logged.
+
+## Treat the API as a product
+
+The Cookbook frames stability as an oath. The **Hippocratic Oath of APIs** ("first, do no harm") has three rules: **take nothing away**, **don't redefine things**, and **make additions optional**. Its companion mantra is **"Don't change it, add it"** — create a new endpoint or form rather than altering an existing one. *APIs are forever*: you cannot predict specific future changes, but you can design for the *possibility* of change, and consumers SHOULD ignore properties they do not understand.
+
+<Callout type="gotcha" title="A spec conveys shape, not behaviour">
+An OpenAPI Specification describes the *shape* of an API — fields, types, security — but not its *semantics* under different conditions. Document ambiguous outcomes explicitly: in a payment API, does a 500 mean the payment went through or not? Model and test the full range of behaviours, especially for external users.
+</Callout>
+
+<Callout type="tip" title="Mocks and examples beat paper review">
+OpenAPI can carry example responses and power mock services. Letting producer and consumer 'try out' the API before it is built surfaces design problems far earlier than reviewing a specification on paper.
+</Callout>
+
+## See also
+
+- [API styles overview](/apis/api-styles-overview/) — pick REST, gRPC, or GraphQL per exchange.
+- [API versioning and evolution](/apis/api-versioning-and-evolution/) — when 'don't change it, add it' is not enough.
+- [Pagination and filtering](/apis/pagination-and-filtering/) — designing collections that evolve.

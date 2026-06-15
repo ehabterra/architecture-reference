@@ -1,0 +1,132 @@
+---
+title: "Deployment and Progressive Delivery"
+category: ms-operations
+kind: topic
+order: 12
+difficulty: "Intermediate"
+status: ready
+intent: "Deploying many interdependent services: the five principles of deployment, the options from VMs to FaaS, and progressive delivery — separating deployment from release to control the blast radius."
+book: "Building Microservices, 2nd ed. (Sam Newman); Enabling Microservice Success (Sarah Wells)"
+related:
+  - migration-patterns
+  - testing-microservices
+  - resilience
+when_use:
+  - "You are designing how to build, deploy, and release many services."
+  - "You want to reduce the risk of each release."
+  - "You are choosing among containers, PaaS, FaaS, and Kubernetes."
+when_avoid:
+  - "You have a single deployable and no independent-release requirement."
+  - "You need testing strategy rather than deployment mechanics."
+quiz:
+  - q: "What is the core idea behind progressive delivery?"
+    options:
+      - text: "Separating deployment from release to get fine-grained control over the blast radius"
+        correct: true
+      - text: "Deploying everything at once on a schedule"
+        correct: false
+      - text: "Only deploying on Fridays"
+        correct: false
+      - text: "Releasing without any testing"
+        correct: false
+    explain: "Progressive delivery is 'continuous delivery with fine-grained control over the blast radius,' resting on separating deployment from release (blue-green, feature toggles, canary, parallel run)."
+  - q: "Which is one of Newman's five principles of deployment?"
+    options:
+      - text: "Infrastructure as code"
+        correct: true
+      - text: "Manual approval for every change"
+        correct: false
+      - text: "One giant build for all services"
+        correct: false
+      - text: "Sharing one database connection pool"
+        correct: false
+    explain: "The five are: isolated execution, focus on automation, infrastructure as code, zero-downtime deployment, and desired state management."
+  - q: "What two CI rules does Newman stress for build artifacts?"
+    options:
+      - text: "Build the artifact once, and deploy the very artifact you verified"
+        correct: true
+      - text: "Rebuild per environment, and never store artifacts"
+        correct: false
+      - text: "Build twice and compare"
+        correct: false
+      - text: "Always build inside production"
+        correct: false
+    explain: "Build once (keeping environment-specific config outside the artifact) and promote the same verified artifact through environments."
+  - q: "What is Newman's stance on Kubernetes adoption?"
+    options:
+      - text: "'Expect Kubernetes in your future,' but don't adopt it just because everyone else does"
+        correct: true
+      - text: "Never use Kubernetes"
+        correct: false
+      - text: "Always start with Kubernetes on day one"
+        correct: false
+      - text: "Kubernetes is only for FaaS"
+        correct: false
+    explain: "Adopt it when your current approach strains; prefer a fully managed cluster and consider whether FaaS/PaaS would serve better."
+takeaway: "Deploy on five principles (isolation, automation, IaC, zero-downtime, desired state), build the artifact once, and use progressive delivery to separate deployment from release."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A theatre does a dress rehearsal (deploy) long before opening night (release), and previews to a small audience before the full house (canary). If a scene flops, they pull it without cancelling the show. Progressive delivery gives software the same separation: get the code on stage quietly, then choose when and to whom it actually goes live.
+</Callout>
+
+## Build it once
+
+Before deployment comes the build. **Continuous integration** verifies that new code integrates — compile, run tests — producing a **version-controlled artifact built once and only once**. Two rules: *build the artifact once*, and *deploy the very artifact you verified* (keep environment-specific config outside it). Newman prefers **trunk-based development** with short-lived branches and feature flags over feature branching, and — on mapping source to builds — favours **multirepos** (one repo per service: clean build-to-service mapping; cross-repo changes usefully signal wrong boundaries) over the monorepo's scaling challenges.
+
+## The five principles of deployment
+
+<Mermaid code={String.raw`graph TD
+  P["Five principles of deployment"]
+  P --> I["Isolated execution<br/>ring-fence each instance"]
+  P --> A["Focus on automation"]
+  P --> C["Infrastructure as code<br/>Terraform / Pulumi"]
+  P --> Z["Zero-downtime deployment<br/>rolling / blue-green"]
+  P --> D["Desired state management<br/>Kubernetes / autoscaling"]`} />
+
+- **Isolated execution** — ring-fence each instance's resources (containers are the default compromise on the isolation/cost spectrum).
+- **Focus on automation** — REA and Gilt scaled service counts by front-loading tooling.
+- **Infrastructure as code** — Terraform, Pulumi, CloudFormation. (The client who spent three months rebuilding an environment from emails is the cautionary tale.)
+- **Zero-downtime deployment** — rolling upgrades, blue-green; the *FT*'s single biggest delivery-speed win.
+- **Desired state management** — Kubernetes, autoscaling groups, Nomad; plus **GitOps**.
+
+## The deployment options spectrum
+
+Evaluated against those principles: physical machines → virtual machines → **containers** (the dominant choice: share the kernel, provision in seconds, weaker isolation than VMs) → PaaS (Heroku as the gold standard — "the smarter the PaaS, the more it goes wrong") → **FaaS** (AWS Lambda: pay-per-use, implicit HA, reduced ops, but limited runtime control, execution caps, statelessness, and cold starts).
+
+Newman's rules of thumb: *if it ain't broke don't fix it*; *give up as much control as you're comfortable with, then a little more*; "expect Kubernetes in your future" but it's **not "Kubernetes or bust."**
+
+<Callout type="tip" title="💡 Let the cloud do the heavy lifting">
+Wells's consistent advice: lean on managed services and don't run your own queues or database clusters. The platform overhead of microservices is real; offloading "undifferentiated heavy lifting" to your provider is one of the biggest levers you have.
+</Callout>
+
+## Progressive delivery — separate deployment from release
+
+Progressive delivery is "continuous delivery with fine-grained control over the blast radius," and it rests entirely on **separating deployment from release**:
+
+<Mermaid code={String.raw`graph LR
+  Build["Build artifact once"] --> Deploy["Deploy to prod<br/>(not live — dark)"]
+  Deploy --> Canary["Release to 1% (canary)"]
+  Canary -->|"healthy"| Ramp["Ramp to 100%"]
+  Canary -->|"breaches SLO"| RB["Auto rollback"]`} />
+
+- **Blue-green** — run two production environments, switch traffic.
+- **Feature toggles** — deploy code dark, flip it on when ready (and to coordinate multi-service rollouts). Cap them and expire them.
+- **Canary release** — route a *subset of users* to the new version; auto-roll-back if it breaches thresholds (Netflix's Spinnaker).
+- **Parallel run** — run old and new on the same requests and compare (GitHub's Scientist) — see [migration patterns](/microservices/migration-patterns/).
+
+<Callout type="gotcha" title="⚠️ Don't reach for Kubernetes too early">
+People adopt Kubernetes (and bespoke platforms) long before they need them, paying enormous complexity for a handful of services. Containerize first, automate desired state, and adopt orchestration only when your current approach strains. "Don't adopt a Kubernetes-based platform just because you see everyone else doing it."
+</Callout>
+
+<Callout type="go" title="🔑 Key insight">
+High performers deploy *more* frequently *and* fail less — because they make each release small and reversible. The mechanism is separating deployment from release so the act of shipping code carries almost no risk.
+</Callout>
+
+## See also
+
+- [Migration patterns](/microservices/migration-patterns/) — parallel run and dark launching in detail.
+- [Testing microservices](/microservices/testing-microservices/) — and testing in production.
+- [Resilience](/microservices/resilience/) — what to build so frequent deploys stay safe.

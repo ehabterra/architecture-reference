@@ -1,0 +1,133 @@
+---
+title: "Identifying Component Boundaries"
+category: fnd-components
+kind: topic
+order: 10
+difficulty: "Intermediate"
+status: ready
+intent: "An iterative process for discovering components, the entity trap to avoid, and how the architecture quantum decides monolith vs distributed."
+book: "Head First Software Architecture; Fundamentals of Software Architecture; Software Architecture: The Hard Parts"
+related:
+  - components-and-coupling
+  - connascence
+  - identifying-architecture-characteristics
+when_use:
+  - "When designing the logical architecture of a new system or a major feature"
+  - "When deciding how fine-grained components or services should be"
+  - "When choosing between a monolith and a distributed architecture"
+when_avoid:
+  - "When you would model components after database entities (the entity trap)"
+  - "When a simple CRUD app needs only scaffolding, not full component design"
+quiz:
+  - q: "What is the entity trap anti-pattern?"
+    options:
+      - text: "Creating a 'Manager' component per database entity instead of around real workflows"
+        correct: true
+      - text: "Storing too many entities in one table"
+        correct: false
+      - text: "Using an ORM"
+        correct: false
+      - text: "Naming components after actors"
+        correct: false
+    explain: "Modelling components after entities (names ending in manager/handler/supervisor) produces vague, overloaded components — that's an ORM mapping, not architecture."
+  - q: "Which step of the component-identification flow most often forces a component to be split?"
+    options:
+      - text: "Analysing architecture characteristics — differing scalability or availability needs split a component"
+        correct: true
+      - text: "Identifying initial components"
+        correct: false
+      - text: "Assigning requirements"
+        correct: false
+      - text: "Naming the components"
+        correct: false
+    explain: "When part of a component needs different characteristics (e.g. an auctioneer needs higher reliability than thousands of bidders), you split it."
+  - q: "What is an architecture quantum?"
+    options:
+      - text: "An independently deployable artifact with high functional cohesion and synchronous (dynamic) coupling"
+        correct: true
+      - text: "The smallest possible microservice"
+        correct: false
+      - text: "A single database table"
+        correct: false
+      - text: "A unit of code coverage"
+        correct: false
+    explain: "The quantum bundles everything needed to function (including its data); a system sharing one database is a quantum of one."
+  - q: "What decides monolith vs distributed?"
+    options:
+      - text: "How many quanta the design discovers — one set of characteristics → monolith; differing sets → distributed"
+        correct: true
+      - text: "The programming language"
+        correct: false
+      - text: "The number of developers"
+        correct: false
+      - text: "Whether the cloud is used"
+        correct: false
+    explain: "One set of characteristics across components favours a monolith; differing characteristics per component point to multiple quanta and a distributed architecture."
+takeaway: "Discover components iteratively, avoid the entity trap, and let the number of architecture quanta — driven by differing characteristics — decide monolith vs distributed."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🗺️ Analogy">
+Drawing component boundaries is like dividing a city into neighbourhoods. Carve them around how people actually live and travel (workflows) and the city flows; carve them around bureaucratic categories on a form (entities) and you get districts nobody can navigate. Good boundaries follow real usage, not the filing cabinet.
+</Callout>
+
+## The iterative identification flow
+
+Components are never right on the first try. *Fundamentals* and *Head First* describe a continuous loop you run for greenfield design **and on every change**:
+
+<Mermaid code={String.raw`graph TD
+  A["1. Identify initial components"] --> B["2. Assign requirements / stories"]
+  B --> C["3. Analyse roles & responsibilities (cohesion)"]
+  C --> D["4. Analyse architecture characteristics"]
+  D --> E["5. Restructure"]
+  E --> A`} />
+
+1. **Identify initial components** — a best guess per top-level thing the system does, based on your chosen partitioning.
+2. **Assign requirements** — map each story to the responsible component.
+3. **Analyse roles and responsibilities** — use **cohesion** to check each component owns what it should and isn't a dumping ground.
+4. **Analyse characteristics** — verify each aligns with the driving [characteristics](/foundations/identifying-architecture-characteristics/). This step most often forces a **split**.
+5. **Restructure** — iterate continually with developers.
+
+## Discovery techniques
+
+- **Actor / Actions** (from RUP) — identify actors, then their primary actions; best for systems with many user types.
+- **Workflow** — trace major user journeys and map steps to components; best for one user type with complex journeys.
+- **Event storming** (from DDD) — assume events/messages and build components around their handlers; fits microservices.
+
+Combine them: use actor/action to find actions, then workflow to order them.
+
+<Callout type="gotcha" title="⚠️ The entity trap">
+Creating a `Bid Manager` or `Order Manager` component per database entity is the **entity trap** — that's an ORM of framework-to-database, not an architecture. Warning signs: names ending in *manager*, *supervisor*, or *handler*, and components that become overloaded dumping grounds. (A few are fine — "Reference Data Manager" for codes is acceptable.)
+</Callout>
+
+## Characteristics drive the split: Bid Capture
+
+A worked example: `Bid Capture` originally accepts bids, finds the highest, **writes all bids to the database**, and notifies the auctioneer. But the driving characteristics — scalability (thousands of bids/sec), availability, and performance — are all hurt by the synchronous DB write. The fix is to split out a new `Bid Tracker` component so Bid Capture hands off bids asynchronously and never waits on the database. The split exists *because the characteristics differ*.
+
+<Mermaid code={String.raw`graph LR
+  subgraph Before["Before — one overloaded component"]
+    BC1["Bid Capture<br/>accept · find high · WRITE DB · notify"] --> DB1["(Database — sync write blocks)"]
+  end
+  subgraph After["After — split by characteristics"]
+    BC2["Bid Capture<br/>(scalable, fast)"] -->|"async handoff"| BT["Bid Tracker<br/>(durable writes)"]
+    BT --> DB2["(Database)"]
+  end`} />
+
+## The architecture quantum: monolith or distributed?
+
+The decisive concept is the **architecture quantum** (*The Hard Parts*): an **independently deployable artifact with high functional cohesion, high static coupling, and synchronous dynamic coupling.** Three parts matter:
+
+- **Independently deployable** — includes everything it needs, *including its data*. A system sharing one database is a **quantum of one** (a monolith), no matter how many services it has.
+- **High functional cohesion** — it does something purposeful (a `Customer` component, not a grab-bag `Utility`).
+- **Synchronous coupling** — synchronous calls bind operational characteristics for the call's duration; async decouples them.
+
+<Callout type="go" title="💡 Key insight">
+Let the **number of quanta** decide monolith vs distributed. If every component shares one set of characteristics, you have one quantum — choose a monolith for its simplicity. When components need *differing* characteristics (a read-only video stream vs a high-write bid capture; an auctioneer vs thousands of bidders), you have multiple quanta and a distributed architecture earns its complexity.
+</Callout>
+
+## See also
+
+- [Components and coupling](/foundations/components-and-coupling/) — the building blocks.
+- [Connascence](/foundations/connascence/) — synchronous vs asynchronous communication coupling.
+- [Identifying architecture characteristics](/foundations/identifying-architecture-characteristics/) — what drives the splits.

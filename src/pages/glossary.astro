@@ -1,0 +1,116 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+// Each term: t=term, k=i18n key suffix, en=English definition (HTML), href=reference.
+// The Arabic definition lives in src/i18n/ar.json under `glossary.<k>`.
+// href starting with http is an external doc (opens in a new tab); otherwise it
+// links to the track page on this site that teaches the term in depth.
+const groups: { key: string; title: string; terms: { t: string; k: string; en: string; href?: string }[] }[] = [
+  {
+    key: 'foundations',
+    title: 'Foundations & Trade-offs',
+    terms: [
+      { t: 'Architecture characteristic', k: 'characteristics', href: '/foundations/architecture-characteristics/', en: 'A non-domain capability (an “-ility”) the system must support that needs special structure and is critical to success.' },
+      { t: 'Trade-off (First Law)', k: 'tradeoff', href: '/foundations/thinking-in-trade-offs/', en: '“Everything in software architecture is a trade-off” — every choice buys one quality at the cost of another.' },
+      { t: 'Fitness function', k: 'fitnessfunction', href: '/foundations/fitness-functions/', en: 'Any objective, automatable check that protects an architecture characteristic as the system changes.' },
+      { t: 'Connascence', k: 'connascence', href: '/foundations/connascence/', en: 'A precise vocabulary for how two components are coupled; refactor toward weaker, more local forms.' },
+      { t: 'Architecture quantum', k: 'quantum', href: '/foundations/identifying-component-boundaries/', en: 'An independently deployable artifact with high functional cohesion; the number of quanta decides monolith vs distributed.' },
+      { t: 'Architecture Decision Record (ADR)', k: 'adr', href: '/foundations/architecture-decision-records/', en: 'A short record of a significant decision — context, decision, and consequences — emphasizing the why.' },
+      { t: 'Evolutionary architecture', k: 'evolutionary', href: '/foundations/evolutionary-architecture/', en: 'Architecture that supports guided, incremental change across multiple dimensions.' },
+    ],
+  },
+  {
+    key: 'ddd',
+    title: 'Domain-Driven Design',
+    terms: [
+      { t: 'Domain-Driven Design (DDD)', k: 'ddd', href: '/ddd/business-domains-and-subdomains/', en: 'Modeling software around the business domain and its shared language.' },
+      { t: 'Bounded context', k: 'boundedcontext', href: '/ddd/bounded-contexts/', en: 'The consistency boundary of a ubiquitous language; within it every term has exactly one meaning.' },
+      { t: 'Ubiquitous language', k: 'ubiquitous', href: '/ddd/ubiquitous-language/', en: 'One shared, consistent business language used by everyone in conversation, docs, tests, and code.' },
+      { t: 'Aggregate', k: 'aggregate', href: '/ddd/entities-and-aggregates/', en: 'A consistency and transactional boundary, mutated only through its root and committed atomically.' },
+      { t: 'Context mapping', k: 'contextmap', href: '/ddd/context-mapping/', en: 'The patterns for integrating bounded contexts (ACL, open-host service, conformist, shared kernel, …).' },
+      { t: 'EventStorming', k: 'eventstorming', href: '/ddd/eventstorming/', en: 'A collaborative workshop that models a business process as a timeline of domain events.' },
+    ],
+  },
+  {
+    key: 'distributed',
+    title: 'Distributed Systems',
+    terms: [
+      { t: 'CAP theorem', k: 'cap', href: '/distributed-systems/communication-and-consistency/', en: 'During a network partition a replicated system must choose between consistency and availability.' },
+      { t: 'Eventual consistency', k: 'eventualconsistency', href: '/distributed-systems/communication-and-consistency/', en: 'Replicas converge to the same value once all updates propagate; reads may be briefly stale.' },
+      { t: 'Consensus (Raft / Paxos)', k: 'consensus', href: '/distributed-systems/consensus-and-coordination/', en: 'Getting failing nodes to agree on one value or order; use etcd/ZooKeeper, never hand-rolled.' },
+      { t: 'Sharding / partitioning', k: 'sharding', href: '/distributed-systems/distributed-databases/', en: 'Splitting data across nodes by hash, range, or value to scale beyond a single machine.' },
+      { t: 'Fallacies of distributed computing', k: 'fallacies', href: '/distributed-systems/fallacies-of-distributed-computing/', en: 'False assumptions — the network is reliable, latency is zero, … — that break across the network.' },
+      { t: 'Idempotency', k: 'idempotency', href: '/distributed-systems/fallacies-of-distributed-computing/', en: 'Processing the same request twice has the same effect as once — the key to safe retries.' },
+    ],
+  },
+  {
+    key: 'events',
+    title: 'Events & Messaging',
+    terms: [
+      { t: 'Event-driven architecture', k: 'eda', href: '/event-driven/thinking-in-events/', en: 'Decoupled processors react asynchronously to events, for scalability and fault tolerance.' },
+      { t: 'Event sourcing', k: 'eventsourcing', href: '/event-driven/event-sourcing/', en: 'Store every state change as an append-only event; derive current state by replaying them.' },
+      { t: 'CQRS', k: 'cqrs', href: '/ddd/cqrs/', en: 'Command Query Responsibility Segregation — one write model and any number of read projections.' },
+      { t: 'Event-carried state transfer (ECST)', k: 'ecst', href: '/event-driven/event-notification-vs-state-transfer/', en: 'An event carries the entity’s whole public state, so consumers never need to call back.' },
+      { t: 'Outbox pattern', k: 'outbox', href: '/event-driven/the-outbox-and-idempotency/', en: 'Write an event in the same transaction as the state change; a relay publishes it later.' },
+      { t: 'Data mesh', k: 'datamesh', href: '/event-driven/data-mesh-principles/', en: 'Treating data as a first-class product with domain ownership and federated governance.' },
+    ],
+  },
+  {
+    key: 'microservices',
+    title: 'Microservices & Delivery',
+    terms: [
+      { t: 'Microservices', k: 'microservices', href: '/microservices/what-are-microservices/', en: 'Independently deployable services modeled around a business domain that own their own data.' },
+      { t: 'Monolith', k: 'monolith', href: '/microservices/what-are-microservices/', en: 'A single deployable application containing all of a system’s features — a valid default.' },
+      { t: 'Saga', k: 'saga', href: '/microservices/sagas/', en: 'A cross-service process modeled as local transactions, each with a compensating undo.' },
+      { t: 'Strangler fig', k: 'stranglerfig', href: '/microservices/the-strangler-fig-pattern/', en: 'Migrate a monolith incrementally by intercepting calls and redirecting them to new services.' },
+      { t: 'Circuit breaker', k: 'circuitbreaker', href: '/microservices/resilience/', en: 'Fails fast after a failure threshold, then probes for recovery — stopping cascading failure.' },
+      { t: 'Progressive delivery', k: 'progressive', href: '/microservices/deployment-and-progressive-delivery/', en: 'Separating deployment from release via blue-green, canary, and feature toggles.' },
+    ],
+  },
+  {
+    key: 'apicloud',
+    title: 'APIs & Cloud',
+    terms: [
+      { t: 'REST', k: 'rest', href: '/apis/rest-and-the-richardson-maturity-model/', en: 'An architectural style for APIs built on resources, representations, and HTTP verbs.' },
+      { t: 'gRPC', k: 'grpc', href: '/apis/api-styles-overview/', en: 'A high-performance RPC framework using protobuf over HTTP/2, with generated typed clients.' },
+      { t: 'GraphQL', k: 'graphql', href: '/apis/api-styles-overview/', en: 'A query language letting clients request exactly the fields they need from one endpoint.' },
+      { t: 'Service mesh', k: 'servicemesh', href: '/apis/service-mesh/', en: 'Sidecar proxies plus a control plane that handle service-to-service networking concerns.' },
+      { t: 'Serverless', k: 'serverless', href: '/cloud/what-is-serverless/', en: 'Run code without managing servers; pay per use with implicit scaling (e.g. AWS Lambda).' },
+      { t: 'Multitenancy', k: 'multitenancy', href: '/cloud/tenant-isolation-models/', en: 'One system serving many tenants with isolation of their data and load.' },
+    ],
+  },
+];
+---
+<BaseLayout title="Glossary" description="Plain-language definitions of the core software-architecture terms and acronyms referenced across The Architecture Reference — bounded context, CAP, saga, fitness function, connascence, ECST, event sourcing, CQRS and more — each linked to the page that teaches it in depth.">
+  <nav class="dp-breadcrumb dp-kicker"><a href="/">The Architecture Reference</a> › <span>Glossary</span></nav>
+
+  <header class="dp-hero">
+    <p class="dp-hero__eyebrow" data-i18n="glossary.eyebrow">Reference</p>
+    <h1 data-i18n="glossary.h1">Glossary</h1>
+    <p class="dp-hero__lede" data-i18n-html="glossary.lede">
+      The Architecture Reference teaches <strong>software architecture</strong>; here are short, plain-language
+      definitions of the core terms and acronyms the pages use — each with a link to learn it in depth. If a page
+      drops a term you don’t recognize, it’s probably here.
+    </p>
+  </header>
+
+  {groups.map((g) => (
+    <section class="dp-gloss-sec">
+      <h2 class="dp-section-head" data-i18n={`glossary.grp.${g.key}`}>{g.title}</h2>
+      <dl class="dp-gloss">
+        {g.terms.map((term) => (
+          <div class="dp-gloss__item">
+            <dt class="dp-gloss__term">
+              {term.t}
+              {term.href && (term.href.startsWith('http')
+                ? <a class="dp-gloss__link" href={term.href} target="_blank" rel="noopener" aria-label={`Learn ${term.t} (external)`}>↗</a>
+                : <a class="dp-gloss__link" href={term.href} aria-label={`Learn ${term.t}`}>→</a>
+              )}
+            </dt>
+            <dd class="dp-gloss__def" data-i18n-html={`glossary.${term.k}`} set:html={term.en} />
+          </div>
+        ))}
+      </dl>
+    </section>
+  ))}
+</BaseLayout>

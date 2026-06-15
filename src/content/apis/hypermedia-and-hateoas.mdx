@@ -1,0 +1,138 @@
+---
+title: "Hypermedia and HATEOAS"
+category: api-rest
+kind: topic
+order: 5
+difficulty: "Intermediate"
+status: ready
+intent: "Embedding links and forms in responses lets clients discover what to do next at runtime — the engine of application state, and the key to evolvable services."
+book: "RESTful Web API Patterns and Practices Cookbook; Mastering API Architecture"
+related:
+  - rest-and-the-richardson-maturity-model
+  - api-versioning-and-evolution
+  - choreography-and-async-communication
+when_use:
+  - "You need clients to survive URL, method, or workflow changes without redeployment."
+  - "You are building flexible, UI-style or long-lived services on the scale of decades."
+  - "You want clients to bind to message formats and profiles rather than hardcoded URLs."
+when_avoid:
+  - "Tight, high-performance interservice calls where chattiness is unacceptable."
+  - "Simple machine-to-machine writes where a complete agreed spec up front is simpler."
+quiz:
+  - q: "What does HATEOAS stand for and mean?"
+    options:
+      - text: "Hypertext As The Engine Of Application State — responses embed the actions possible next"
+        correct: true
+      - text: "HTTP Authentication Token Exchange Over A Server"
+        correct: false
+      - text: "Hypermedia Asynchronous Transfer Of All State"
+        correct: false
+      - text: "Header-And-Token Encoded Access Of Services"
+        correct: false
+    explain: "HATEOAS is Richardson Level 3: hypermedia (links and forms) drives application state, telling the client what it can do now and how."
+  - q: "According to the Cookbook, what should resilient clients bind to instead of URLs and object schemas?"
+    options:
+      - text: "The protocol, the message format/media type, and the semantic profile"
+        correct: true
+      - text: "The database table names"
+        correct: false
+      - text: "The server's IP address"
+        correct: false
+      - text: "Hardcoded endpoint paths"
+        correct: false
+    explain: "URLs and object schema change often; protocol, format, and profile are higher abstractions that rarely change — the three stable binding agents."
+  - q: "What is a Semantic Profile Document (SPD)?"
+    options:
+      - text: "A description (not a definition) of a service's ontology, taxonomy, and choreography — e.g. in ALPS"
+        correct: true
+      - text: "An OpenAPI definition with URLs and status codes"
+        correct: false
+      - text: "A database migration script"
+        correct: false
+      - text: "A TLS certificate bundle"
+        correct: false
+    explain: "An SPD (e.g. ALPS or DCAP) describes possible data, objects, and actions — deliberately omitting implementation details like URLs and methods."
+  - q: "What is the practical price of HATEOAS?"
+    options:
+      - text: "A design-time agreement: clients must understand the media type to enforce the embedded controls"
+        correct: true
+      - text: "It requires gRPC"
+        correct: false
+      - text: "It forbids caching"
+        correct: false
+      - text: "It mandates a single endpoint"
+        correct: false
+    explain: "Embedded hypermedia is 'the most important step' toward RESTful APIs but is a design-time agreement — the consumer must know the format to honour the controls."
+takeaway: "Embed links and forms so method, URL, inputs, and validation arrive at runtime — then clients bind to protocol, format, and profile, and new actions become free."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🌐 Analogy">
+A web browser has worked for 30+ years without updates as websites change daily. Why? It binds to HTML (the format), not to any one site's URLs. Every page tells the browser what it can do next — links to follow, forms to fill. HATEOAS gives machine clients the same superpower: the response itself is the instruction set.
+</Callout>
+
+## Hypermedia is the engine of application state
+
+The Cookbook's unifying thesis is that **hypermedia** — links and forms embedded in messages — is the technology that lets services be safely changed *while still running*. A response carries **affordances** (the things that *afford* an action): inline controls that supply, at runtime, the properties to send, the HTTP method, the target URL, and the validation rules. A client that parses these controls lets the service freely change URLs, methods, even formats and parameters.
+
+This is Richardson [Level 3 (HATEOAS)](/apis/rest-and-the-richardson-maturity-model/): Hypertext As The Engine Of Application State.
+
+```html
+<form name="doCreate" action=".../person/" method="post"
+      enctype="application/x-www-form-urlencoded">
+  <input type="hidden" name="identifier" />
+  <input name="givenName" required />
+  <input name="telephone" pattern="[0-9]{10}" />
+</form>
+```
+
+Any browser enforces that form with **zero custom code**. The same expressed in Collection+JSON uses a `template.data` array with `required:true` and a `regex`. The consumer need not understand the *meaning* of the inputs, only enforce them — so input count, URL, and validation can change without breaking it.
+
+## Bind to protocol, format, and profile
+
+Writing a client creates a **binding** between producer and consumer. The Cookbook's core advice: bind to things that rarely change.
+
+<Mermaid code={String.raw`graph TD
+  Bad1["URL (/persons/123)"]:::bad
+  Bad2["Object schema"]:::bad
+  Good1["Protocol (HTTP)"]:::good
+  Good2["Message format / media type<br/>(HTML, Collection+JSON, SIREN)"]:::good
+  Good3["Semantic profile (ALPS)"]:::good
+  Bad1 --> Client["Brittle client"]
+  Bad2 --> Client
+  Good1 --> Resilient["Resilient client"]
+  Good2 --> Resilient
+  Good3 --> Resilient
+  classDef bad fill:#fde,stroke:#c66;
+  classDef good fill:#dfd,stroke:#6a6;`} />
+
+**URLs** and **object/schema** are poor binding targets — they break on any storage change or re-homing. **Protocol** (HTTP), **message format** (a structured media type), and **semantic profile** are the three stable binding agents. Choose **registered, structured media types** (HTML, Collection+JSON, SIREN, HAL) whose structure stays constant as content changes; favour formats supporting embedded hypermedia and extension.
+
+## Semantic profiles close the vocabulary gap
+
+A response's structure can be stable, but new **domain property names** still need shared meaning. A **Semantic Profile Document (SPD)** — typically in **ALPS** — is a *description*, not a definition: it captures the three information-architecture pillars, **ontology** (data properties), **taxonomy** (aggregate objects), and **choreography** (actions, tagged `safe` / `unsafe` / `idempotent`). It deliberately omits URLs, methods, and status codes. Clients can negotiate it at runtime (`Accept-Profile` / `Content-Profile`); a mismatch yields `406 Not Acceptable` listing supported profiles.
+
+<Mermaid code={String.raw`sequenceDiagram
+  participant C as Client
+  participant S as Service
+  C->>S: GET with Accept-Profile
+  alt profile supported
+    S-->>C: 200 OK with Content-Profile
+  else profile unknown
+    S-->>C: 406 Not Acceptable, supported profiles
+  end`} />
+
+<Callout type="go" title="New actions are free">
+A message-centric client that renders whatever controls the response contains picks up new server actions automatically — they cost the client nothing. A domain-first client that hardcodes 'addToList', 'setDueDate' breaks the moment the server adds or changes a method.
+</Callout>
+
+<Callout type="gotcha" title="HATEOAS is not always the answer">
+*Mastering API Architecture* notes HATEOAS is rarely used in modern RESTful HTTP services: it is chatty, ill-suited to interservice calls, and often short-circuited by agreeing a complete spec up front. Embedded hypermedia is also a **design-time agreement** — its 'price of entry' is that the consumer must understand the media type. Reserve it for flexible, UI-style, long-lived systems.
+</Callout>
+
+## See also
+
+- [REST and the Richardson Maturity Model](/apis/rest-and-the-richardson-maturity-model/) — where HATEOAS sits.
+- [API versioning and evolution](/apis/api-versioning-and-evolution/) — hypermedia as a vector for change.
+- [Choreography and async communication](/apis/choreography-and-async-communication/) — hypermedia-driven workflow.

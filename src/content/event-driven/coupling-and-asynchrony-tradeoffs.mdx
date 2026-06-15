@@ -1,0 +1,134 @@
+---
+title: "Coupling and Asynchrony Trade-offs"
+category: ed-foundations
+kind: topic
+order: 3
+difficulty: "Intermediate"
+status: ready
+intent: "What you gain and pay for choosing asynchronous, decoupled events over synchronous request-response — and why hybrid architectures are the norm."
+book: "Building Event-Driven Microservices (Adam Bellemare); Flow Architectures (James Urquhart)"
+related:
+  - thinking-in-events
+  - event-notification-vs-state-transfer
+  - data-in-motion-and-flow
+when_use:
+  - "Producers and consumers must scale, fail, and deploy independently"
+  - "Loose coupling on domain data matters more than an immediate answer"
+  - "You can tolerate eventual consistency between services"
+when_avoid:
+  - "You need an immediate synchronous response (auth, A/B tests, third-party HTTP)"
+  - "Tracing a single request end-to-end must be trivial"
+  - "Strong read-after-write consistency is required across the interaction"
+quiz:
+  - q: "A key drawback of synchronous request-response microservices is…"
+    options:
+      - text: "Point-to-point couplings and dependent scaling that can form a distributed monolith"
+        correct: true
+      - text: "They cannot use HTTP"
+        correct: false
+      - text: "They are impossible to test"
+        correct: false
+      - text: "They cannot return data"
+        correct: false
+    explain: "Synchronous calls couple caller to callee for scaling and availability; a failed downstream service propagates failure, and data access tied to the implementation creates distributed monoliths."
+  - q: "When a producer fails in a mature event-driven layer, what happens to consumers?"
+    options:
+      - text: "They keep consuming already-published events; only new data is delayed"
+        correct: true
+      - text: "They all fail immediately"
+        correct: false
+      - text: "They lose all state"
+        correct: false
+      - text: "They must switch to synchronous calls"
+        correct: false
+    explain: "Decoupling ownership/production from access/consumption means a producer outage merely delays new data; the durable log keeps serving existing facts."
+  - q: "What is the pragmatic verdict on sync vs. async?"
+    options:
+      - text: "Hybrid architectures are the norm; neither approach is universally superior"
+        correct: true
+      - text: "Always use synchronous"
+        correct: false
+      - text: "Always use asynchronous"
+        correct: false
+      - text: "Never mix the two"
+        correct: false
+    explain: "Each has genuine strengths; real systems combine event-driven cores with request-response edges for auth, UIs, and third-party integration."
+  - q: "Eventual consistency in an event-driven system is best understood as…"
+    options:
+      - text: "Convergence — once all events are delivered, all replicas agree; each consumer reads at its own rate"
+        correct: true
+      - text: "A bug to be eliminated"
+        correct: false
+      - text: "The same as strong consistency"
+        correct: false
+      - text: "Only relevant to databases"
+        correct: false
+    explain: "Doug Terry, who coined the term, later preferred 'eventual convergence.' Producers keep strong consistency internally; consumers get their own eventually consistent views."
+takeaway: "Async events buy independent scaling, deployment, and failure isolation at the cost of eventual consistency and harder tracing — so most real systems are hybrid."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A synchronous call is a face-to-face conversation: fast and direct, but both people must be present and free at the same instant. An asynchronous event is leaving a note on a shared board: the writer moves on immediately and readers act whenever they're ready — looser, more resilient, but you can't expect an answer back in the same breath.
+</Callout>
+
+## The two postures
+
+**Synchronous request-response** services call each other directly and wait. **Asynchronous event-driven** services communicate only through durable streams. Neither dominates; the architect's job is to know what each costs.
+
+### What asynchrony buys
+
+- **Loose coupling on domain data** — consumers depend on a stream's contract, not a service's implementation.
+- **Independent scaling** — a slow consumer doesn't throttle the producer; you scale each on its own lag.
+- **Failure isolation** — a failed producer only *delays new data*; consumers keep reading the durable log. This is the decoupling of **ownership/production** from **access/consumption**.
+- **Independent deployment and high testability** — services release on their own schedules; events are trivially composed into test cases.
+- **Technological and business-requirement flexibility** — each context picks its own stack and evolves on its own cadence.
+
+### What asynchrony costs
+
+- **Eventual consistency** — really *convergence*: once all events are delivered, replicas agree, but each consumer reads at its own rate, so a lagging consumer can answer a question with stale data.
+- **Harder end-to-end tracing** — a business outcome emerges from many services rather than one call stack.
+- **The microservice tax** — broker, container management, pipelines, monitoring, and logging must be paid for, ideally centrally.
+- **Operational subtlety** — out-of-order and late events, duplicate handling, and offset management all become first-class concerns.
+
+<Mermaid code={String.raw`graph TD
+  Q["Need an immediate answer?"] -->|Yes| S["Synchronous request-response<br/>auth, price quote, UI read"]
+  Q -->|No| M["Many consumers / independence?"]
+  M -->|Yes| E["Asynchronous events<br/>durable, replayable stream"]
+  M -->|No| H["Either works — weigh the tax"]
+  S --> HY["Hybrid system"]
+  E --> HY`} />
+
+## Where each shines
+
+Bellemare lists honest strengths for **synchronous** services: authentication, A/B tests, third-party HTTP integrations, easier request tracing, powering web and mobile, and easier-to-hire talent. Their drawbacks are equally real: point-to-point couplings, **dependent scaling**, service-failure propagation, API versioning pain, data access tied to the implementation, and the **distributed monolith** that results.
+
+<Mermaid code={String.raw`graph TD
+  subgraph Sync["Synchronous — failure cascades"]
+    A1["A"] --> B1["B"] --> C1["C ✗ down"]
+    C1 -.->|"error propagates up"| A1
+  end
+  subgraph Async["Async — failure absorbed"]
+    A2["Producer ✗ down"] -.->|"only new data delayed"| L["Durable log"]
+    L --> C2["Consumers keep reading"]
+  end`} />
+
+<Callout type="go" title="The key insight">
+Failure behavior is the clearest divide. In a synchronous chain, a downstream outage cascades upward. In a decoupled event layer, a producer outage is *absorbed* by the durable log — consumers degrade to "no new data," not "no data."
+
+</Callout>
+
+## Hybrid is the default
+
+Because exposing the broker directly to external clients is unsafe and some needs are inherently synchronous, real systems put a **request-response edge** in front of an **event-driven core**. External clients hit HTTP APIs; those APIs convert interactions into events (or read from materialized state) where it makes sense. Urquhart's *Flow Architectures* reinforces the boundary: request-response APIs are *not* flow because they give no advance signal of data availability — but they remain essential where an immediate, point-to-point answer is the requirement.
+
+<Callout type="gotcha" title="Don't let eventual consistency leak into a synchronous promise">
+The danger is a service in one time bubble asking a synchronous question of another whose data hasn't converged. If you must serve a read while lagging, expose it: return stale data flagged as such, or reply HTTP 503 with `Retry-After` rather than silently answering wrong. See [data in motion and flow](/event-driven/data-in-motion-and-flow/).
+</Callout>
+
+## See also
+
+- [Thinking in events](/event-driven/thinking-in-events/) — why the medium decouples ownership from consumption.
+- [Event notification vs. state transfer](/event-driven/event-notification-vs-state-transfer/) — coupling choices inside the event style.
+- [Data in motion and flow](/event-driven/data-in-motion-and-flow/) — the World Wide Flow vision of cross-org events.

@@ -1,0 +1,139 @@
+---
+title: "Tenant Isolation Models"
+category: cld-saas
+kind: topic
+order: 9
+difficulty: "Advanced"
+status: ready
+intent: "Silo, pool, and bridge express how resources map to tenants — but deployment is not isolation; true isolation needs a separate gatekeeper scoped by tenant context."
+book: "Building Multi-Tenant SaaS Architectures (Tod Golding)"
+related:
+  - control-plane-vs-application-plane
+  - tiering-metering-and-noisy-neighbors
+  - tenant-onboarding-and-identity
+when_use:
+  - "Choosing a deployment model per resource: dedicated (silo), shared (pool), or mixed (bridge)"
+  - "Enforcing that no tenant can ever reach another tenant's data"
+  - "Designing for compliance, blast-radius limits, or premium tiering"
+when_avoid:
+  - "Assuming a siloed/dedicated resource is automatically isolated"
+  - "Relying on RBAC or simple tenant-ID filtering as your isolation mechanism"
+  - "Siloing everything by default — make silo earn its way out"
+quiz:
+  - q: "What do 'silo' and 'pool' mean?"
+    options:
+      - text: "Silo = a resource dedicated to a tenant; pool = a resource shared by tenants"
+        correct: true
+      - text: "Silo = shared; pool = dedicated"
+        correct: false
+      - text: "Silo = compute; pool = storage"
+        correct: false
+      - text: "Silo = control plane; pool = application plane"
+        correct: false
+    explain: "The silo/pool terms apply granularly per resource and avoid the baggage of 'multi-tenant.' A mixed/bridge model combines them service-by-service."
+  - q: "Why is 'deployment is not isolation' the foundational argument?"
+    options:
+      - text: "A siloed per-tenant database still leaks if service code can substitute another tenant's ID"
+        correct: true
+      - text: "Deployment always fails to isolate networks"
+        correct: false
+      - text: "Pooled resources cannot be isolated at all"
+        correct: false
+      - text: "Isolation only matters for compute"
+        correct: false
+    explain: "Dedicated deployment only makes isolation easier. You need a separate gatekeeper that scopes access by tenant context regardless of deployment model."
+  - q: "What is item-level isolation?"
+    options:
+      - text: "Isolation inside a shared resource where tenants' items are commingled — the hardest model"
+        correct: true
+      - text: "A dedicated stack per tenant"
+        correct: false
+      - text: "A dedicated database per tenant"
+        correct: false
+      - text: "Network-level isolation"
+        correct: false
+    explain: "The three categories (coarse to fine) are full-stack, resource-level, and item-level; item-level is hardest because available constructs shrink (e.g., DynamoDB LeadingKeys conditions)."
+  - q: "How does runtime isolation typically obtain tenant-scoped access for pooled compute?"
+    options:
+      - text: "Code acquires tenant-scoped credentials per request via an isolation manager (e.g., STS assume_role with a scoped policy)"
+        correct: true
+      - text: "It filters query results by TenantId after fetching all rows"
+        correct: false
+      - text: "It relies on the user's RBAC role"
+        correct: false
+      - text: "It uses one shared admin credential"
+        correct: false
+    explain: "Runtime isolation dynamically acquires scoped credentials per request; deployment-time isolation injects a templatized policy into siloed compute with no dependency on app code."
+takeaway: "Silo = dedicated, pool = shared, bridge = mixed — but deployment is not isolation: add a gatekeeper that scopes every resource access by tenant context."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Giving each tenant their own apartment (silo) makes privacy easier, but it isn't privacy by itself — if the building's master key opens every door, a careless concierge can still walk into the wrong unit. Isolation is the lock and the rule that says "this key opens *only* your door," whether tenants have separate apartments or share one big loft (pool).
+</Callout>
+
+## Silo, pool, and the bridge between them
+
+The whole book turns on two terms that describe how application-plane resources map to infrastructure:
+
+- **Silo** — a resource *dedicated* to a tenant.
+- **Pool** — a resource *shared* by tenants.
+
+These deliberately avoid the baggage of "multi-tenant," apply **granularly** (per resource or group), and don't map to any single construct. The deployment models combine them:
+
+<Mermaid code={String.raw`graph TD
+  M["Deployment models"] --> FS["Full Stack Silo<br/>(every tenant fully dedicated)"]
+  M --> FP["Full Stack Pool<br/>(all resources shared)"]
+  M --> HY["Hybrid Full Stack<br/>(limited silos + pool)"]
+  M --> MM["Mixed Mode / Bridge<br/>(silo/pool per service)"]
+  M --> PD["Pod<br/>(group tenants per unit)"]`} />
+
+- **Full Stack Silo** — every tenant gets an identical, same-version environment (account-per-tenant or VPC-per-tenant). Drivers: compliance, migration, premium tiering. Reduced blast radius, simple cost attribution — but it doesn't scale to hundreds/thousands of tenants. Mindset: "build as if it were a full-stack pool, then treat each silo as a single-tenant instance of the pool" — **never allow per-tenant customization.**
+- **Full Stack Pool** — all resources shared, chasing economies of scale; **tenant context becomes essential to every operation.** Isolation is harder, noisy-neighbor risk is high, and an outage is an "all-in commitment" hitting *all* tenants (demanding **bulkhead patterns** and a higher availability bar).
+- **Mixed Mode (the bridge)** — fine-grained silo/pool choices service-by-service (e.g., a siloed order service for compliance alongside a pooled ratings service) — maximum flexibility, a compelling middle path.
+- **Pod** — groups a collection of tenants into a unit of deployment/operation, driven by scale limits, geography, or isolation.
+
+## Deployment is not isolation
+
+<Callout type="gotcha" title="The cardinal SaaS mistake">
+A Product service with siloed per-tenant databases *looks* isolated — but if service code substitutes another tenant's ID, the request succeeds. **Deployment is not isolation.** Dedicated deployment only makes isolation easier. You need a **separate gatekeeper mechanism** that uses tenant context to scope access regardless of deployment model. A single leak can be catastrophic, and even "trusted" developer code can unintentionally cross boundaries.
+</Callout>
+
+Two more distinctions matter: **RBAC ≠ isolation** (RBAC scopes by a user's *role*; isolation scopes exclusively by *tenant context* and is identical for all users in a tenant), and **filtering by TenantId is not enough** — true isolation must make it *impossible* for a query to reach another tenant's data.
+
+## The three isolation categories
+
+From coarse to fine:
+
+1. **Full-stack isolation** — a dedicated stack per tenant (straightforward).
+2. **Resource-level isolation** — shared compute, but an entire resource (database, bucket, queue) is dedicated per tenant.
+3. **Item-level isolation** — inside a shared resource where tenants' items are commingled — the **hardest**, because available constructs shrink (e.g., a DynamoDB shared table with an IAM `Condition` on `dynamodb:LeadingKeys`).
+
+## Deployment-time vs. runtime enforcement
+
+- **Deployment-time isolation** (siloed compute) — inject tenant context into a **templatized policy** at deployment, with *no dependency on application code*; compliance shifts to provisioning.
+- **Runtime isolation** (pooled compute) — code dynamically acquires **tenant-scoped credentials** per request via an isolation manager — e.g., STS `assume_role()` with a scoped policy. Optionally inject scoped credentials from outside the service (an API Gateway / Lambda authorizer).
+
+<Mermaid code={String.raw`sequenceDiagram
+  participant R as Request with tenant context
+  participant S as Service code
+  participant IM as Isolation manager
+  participant STS as STS assume_role
+  participant D as Shared resource
+  R->>S: invoke
+  S->>IM: acquire scoped credentials
+  IM->>STS: assume role with scoped policy
+  STS-->>IM: tenant-scoped credentials
+  IM-->>S: credentials
+  S->>D: access only this tenant data`} />
+
+<Callout type="go" title="Hide it through interception">
+Push isolation out of developers' hands with **interception** — aspects, middleware, wrappers, and **sidecars** — so business logic never handles tenant scoping directly. For scale, **cache scoped credentials with a TTL**, keep credential helpers in-process, and use **policy templates** to avoid hitting IAM policy limits. Default to **pooled** and make silo "earn its way out." Testing isolation is one of the hardest aspects — inject an invalid tenant context deep in the app (even via chaos engineering) and assert no data is returned.
+</Callout>
+
+## See also
+
+- [Control plane vs. application plane](/cloud/control-plane-vs-application-plane/) — where isolation constructs live.
+- [Tiering, metering, and noisy neighbors](/cloud/tiering-metering-and-noisy-neighbors/) — deployment-focused tiering uses these models.
+- [Tenant onboarding and identity](/cloud/tenant-onboarding-and-identity/) — tenant context that isolation scopes by.

@@ -1,0 +1,121 @@
+---
+title: "The Outbox and Idempotency"
+category: ed-patterns
+kind: topic
+order: 9
+difficulty: "Advanced"
+status: ready
+intent: "Publishing events atomically with a database write via the transactional outbox, and processing them effectively once with idempotency, deduplication, and transactions."
+book: "Building Event-Driven Microservices; Building an Event-Driven Data Mesh (Adam Bellemare)"
+related:
+  - event-first-design
+  - event-processing-topologies
+  - schemas-and-evolution
+when_use:
+  - "A state change and its event must both happen or neither (no lost or phantom events)"
+  - "You want to isolate the internal data model from the published event"
+  - "Consumers may receive duplicates and must apply each effect once"
+when_avoid:
+  - "Dual writes — writing to the DB and the stream separately with no atomic guarantee"
+  - "Loss-tolerant measurement data where occasional drops are acceptable (dual write may suffice)"
+  - "You cannot modify the application or the store at all (use CDC/query-based liberation instead)"
+quiz:
+  - q: "The defining requirement of the transactional outbox is that…"
+    options:
+      - text: "The internal table update and the outbox insert happen in a single database transaction"
+        correct: true
+      - text: "The outbox is written after the event is published"
+        correct: false
+      - text: "The outbox replaces the database"
+        correct: false
+      - text: "The outbox must be in a different database"
+        correct: false
+    explain: "Atomicity is the whole point: both writes commit together or roll back together, eliminating the dual-write gap. An async process then ships the outbox rows to the stream."
+  - q: "Why is the 'dual write' an anti-pattern?"
+    options:
+      - text: "Writing to the DB and the stream separately has no atomic guarantee, so it fails intermittently and missing data surfaces weeks later"
+        correct: true
+      - text: "It is too slow"
+        correct: false
+      - text: "It cannot be schematized"
+        correct: false
+      - text: "It requires two databases"
+        correct: false
+    explain: "Dual writes work most of the time, which is exactly what makes them dangerous: the rare failure leaves the DB and stream inconsistent with no trace."
+  - q: "'Effectively once' processing means…"
+    options:
+      - text: "Updates to the source of truth are consistently applied despite failures, even though processing (and side effects) may re-execute after a crash"
+        correct: true
+      - text: "Each event is physically delivered exactly one time"
+        correct: false
+      - text: "Events are never duplicated by the broker"
+        correct: false
+      - text: "Processing is single-threaded"
+        correct: false
+    explain: "Loosely called 'exactly once,' it really means the net effect is applied once; a crash before offset commit can cause re-execution, so side effects must be idempotent."
+  - q: "Without broker transactions, how do you achieve effectively-once application?"
+    options:
+      - text: "Generate a dedupe ID (hash of high-cardinality fields), keep a per-partition store of processed IDs, and dedup within a single partition with idempotent writes"
+        correct: true
+      - text: "Ignore duplicates entirely"
+        correct: false
+      - text: "Commit offsets before processing"
+        correct: false
+      - text: "Use a global lock per event"
+        correct: false
+    explain: "Perfect dedup is prohibitively expensive, so it's best-effort with TTL/max-size, scoped per partition, paired with keys and idempotent writes."
+takeaway: "Write state and event in one transaction (outbox), never dual-write, and make processing effectively once via transactions or dedupe IDs with idempotent writes."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Imagine a shop that must update its ledger and also file a slip in the outbox for the courier. Doing them as two separate acts means a power cut between them leaves the books and the courier disagreeing. The outbox pattern staples both into one notarized action — either the page is signed and the slip is filed together, or neither happens — and the courier later picks up slips idempotently, even if he comes by twice.
+</Callout>
+
+## The problem: the dual write
+
+The naive way to emit an event when state changes is to write the database *and* publish to the stream as two separate operations. This is the **dual write**, and it is an anti-pattern: there is **no atomic guarantee** between the two. It works most of the time — which is precisely the danger. The rare failure (crash between the two writes) leaves the database and stream inconsistent; missing or phantom data surfaces weeks later and is nearly impossible to trace. Dual writes are acceptable only for loss-tolerant **measurement** data; for anything that matters, use the outbox.
+
+<Mermaid code={String.raw`graph TD
+  App["Application"] -->|"1. write DB ✓"| DB[("Database")]
+  App -->|"2. publish ✗ (crash here)"| Str["Stream"]
+  DB -.->|"DB and stream now disagree"| Gap["Phantom / lost event"]`} />
+
+## The transactional outbox
+
+An **outbox** is a dedicated table written **within the same transaction** as the internal state change, so the two are atomic. An asynchronous process then ships the outbox rows to the stream.
+
+<Mermaid code={String.raw`graph TD
+  APP["Application"] -->|"single transaction"| TX["BEGIN ... COMMIT"]
+  TX --> ROW["Update business table"]
+  TX --> OB["Insert into outbox table"]
+  OB -->|"async relay (CDC / poller)"| STREAM["Event stream"]
+  STREAM --> C["Consumers"]`} />
+
+The outbox needs a strict ordering ID (autoincrementing) plus a `created_at` timestamp. Crucially, it **need not map 1:1 to internal tables** — a major benefit for **isolating the internal model**: you can denormalize at insertion, or keep a 1:1 mapping and denormalize downstream (Bellemare's **eventification** pattern, with a private namespace for raw events and a public namespace for the published result).
+
+For **schema compatibility**, serialize **before committing** (the strongest guarantee — a serialization failure rolls back the whole transaction and enables a single shared outbox), rather than after writing (which risks unserializable events accumulating). Debezium's **outbox event router** is the recommended tooling: it suppresses DELETE propagation, can still emit tombstones, and auto-cleans the table.
+
+<Callout type="go" title="The key insight">
+The outbox is the cleanest way to be **event-first** without a CDC framework. Because the app owns its own capture, there is no cross-team dependency on a shared connector platform, and the internal model stays hidden behind the outbox's public schema.
+</Callout>
+
+## Processing effectively once
+
+Even with perfect production, consumers can see **duplicates** (retries, or a crash before the offset commit). The goal is **effectively once**: updates to the source of truth are consistently applied despite failures — loosely called "exactly once," though processing and side effects may *re-execute* after a crash. Two routes:
+
+- **With transactions** (full support currently only in Kafka): wrap output events, changelog-backed state updates, and the consumer offset increment in a single atomic transaction; consumers abstain from uncommitted transactions.
+- **Without transactions**: identify and filter duplicates yourself. Generate a **dedupe ID** (a hash of high-cardinality properties), maintain a **per-partition** state store of processed IDs (best-effort, with TTL/max-size since perfect dedup is prohibitively expensive), dedup only within a single partition, and always produce with a **key plus idempotent writes**.
+
+**Idempotent writes** (Kafka and Pulsar) ensure an event is written once even on producer or broker failure — the foundation either route builds on.
+
+<Callout type="gotcha" title="Committing offsets before processing loses data">
+Always commit offsets *after* the work — producing output and applying state — completes. Committing at the start means a crash mid-processing advances the offset past unprocessed events, silently dropping them. After-the-fact commit gives the strongest at-least-once guarantee, which idempotency then upgrades toward effectively once.
+</Callout>
+
+## See also
+
+- [Event-first design](/event-driven/event-first-design/) — why teams owning their own capture matters.
+- [Event processing topologies](/event-driven/event-processing-topologies/) — changelogs and transactional state.
+- [Schemas and evolution](/event-driven/schemas-and-evolution/) — serialize-before-commit for safety.

@@ -1,0 +1,106 @@
+---
+import '../styles/global.css';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+import { getCollection } from 'astro:content';
+import { SITE_TITLE, SITE_DESC } from '../lib/consts';
+import ar from '../i18n/ar.json';
+
+interface Props { title?: string; description?: string; }
+const { title, description } = Astro.props;
+const pageTitle = title ? `${title} · The Architecture Reference` : SITE_TITLE;
+const desc = description ?? SITE_DESC;
+
+// Build a lightweight search index for the ⌘K command palette.
+const TRACKS = [
+  { coll: 'foundations', base: '/foundations', label: 'Foundations' },
+  { coll: 'styles', base: '/styles', label: 'Architecture Styles' },
+  { coll: 'ddd', base: '/ddd', label: 'Domain-Driven Design' },
+  { coll: 'microservices', base: '/microservices', label: 'Microservices' },
+  { coll: 'event-driven', base: '/event-driven', label: 'Event-Driven' },
+  { coll: 'distributed-systems', base: '/distributed-systems', label: 'Distributed Systems' },
+  { coll: 'apis', base: '/apis', label: 'APIs & Communication' },
+  { coll: 'cloud', base: '/cloud', label: 'Cloud & SaaS' },
+  { coll: 'automation', base: '/automation', label: 'Process Automation' },
+  { coll: 'strategy', base: '/strategy', label: "The Architect's Path" },
+] as const;
+const searchIndex = (
+  await Promise.all(
+    TRACKS.map(async (tk) => {
+      const items = await getCollection(tk.coll as any);
+      return items.map((p: any) => ({
+        t: p.data.title,
+        u: `${tk.base}/${p.id}/`,
+        c: p.data.category,
+        s: tk.label,
+        i: p.data.intent,
+        d: p.data.difficulty,
+      }));
+    }),
+  )
+).flat();
+---
+<!doctype html>
+<html lang="en" data-lang="en" dir="ltr">
+  <head>
+    <script is:inline>
+      (function () {
+        try {
+          var d = document.documentElement;
+          if (localStorage.getItem('dp-lang') === 'ar') {
+            d.dataset.lang = 'ar';
+            d.dir = 'rtl';
+          }
+          // before first paint, so light-theme users never flash dark
+          if (localStorage.getItem('dp-theme') === 'light') d.dataset.theme = 'light';
+        } catch (e) {}
+      })();
+    </script>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{pageTitle}</title>
+    <meta name="description" content={desc} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={desc} />
+    <meta property="og:type" content="website" />
+    <meta name="theme-color" content="#080b12" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
+    />
+  </head>
+  <body>
+    <div class="dp-readbar" id="dp-readbar"></div>
+    <Nav />
+    <main class="dp-container">
+      <slot />
+    </main>
+    <Footer />
+
+    <!-- ⌘K command palette -->
+    <div class="dp-cmdk" id="dp-cmdk" aria-hidden="true">
+      <div class="dp-cmdk__backdrop" data-dp-cmdk-close></div>
+      <div class="dp-cmdk__panel" role="dialog" aria-modal="true" aria-label="Search the reference">
+        <input class="dp-cmdk__input" id="dp-cmdk-input" type="text" placeholder="Search the architecture reference…" autocomplete="off" spellcheck="false" />
+        <div class="dp-cmdk__filters" id="dp-cmdk-filters"></div>
+        <ul class="dp-cmdk__results" id="dp-cmdk-results"></ul>
+        <div class="dp-cmdk__hint">
+          <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+          <span><kbd>↵</kbd> open</span>
+          <span><kbd>esc</kbd> close</span>
+        </div>
+      </div>
+    </div>
+    <script type="application/json" id="dp-search-index" set:html={JSON.stringify(searchIndex)}></script>
+    <script type="application/json" id="dp-i18n" set:html={JSON.stringify(ar)}></script>
+
+    <script>
+      import '../scripts/progress.js';
+      import '../scripts/ui.js';
+    </script>
+  </body>
+</html>

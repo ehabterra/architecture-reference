@@ -1,0 +1,131 @@
+---
+title: "Testing Serverless"
+category: cld-serverless
+kind: topic
+order: 5
+difficulty: "Intermediate"
+status: ready
+intent: "Serverless needs a novel test approach: don't re-couple decoupled services — aim for maximum confidence in minimum time across business logic, integration points, and data contracts."
+book: "Serverless Development on AWS (Brisals & Hedger)"
+related:
+  - event-driven-serverless-patterns
+  - observability-and-cost
+  - the-well-architected-lens
+when_use:
+  - "Testing distributed, event-driven systems built from managed services"
+  - "You want to balance pre-deploy coverage against observability and recovery"
+  - "Focusing quality effort on critical, time-sensitive, user-facing paths"
+when_avoid:
+  - "Trying to deploy the whole system and test it end-to-end as one unit"
+  - "Chasing maximum coverage or zero bugs (bugs are inevitable)"
+  - "Testing what AWS owns — 'if you can't fix it, you shouldn't test it'"
+quiz:
+  - q: "What is the goal of serverless testing?"
+    options:
+      - text: "Maximum confidence in minimum time, balanced against delivery, observability, and recovery"
+        correct: true
+      - text: "100% code coverage"
+        correct: false
+      - text: "Eliminating every possible bug before release"
+        correct: false
+      - text: "Re-coupling services so they can be tested together"
+        correct: false
+    explain: "Because bugs are inevitable, serverless testing trades some pre-deploy coverage for observability and recovery, focusing on critical paths."
+  - q: "What are the three building blocks of an event-driven app to test?"
+    options:
+      - text: "Business logic, integration points, and data contracts"
+        correct: true
+      - text: "Functions, queues, and databases"
+        correct: false
+      - text: "Unit, integration, and e2e tests"
+        correct: false
+      - text: "Latency, cost, and security"
+        correct: false
+    explain: "Business logic → unit tests; integration points (configuration, permissions, payloads) → infrastructure/unit/contract tests; data contracts → static analysis and contract tests."
+  - q: "What is the 'serverless square of balance'?"
+    options:
+      - text: "Test, deliver, observe, and recover kept in equilibrium"
+        correct: true
+      - text: "Unit, integration, contract, and e2e tests"
+        correct: false
+      - text: "Cost, performance, security, sustainability"
+        correct: false
+      - text: "Four AWS Regions for redundancy"
+        correct: false
+    explain: "Stability is a product of speed: trade some pre-deployment coverage for stronger observability and recovery."
+  - q: "Why should you generally not test what AWS owns?"
+    options:
+      - text: "If you can't fix it, you shouldn't test it — test your config, permissions, and payloads instead"
+        correct: true
+      - text: "AWS services never fail"
+        correct: false
+      - text: "It is against the AWS terms of service"
+        correct: false
+      - text: "Managed services have no observable behavior"
+        correct: false
+    explain: "Under shared responsibility, test your business logic, configuration, permissions, and payloads — verify config without invoking the underlying service."
+takeaway: "Don't re-couple decoupled services to test them; aim for maximum confidence in minimum time, test business logic + integration points + data contracts, and shift right."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+You don't crash-test a whole car to check the seatbelt buckle. You test the buckle in isolation, verify it bolts to the right mount, confirm it meets the safety spec — then run a few full crash tests on the journeys that matter most. Serverless testing works the same way: test the parts, verify the joins, and reserve end-to-end runs for critical paths.
+</Callout>
+
+## Why serverless testing is different
+
+The very attributes that make serverless powerful — **decoupling, event-driven communication, managed services, distribution, cloud-native execution** — make the traditional "deploy the whole system and test it end-to-end" strategy counterproductive. The core thesis: **if your services are decoupled in development and at runtime, do not re-couple them during testing.** Difficulty comes from variable latency, acknowledgment-only async communication, opaque AWS-owned services, eventual consistency, and the hardness of local emulation.
+
+Rather than chasing maximum coverage or zero bugs (bugs are *inevitable* — "everything fails all the time"), the aim is **maximum confidence in minimum time**.
+
+## The serverless square of balance
+
+<Mermaid code={String.raw`graph TD
+  T["Test"] --- D["Deliver"]
+  D --- O["Observe"]
+  O --- R["Recover"]
+  R --- T
+  C["Maximum confidence,<br/>minimum time"] --> T
+  C --> O
+  C --> R`} />
+
+Keep **test, deliver, observe, recover** in equilibrium. "Stability is a product of speed" — so trade some pre-deployment coverage for **observability** and **recovery**. Distinguish **critical paths** (user present, time-sensitive, synchronous, business-critical data → test coverage + alerting) from **noncritical paths** (background, recoverable → alerting + fault tolerance, can ship more bugs within **error budgets**).
+
+## Three building blocks to test
+
+An event-driven app has three things worth testing:
+
+- **Business logic** — abstract it from the handler and unit-test it in isolation (TDD).
+- **Integration points** — **Configuration** (→ infrastructure + unit tests), **Permissions** (→ infrastructure tests, e.g., asserting IAM via CDK `Template.hasResourceProperties`), and **Payloads** (→ unit, contract, and static analysis).
+- **Data contracts** — verify requests/responses against agreed types via **contract testing** (JSON Schema with Ajv, or Pact) and static typing.
+
+<Mermaid code={String.raw`graph TD
+  BL["Business logic"] --> UT["Unit tests (TDD)"]
+  IP["Integration points"] --> IT["Infrastructure + unit tests"]
+  IP --> CT["Contract tests"]
+  DC["Data contracts"] --> CT
+  DC --> SA["Static analysis"]`} />
+
+<Callout type="gotcha" title="Don't test what AWS owns">
+"If you can't fix it, you shouldn't test it." Don't write tests that exercise AWS's internal behavior. Test your **configuration**, **permissions**, and **payloads** — for example verify an EventBridge rule's pattern with `TestEventPatternCommand` *without* invoking the underlying services. Mock any code you are not responsible for testing or fixing.
+</Callout>
+
+## Just enough, just in time
+
+- **Just enough testing** — prefer **static testing** (unit tests + static analysis, no deployment); use **mutation testing** to find useless tests; remove flaky tests cautiously.
+- **Just-in-time testing** — limit the *number of test runs*; run as few times as possible, as close to production as possible — a **shift-right** posture tied to **continuous integration** (integrate to trunk at least daily).
+- **Environments** — use as few as possible. Avoid per-PR ephemeral environments (the "antithesis of CI"); prefer **instant environments** isolated to two or three components.
+- **Post-deploy** — add **synthetic canaries** and **load test** critical paths before big events.
+
+Two supporting tools: a **Definition of Done** checklist (quality measure, release method, failure detection pre- and post-prod, debuggability/tracing, recovery) and **FMEA** (Failure Modes and Effects Analysis): probability × severity, adjusted by detection, to prioritize where tests and observability go.
+
+<Callout type="go" title="Key insight">
+Treat a serverless system as a *collection* of distinct applications and apply quality controls per component. The async equivalent of an end-to-end assertion is a **retried assertion with a timeout** — e.g., "order placed → an `orderCreated` event appears on the bus."
+</Callout>
+
+## See also
+
+- [Event-driven serverless patterns](/cloud/event-driven-serverless-patterns/) — the integration points you test.
+- [Observability and cost](/cloud/observability-and-cost/) — observe and recover, the other half of the square.
+- [The Well-Architected lens](/cloud/the-well-architected-lens/) — operational excellence and reliability.

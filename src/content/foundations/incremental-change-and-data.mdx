@@ -1,0 +1,122 @@
+---
+title: "Incremental Change and Data"
+category: fnd-evolution
+kind: topic
+order: 14
+difficulty: "Advanced"
+status: ready
+intent: "How deployment pipelines, feature toggles, and database evolution patterns let an architecture change in small, safe, reversible steps — including the hardest dimension, data."
+book: "Building Evolutionary Architectures"
+related:
+  - evolutionary-architecture
+  - fitness-functions
+  - architecture-decision-records
+when_use:
+  - "When you need to deploy architectural change in small, reversible increments"
+  - "When evolving a database schema that other applications or services depend on"
+  - "When replacing triggers, stored procedures, or shared-database integration"
+when_avoid:
+  - "When engineering maturity is too low (builds left broken for days)"
+  - "When a fossilized schema or COTS package makes incremental change impractical"
+quiz:
+  - q: "What is the Expand/Contract pattern used for?"
+    options:
+      - text: "Evolving a schema by maintaining old and new states simultaneously through a transition phase"
+        correct: true
+      - text: "Scaling a database horizontally"
+        correct: false
+      - text: "Compressing data at rest"
+        correct: false
+      - text: "Caching query results"
+        correct: false
+    explain: "Expand/Contract (a subset of Parallel Change) adds the new state, transitions while both exist, then contracts away the old — letting code and schema evolve without a breaking big-bang change."
+  - q: "Once a migration script has run, what is the rule?"
+    options:
+      - text: "Migrations are immutable — to reverse a change, add a new migration"
+        correct: true
+      - text: "Edit the original script in place"
+        correct: false
+      - text: "Delete it and rebuild"
+        correct: false
+      - text: "Run it again with different values"
+        correct: false
+    explain: "Modeled on double-entry bookkeeping, a run migration is immutable; you rebuild forward from script 1, so most teams have abandoned undo migrations."
+  - q: "What is the chief role of a deployment pipeline in evolutionary architecture?"
+    options:
+      - text: "It listens for changes and runs increasingly sophisticated stages, including fitness functions, every time the system changes"
+        correct: true
+      - text: "It compiles the code once"
+        correct: false
+      - text: "It replaces version control"
+        correct: false
+      - text: "It only runs unit tests"
+        correct: false
+    explain: "The pipeline runs separable stages (provisioning, testing levels, atomic and holistic fitness functions) on every change, automating governance."
+  - q: "How do feature toggles support incremental change?"
+    options:
+      - text: "They reconcile continuous deployment with staged release and enable QA in production"
+        correct: true
+      - text: "They replace the database"
+        correct: false
+      - text: "They eliminate the need for testing"
+        correct: false
+      - text: "They version the API automatically"
+        correct: false
+    explain: "A toggle is an if-statement on config that enables/disables a feature, letting teams deploy continuously, release on a schedule, and route only QA users to a hidden feature."
+takeaway: "Evolve in small reversible steps: deploy through a pipeline of fitness functions, hide work behind toggles, and evolve schemas with Expand/Contract and immutable forward-only migrations."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧱 Analogy">
+Renovating a house you still live in, you don't demolish every wall at once. You build the new bathroom, switch over when it works, then remove the old one. Incremental change — especially to data — is exactly this: stand up the new state beside the old, transition while both exist, and only then tear down the old.
+</Callout>
+
+## Two aspects of incremental change
+
+*Building Evolutionary Architectures* distinguishes **development** (how teams build) from **operational** (how teams deploy) incremental change, both building on Continuous Delivery. Services are operationally isolated in a **share-nothing** architecture, each deployed in its own container. When a new service version ships, a temporary **proxy** routes callers to the version they request, so old callers needn't change and new callers gain capability immediately. When monitoring shows a version is no longer routed to, operations **garbage-collects** it.
+
+## The deployment pipeline
+
+The core mechanism is the **deployment pipeline** (distinct from a CI server): it *listens* for changes and runs a series of increasingly sophisticated, separable **stages** — environment provisioning, multiple levels of testing, and crucially [fitness functions](/foundations/fitness-functions/).
+
+<Mermaid code={String.raw`graph LR
+  S1["1. Replicate CI<br/>unit + functional"] --> S2["2. Containerize + deploy"]
+  S2 --> S3["3. Atomic fitness functions<br/>scalability · security · metrics"]
+  S3 --> S4["4. Holistic fitness functions<br/>contract tests"]
+  S4 --> S5["5. Manual stages<br/>security review · audit"]
+  S5 --> S6["6. Automated deploy"]`} />
+
+**Feature toggles** (an if-statement on config) reconcile continuous deployment with staged "big bang" releases and enable **QA in production** (routing only QA users to a hidden feature). **Fan-out / fan-in** lets the pipeline verify in parallel that a change didn't break production *and* that the change itself succeeds, then consolidate. **Consumer-driven contracts** (e.g. Pact) act as an engineering safety net — the consumer hands the provider a test suite the provider promises to keep passing, so the provider can evolve freely.
+
+## Data: the hardest dimension
+
+Data is a first-class evolutionary dimension and often *more* problematic than architectural coupling — databases become integration points, and data teams historically lagged on engineering practices. Evolutionary database design rests on three axes: **tested** (fitness functions keep ORM mappings in sync), **versioned** (source and schema are symbiotic), and **incremental** (automated migration scripts, not manual edits).
+
+<Callout type="gotcha" title="⚠️ Migrations are immutable">
+Modeled on double-entry bookkeeping, once a **migration/delta script** has run it is **immutable** — to reverse a change you add a *new* migration. Most teams have abandoned **undo migrations** entirely: you can always rebuild forward from script 1, and maintaining both directions doubles testing while making dropped-column reversals daunting.
+</Callout>
+
+## Expand/Contract for schema change
+
+**Shared Database Integration** fossilizes a schema across every application that touches it. The remedy is the **Expand/Contract pattern** (a subset of **Parallel Change**) with a **transition phase** that maintains old and new states simultaneously.
+
+<Mermaid code={String.raw`graph LR
+  E["Expand<br/>add new columns/state<br/>(old still works)"] --> T["Transition<br/>both states live<br/>code migrates at its pace"]
+  T --> C["Contract<br/>drop the old state<br/>once nothing reads it"]`} /> The worked example — splitting `name` into `firstname`/`lastname` — culminates in the hardest case (legacy data *and* integration points) handled with a bidirectional **database trigger** plus refinements like `SET UNUSED`, exploiting native database facilities to evolve safely.
+
+When microservices give each bounded context its own database, native guarantees are replaced by fitness functions: **referential integrity** becomes event-driven deletion propagation; **data duplication** distinguishes write ownership from read access (owners publish changes, readers cache on startup); and triggers/stored procedures are retired via the database **Strangler Fig** ("Migrate Method from Database"), with a fitness function verifying all dependencies have migrated before the procedure is dropped.
+
+<Callout type="tip" title="Engineering maturity is a prerequisite">
+Incremental change assumes a certain engineering maturity — for example, not leaving builds broken for days. Without it, the pipeline and parallel-change patterns can't deliver their safety.
+</Callout>
+
+<Callout type="go" title="💡 Key insight">
+Make decisions reversible (blue/green deploys, toggles, canary releasing, service routing) and remove needless variability (immutable infrastructure). The $400M "Knightmare" feature-flag disaster shows what happens when a snowflake server drifts from the rest — reversibility and uniformity are what make fast change safe.
+</Callout>
+
+## See also
+
+- [Evolutionary architecture](/foundations/evolutionary-architecture/) — the discipline this implements.
+- [Fitness functions](/foundations/fitness-functions/) — what runs in the pipeline stages.
+- [Architecture decision records](/foundations/architecture-decision-records/) — recording the why behind these changes.

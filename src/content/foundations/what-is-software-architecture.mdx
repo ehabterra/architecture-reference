@@ -1,0 +1,88 @@
+---
+title: "What Is Software Architecture?"
+category: fnd-thinking
+kind: guide
+order: 1
+difficulty: "Start here"
+status: ready
+intent: "The decisions that are expensive to change — how architecture differs from design, the four dimensions of architecture, and why every choice is a trade-off."
+book: "Fundamentals of Software Architecture; Head First Software Architecture"
+related:
+  - architecture-vs-design
+takeaway: "Architecture is the set of decisions that are hard to reverse — so spend your effort where change is expensive, and make the trade-offs explicit."
+quiz:
+  - q: "What best distinguishes architecture from design?"
+    options:
+      - text: "Architectural decisions are significant and costly to change later; design decisions are more easily reversed"
+        correct: true
+      - text: "Architecture is diagrams; design is code"
+        correct: false
+      - text: "Architecture is done by architects; design is done by developers"
+        correct: false
+      - text: "There is no difference"
+        correct: false
+    explain: "The useful line is reversibility and significance: the harder and more expensive a decision is to change, the more architectural it is. Diagrams vs code and role titles are not the distinction."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🏛️ Analogy">
+You can repaint a room or move a couch cheaply (design). Moving a load-bearing wall is expensive and risky (architecture). Software is the same: the decisions that are hard and costly to reverse are the architectural ones — and they deserve the most care up front.
+</Callout>
+
+## Four dimensions of architecture
+
+The architecture of a system is more than its structure. *Fundamentals of Software Architecture* frames it as four intertwined dimensions:
+
+<Mermaid code={String.raw`graph TD
+  A["Software Architecture"] --> S["Structure<br/>(architecture style)"]
+  A --> C["Architecture characteristics<br/>(the -ilities)"]
+  A --> D["Architecture decisions<br/>(the rules)"]
+  A --> P["Design principles<br/>(guidelines)"]`} />
+
+- **Structure** — the architecture *style* (layered, microservices, event-driven…).
+- **Characteristics** — the success criteria the system must meet (availability, scalability, …).
+- **Decisions** — the hard rules for how the system is built (e.g., "only the business layer may access the database").
+- **Design principles** — guidelines rather than rules (e.g., "prefer asynchronous messaging between services").
+
+- **Structure** answers *what shape is the system?* — the topology of components and how they're partitioned.
+- **Characteristics** answer *what must it do well?* — the operational and structural qualities (the "-ilities") that determine success or failure independent of features.
+- **Decisions** are the long-lived constraints that, once made, are costly to walk back.
+- **Design principles** are softer guidance that teams apply case by case.
+
+Together these define the *intent* of a system. You can read all the code and still not know the architecture, because the architecture lives in these cross-cutting choices, not in any single module.
+
+## A spectrum, not a wall
+
+The classic question "is this architecture or design?" is better answered as a **spectrum measured by the cost of change**. *Head First Software Architecture* frames the same idea as a sliding scale: the further left a decision sits, the more it ripples across the whole system and the more expensive it is to undo.
+
+<Mermaid code={String.raw`graph LR
+  A["Architectural<br/>(hard to reverse)"] --> B["Style & topology"]
+  A --> C["Sync vs async"]
+  A --> D["Data ownership"]
+  E["Design<br/>(easy to reverse)"] --> F["Class structure"]
+  E --> G["Naming"]
+  E --> H["Local algorithms"]
+  A -.cost of change.-> E`} />
+
+Choosing event-driven over a monolith, or splitting one database into many, sits on the architectural end — reversing it touches every team. Renaming a method or reordering parameters sits on the design end. Most decisions fall in between, and the architect's skill is sensing *which end a given decision is closer to* before committing.
+
+<Callout type="gotcha" title="⚠️ The irreversibility trap">
+Treating an easily-reversible decision as if it were architectural wastes time in analysis paralysis; treating an architectural decision as if it were cheap is far worse — you discover the cost only when change becomes nearly impossible. Calibrate effort to reversibility.
+</Callout>
+
+## Every decision is a trade-off
+
+There are no best practices in architecture — only trade-offs. Choosing microservices buys independent deployability at the cost of operational complexity; choosing strong consistency buys correctness at the cost of availability. *Fundamentals of Software Architecture* captures this in its **First Law of Software Architecture**: *everything in software architecture is a trade-off* — and a corollary: *why is more important than how.*
+
+The architect's job is therefore not to find the "right" answer but to:
+
+1. **Identify the forces** — the characteristics that actually matter for *this* system (see [identifying architecture characteristics](/foundations/identifying-architecture-characteristics/)).
+2. **Weigh the trade-offs** explicitly rather than defaulting to fashion or habit.
+3. **Record the *why*** so future teams understand the constraints they inherited (see [architecture decision records](/foundations/architecture-decision-records/)).
+
+## See also
+
+- [Architecture vs design](/foundations/architecture-vs-design/) — where the line really sits.
+- [Architecture characteristics](/foundations/architecture-characteristics/) — the "-ilities" that drive structure.
+- [Thinking in trade-offs](/foundations/thinking-in-trade-offs/) — the core mental discipline of the role.

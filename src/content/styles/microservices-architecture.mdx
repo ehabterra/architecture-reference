@@ -1,0 +1,153 @@
+---
+title: "Microservices Architecture"
+category: sty-distributed
+kind: topic
+order: 10
+difficulty: "Advanced"
+status: ready
+intent: "The domain-partitioned distributed style built on bounded contexts — single-purpose services, distributed data, operational automation, and the agility champion that pays in performance and cost."
+book: "Software Architecture Patterns (2nd ed.); Fundamentals of Software Architecture; Software Architecture: The Hard Parts"
+related:
+  - service-based-architecture
+  - event-driven-architecture
+  - technical-vs-domain-partitioning
+  - fallacies-of-distributed-computing
+when_use:
+  - "Functionality breaks cleanly into dozens or hundreds of independent, distinct pieces."
+  - "You need high agility, function-level scalability, fault tolerance, and drop-in extensibility."
+  - "You have cross-functional domain teams and mature DevOps."
+when_avoid:
+  - "Workflows require lots of inter-service orchestration tying functionality together."
+  - "Data is tightly coupled and can't be split into many schemas (use service-based instead)."
+  - "You have tight cost/time constraints or need high performance and low latency."
+quiz:
+  - q: "What is a microservice?"
+    options:
+      - text: "A single-purpose, separately deployed unit that does one thing really well"
+        correct: true
+      - text: "A service with fewer than 100 lines of code"
+        correct: false
+      - text: "Any service that runs in a container"
+        correct: false
+      - text: "A layer in a monolith"
+        correct: false
+    explain: "'Micro' refers to what it does, not its physical size — a 312-class service that does one thing is still a microservice."
+  - q: "What concept makes microservices possible, by encapsulating a domain's code and data as one unit?"
+    options:
+      - text: "Bounded context"
+        correct: true
+      - text: "The architecture sinkhole"
+        correct: false
+      - text: "The data grid"
+        correct: false
+      - text: "The plug-in registry"
+        correct: false
+    explain: "The bounded context (Eric Evans) encapsulates a domain's code, data structures, and data; only the owning service may touch its data, others request it via a contract. Microservices would not exist without it."
+  - q: "Why does microservices score only 2/5 on performance despite 5/5 scalability?"
+    options:
+      - text: "Remote communication adds network, security, and data latency — especially the extra DB call when one service needs another's data"
+        correct: true
+      - text: "Containers are slow"
+        correct: false
+      - text: "It uses too few services"
+        correct: false
+      - text: "Bounded contexts prevent caching"
+        correct: false
+    explain: "A monolith would use a single join; in microservices the data owner must make an additional DB call, and every hop adds network and security latency."
+  - q: "What does the API gateway in microservices NOT do, unlike SOA's ESB?"
+    options:
+      - text: "It contains no business logic and performs no orchestration or mediation"
+        correct: true
+      - text: "It cannot generate request IDs"
+        correct: false
+      - text: "It cannot handle security"
+        correct: false
+      - text: "It cannot route requests"
+        correct: false
+    explain: "Keeping the gateway free of business logic and orchestration preserves the bounded context — all interesting logic stays inside services."
+takeaway: "Bounded contexts let microservices win agility, scalability, fault tolerance, and extensibility — at the highest cost and the weakest performance among distributed styles."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Microservices are a food court rather than a single restaurant. Each stall is fully independent — its own kitchen, menu, staff, and till — and does one cuisine well. You can renovate the sushi stall, double its size on a busy night, or replace it entirely without closing the burger stall. The price of all that independence: every stall needs its own everything, and getting a combo meal means walking between counters.
+</Callout>
+
+## Topology
+
+**Microservices** is a *distributed*, *domain-partitioned* style: an ecosystem of **single-purpose, separately deployed services**, typically accessed through an **API gateway**. Client requests (often from a **microfrontend**) hit gateway endpoints, which forward to the right service. Each service accesses its own data or asks the owner for data it doesn't own.
+
+<Mermaid code={String.raw`graph TD
+  UI["Microfrontend / client"] --> GW["API gateway<br/>(no business logic)"]
+  GW --> S1["Order service"]
+  GW --> S2["Payment service"]
+  GW --> S3["Inventory service"]
+  S1 --> D1[("Order data")]
+  S2 --> D2[("Payment data")]
+  S3 --> D3[("Inventory data")]`} />
+
+- **Data ownership** — each service **owns its own tables** (often a schema). *Only the owner may access its data*; others must ask via a contract — never touch the tables directly.
+- **API gateway** — hides service location and handles cross-cutting infrastructure (security, metrics, request IDs). Unlike SOA's ESB, it contains **no business logic** and performs **no orchestration**, preserving the bounded context.
+
+## Bounded context: the foundation
+
+A **microservice** is a single-purpose, separately deployed unit that does one thing well — "micro" refers to *what it does*, not its size. The **bounded context** (Eric Evans) encapsulates a domain's code, data structures, and data as one unit. The counter-example shows why it is essential: 250 services all hitting the same monolithic tables means dropping a column used by 120 services requires coordinating 120 deployments at once — infeasible. The bounded context gives both **agility** and **change control**: only the owning service changes when its data changes; others request data via a contract and stay untouched.
+
+## Three things that make it unique
+
+1. **Distributed data** — the only style that *requires* data broken up across services. Pure one-DB-per-service rarely holds in practice; when data is shared (2–6 services due to FKs, triggers, views), the bounded context **expands** to include those tables and services.
+2. **Operational automation** — you cannot test, deploy, and monitor hundreds-to-thousands of services manually, so **containerization** (Docker), **orchestration** (Kubernetes), and **DevOps** are requirements, not nice-to-haves. Operational concerns are shared via the **sidecar pattern** and **service mesh**.
+3. **Organizational change** — the only style that *requires* **cross-functional domain teams** (UI + backend + DB on one team) with identified service owners per domain.
+
+<Callout type="go" title="Choreography over orchestration">
+Microservices favors **choreography** (services call each other directly, matching the decoupling philosophy) over **orchestration** (a central mediator). Use a localized mediator only for inherently coupled workflows — and keep it inside one service, never in the API gateway.
+</Callout>
+
+## The hard parts
+
+- **Granularity** is the first hard part — the single-responsibility principle is subjective. Objective drivers: code volatility, fault tolerance, scalability/throughput, and access control. Too-fine services force excessive communication.
+- **Don't do cross-service transactions.** They create the worst dynamic coupling (connascence of value). Fix granularity instead — needing transactions usually means services are too small. Use the **saga pattern** with compensating transactions only *sparingly*: "if transactions are the dominant feature of the architecture, mistakes were made."
+
+<Callout type="gotcha" title="Surprisingly weak on performance">
+Despite five-star scalability, microservices often scores poorly on **performance** because services communicate remotely, incurring three latencies: **network** (30-300+ ms), **security** (authn/authz), and the biggest, **data latency** — when one service needs another's data, the owner must make an *extra* DB call where a monolith would have used a single join. See [Fallacies of distributed computing](/styles/fallacies-of-distributed-computing/).
+</Callout>
+
+<Mermaid code={String.raw`graph LR
+  C["Client"] -->|"network latency"| O["Order service"]
+  O -->|"needs customer data:<br/>remote call + security"| Cu["Customer service"]
+  Cu -->|"extra DB call<br/>(a monolith would just JOIN)"| DB[("Customer data")]`} />
+
+## Characteristics
+
+| Characteristic | Rating |
+|---|---|
+| Partitioning | Domain |
+| Overall cost | $$$$$ (highest) |
+| Agility | 5 / 5 |
+| Scalability | 5 / 5 |
+| Fault tolerance | 5 / 5 |
+| Extensibility | 5 / 5 |
+| Performance | 2 / 5 |
+| Simplicity | 1 / 5 |
+
+Microservices is the **agility and extensibility champion** with excellent scalability and fault tolerance — but it is the **most expensive** style and the **weakest on performance** among distributed styles. It has the most distinct quanta of any modern architecture.
+
+## When to use it
+
+- Functionality breaks into **dozens or hundreds of independent pieces**.
+- High needs for **agility, function-level scalability, fault tolerance, and drop-in extensibility**.
+- You have **cross-functional domain teams** and mature DevOps.
+
+## When to avoid it
+
+- Workflows require lots of **inter-service orchestration**.
+- Data is **tightly coupled** and can't split (choose [service-based](/styles/service-based-architecture/)).
+- **Tight cost/time** or **high-performance/low-latency** needs.
+
+## See also
+
+- [Service-based architecture](/styles/service-based-architecture/) — the cheaper, coarser distributed alternative.
+- [Event-driven architecture](/styles/event-driven-architecture/) — event-driven microservices is the most common hybrid.
+- [Technical vs domain partitioning](/styles/technical-vs-domain-partitioning/) — microservices is domain partitioning taken to the extreme.
+- [Fallacies of distributed computing](/styles/fallacies-of-distributed-computing/) — why performance suffers.

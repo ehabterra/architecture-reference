@@ -1,0 +1,138 @@
+---
+title: "Pagination and Filtering"
+category: api-rest
+kind: topic
+order: 8
+difficulty: "Intermediate"
+status: ready
+intent: "Design collections to evolve: wrap arrays in an object, paginate with an opaque next link, filter with a standard expression language, and never smuggle SQL in a query parameter."
+book: "RESTful Web API Patterns and Practices Cookbook; Mastering API Architecture"
+related:
+  - designing-good-apis
+  - caching-and-conditional-requests
+  - rest-and-the-richardson-maturity-model
+when_use:
+  - "A collection can grow large and must be returned in manageable chunks."
+  - "Consumers need to narrow results by field values without fetching everything."
+  - "You want list navigation that survives growth to thousands of members."
+when_avoid:
+  - "A tiny, bounded collection that will never need paging or filtering."
+  - "You are tempted to expose a raw query engine or accept SQL in ?q= (a security and coupling trap)."
+quiz:
+  - q: "Why wrap a collection in an object instead of returning a bare array?"
+    options:
+      - text: "So you can add pagination metadata (like @nextLink) later without a breaking change"
+        correct: true
+      - text: "Arrays are not allowed in JSON"
+        correct: false
+      - text: "It makes responses smaller"
+        correct: false
+      - text: "REST requires objects at the top level"
+        correct: false
+    explain: "Converting a top-level array to an object later breaks consumers; nesting the array in an object from the start (value + @nextLink) keeps it evolvable."
+  - q: "What does the @nextLink in a paginated response represent?"
+    options:
+      - text: "An opaque URL to fetch the next set of results"
+        correct: true
+      - text: "The total number of pages"
+        correct: false
+      - text: "An authentication token"
+        correct: false
+      - text: "The ETag of the collection"
+        correct: false
+    explain: "Pagination returns a partial result plus an opaque instruction (a next link) for fetching the following set."
+  - q: "How should you implement a simple contains-AND filter via the query string?"
+    options:
+      - text: "?name=value pairs where '=' means contains/in and '&' means AND"
+        correct: true
+      - text: "Pass a full SQL statement in ?q="
+        correct: false
+      - text: "Invent a custom binary query syntax"
+        correct: false
+      - text: "Use POST with a stored procedure name"
+        correct: false
+    explain: "The Cookbook implements '=' as contains and '&' as AND — often the only IRQL needed; richer needs go to Lucene/SQL exposed as a media type, not smuggled into ?q=."
+  - q: "When a well-formed filter matches no records, what status is correct?"
+    options:
+      - text: "200 OK with an empty collection"
+        correct: true
+      - text: "404 Not Found"
+        correct: false
+      - text: "400 Bad Request"
+        correct: false
+      - text: "500 Internal Server Error"
+        correct: false
+    explain: "A valid filter with no matches is 200 + empty array; a single-resource lookup that does not exist is 404; an invalid request is 4xx."
+takeaway: "Wrap collections in an object, paginate with an opaque next link, filter with a standard expression, and never smuggle a query language into ?q=."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="📚 Analogy">
+A good collection endpoint is a library catalogue, not a forklift dumping every book at your feet. You ask for a shelf at a time (pagination), narrow by subject (filtering), and the catalogue hands you a card pointing to the next drawer (the next link) — without you needing to know how the stacks are organised behind the desk.
+</Callout>
+
+## Design collections to evolve
+
+The single most important collection decision is made on day one. Returning a **raw array** from `GET /attendees` cannot evolve — the moment you need pagination you must convert the array into an object to add a next link, and that is a **breaking change**. So nest the array inside an object from the start:
+
+```json
+{
+  "value": [ { "id": 1, "displayName": "Jim" } ],
+  "@nextLink": "/attendees?page=2"
+}
+```
+
+Pagination returns a **partial result plus instructions** for fetching the next set. Keep the `@nextLink` **opaque** — consumers follow it, they do not construct it — so you can change the underlying paging mechanism freely.
+
+## Standard list navigation
+
+The Cookbook generalises this into a fixed set of navigation actions for any list: **List**, **First**, **Previous**, **Next**, **Last**, **Select**, **Exit**, **Home**. Returned pages include only the links that apply — the first page has no `previous`, and `last` is often omitted because it is too costly for long lists.
+
+<Mermaid code={String.raw`graph LR
+  List["list / collection"] --> P1["Page 1<br/>first, next, exit"]
+  P1 --> P2["Page 2<br/>first, previous, next"]
+  P2 --> Pn["Last page<br/>first, previous, exit"]
+  P1 -. "select item" .-> Item["/customers/aq1sw2de3"]`} />
+
+<Callout type="tip" title="Assume thousands of members">
+Design as if every collection holds thousands of rows: compute pages lazily, return a summary plus a 'select' detail link rather than full records, set a default page size (~50) via client preferences, and avoid arbitrary 'jump to page N' — it forces expensive offset scans.
+</Callout>
+
+## Filtering
+
+Beyond paging, large collections need filtering. Two complementary approaches appear across the books:
+
+- **A standard expression language.** The Microsoft REST API Guidelines borrow from the **OData** standard: `GET /attendees?$filter=displayName eq 'Jim'`. You need not implement all of it up front, but designing to the standard lets the API grow without breaking consumers.
+- **Simple contains-AND via the query string.** Implement `?name=value` where `=` means **contains/in** and `&` means **AND** — `?ID=3e&NAME=Mi` returns rows matching both. This is often the only information-retrieval query language (IRQL) an API needs. Richer needs (more operators) call for Lucene or SQL exposed deliberately as a **media type**, not invented ad hoc.
+
+## Status codes for queries
+
+Apply normal HTTP semantics so consumers can write consistent handling:
+
+- A well-formed **filter** with no matches → **200 OK** with an empty collection.
+- A **single-resource** lookup whose target does not exist → **404**.
+- An invalid client request (e.g. a non-existent property) → **4xx**.
+- A valid request the backend cannot fulfil (timeout) → **5xx**.
+
+<Mermaid code={String.raw`graph TD
+  R["Query request"] --> V{"Request well-formed?"}
+  V -->|"no, bad property"| C4["4xx Bad Request"]
+  V -->|"yes"| K{"Kind?"}
+  K -->|"filter, no matches"| Empty["200 OK, empty collection"]
+  K -->|"single resource missing"| NF["404 Not Found"]
+  K -->|"backend timeout"| C5["5xx Server Error"]`} />
+
+<Callout type="gotcha" title="Never smuggle a query into ?q=">
+Accepting a full query string in ?q= or ?query= is an anti-pattern: it hits URL length limits, mangles reserved characters and encoding, invites SQL injection, and tightly couples consumers to your engine. Expose named queries, a standard filter expression, or a query media type instead — and don't invent a custom query syntax.
+</Callout>
+
+<Callout type="go" title="Turn expensive queries into cacheable resources">
+For complex or replayed queries, create the query as a resource via PUT, then GET its URL to execute and return results — which makes the result cacheable and avoids long query strings. See caching for how ETags and Cache-Control apply.
+</Callout>
+
+## See also
+
+- [Designing good APIs](/apis/designing-good-apis/) — why object-wrapped collections matter from day one.
+- [Caching and conditional requests](/apis/caching-and-conditional-requests/) — making query responses cacheable.
+- [REST and the Richardson Maturity Model](/apis/rest-and-the-richardson-maturity-model/) — resource and verb foundations.

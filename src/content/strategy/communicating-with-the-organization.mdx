@@ -1,0 +1,125 @@
+---
+title: "Communicating with the Organization"
+category: path-elevator
+kind: topic
+order: 4
+difficulty: "Intermediate"
+status: ready
+intent: "Architects close the gap between technical knowledge and decision makers by building a ramp not a cliff, asking the right questions, and treating the organization itself as a system to be understood."
+book: "The Software Architect Elevator (Gregor Hohpe)"
+related:
+  - the-architect-elevator
+  - communicating-strategy
+  - applying-systems-thinking-to-organizations
+when_use:
+  - "When you must explain a technical topic to executives who control the budget."
+  - "When a review needs to surface hidden decisions, assumptions, and outdated thinking."
+  - "When the organization itself behaves like a system that resists the change you propose."
+when_avoid:
+  - "When code or generated diagrams genuinely communicate the value — but they rarely do for sponsors."
+  - "When 'a workshop for every question' is being used to bury your scrutiny rather than answer it."
+  - "When you would give a rubber-stamp 'free pass' instead of a real review."
+quiz:
+  - q: "What does 'build a ramp, not a cliff' mean?"
+    options:
+      - text: "Lead the audience up a steep but logical sequence of reasoning instead of hitting them with a wall of jargon"
+        correct: true
+      - text: "Always simplify the message until it is trivial"
+        correct: false
+      - text: "Present the conclusion first and skip the reasoning"
+        correct: false
+      - text: "Use more diagrams than words"
+        correct: false
+    explain: "If something isn't comprehensible, the fault is the lack of clarity, not the audience. A ramp is a climbable chain of reasoning even a non-technical executive can follow."
+  - q: "Per Hohpe (via Aristotle), what three elements does a persuasive technical talk need?"
+    options:
+      - text: "Logos (facts/structure), Ethos (credible character), and Pathos (emotion)"
+        correct: true
+      - text: "Slides, demos, and a Q&A"
+        correct: false
+      - text: "Budget, timeline, and headcount"
+        correct: false
+      - text: "Charts, tables, and bullet points"
+        correct: false
+    explain: "To move an organization you must move people, which needs a good story — logical structure, a credible messenger, and emotional resonance ('Zombies will eat your brain!')."
+  - q: "What is the chief architect's real expertise, according to 'Question Everything'?"
+    options:
+      - text: "Knowing the right questions to ask, not knowing all the answers"
+        correct: true
+      - text: "Having the deepest technical knowledge in the room"
+        correct: false
+      - text: "Producing the most detailed documentation"
+        correct: false
+      - text: "Approving the most architecture decisions"
+        correct: false
+    explain: "Like the Oracle in The Matrix, the architect helps people hear what they need to hear; the Five Whys surface the decisions and assumptions hidden behind results presented as 'god-given'."
+  - q: "Why does Hohpe limit most documents to about five pages?"
+    options:
+      - text: "Short documents are far more likely to actually be read"
+        correct: true
+      - text: "Longer documents cost more to print"
+        correct: false
+      - text: "Five pages is an industry regulation"
+        correct: false
+      - text: "It prevents architects from thinking too hard"
+        correct: false
+    explain: "Documentation still provides coherence, clarity ('you can write only what you have understood'), and history — but only if it is read, so brevity matters."
+takeaway: "Build a ramp, not a cliff: lead with a story (logos, ethos, pathos), ask the right questions, and treat the resisting organization as a system."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🛗 Analogy">
+A technical topic is exciting to the presenter and baffling to the audience — like dropping someone at the foot of a cliff and expecting them to climb. Build a <strong>ramp</strong> instead: a steep but continuous slope of reasoning anyone can walk up. If they can't follow, the fault is the missing clarity, not the audience.
+</Callout>
+
+The architect's value depends on connecting the people who hold technical knowledge to the people who make high-level decisions. Classical presentation advice fails here, because, as Hohpe notes, "you can't manage what you can't understand" — and most architecture goes unmanaged because it goes unexplained.
+
+## Tell a story: logos, ethos, pathos
+
+To transform an organization you must **move people**, and that requires a good story. Aristotle's three appeals apply directly:
+
+- **Logos** — facts, structure, the logical chain.
+- **Ethos** — a credible character; people trust the messenger before the message.
+- **Pathos** — emotion. ("Zombies will eat your brain!" is pathos in service of a real point about legacy systems.)
+
+<Mermaid code={String.raw`graph LR
+  K["Technical knowledge<br/>(engine room)"] --> R["The ramp<br/>(logos + ethos + pathos)"]
+  R --> D["Decision makers<br/>(penthouse)"]
+  J["Jargon cliff"] -.->|"loses the audience"| X["No decision"]
+  R -->|"comprehensible"| Y["Funded decision"]`} />
+
+<Callout type="go" title="🔑 Push less paper">
+Documentation still earns its keep — it gives coherence, validation, clarity of thought ("you can write only what you have understood"), education, history, and stakeholder communication. But Hohpe caps most team documents at <strong>five pages</strong>, because short documents are the ones that actually get read. And no — the code is not the documentation; it rarely explains your value proposition to an executive sponsor.
+</Callout>
+
+## Question everything
+
+The chief architect's expertise is not knowing every answer but **"knowing the right questions to ask."** Like the Oracle in *The Matrix*, a review gives no straight answer — it helps people hear what they already need to hear. The core tool is the **Five Whys** (from the Toyota Production System): keep asking "why" until you reach the real cause, surfacing the **decisions and the assumptions** behind results that are too often presented as "god-given." Where you can, request an **Architecture Decision Record** so the rationale is explicit.
+
+<Mermaid code={String.raw`graph TD
+  R["Result presented<br/>as god-given"] -->|"why?"| W1["Surfaced decision"]
+  W1 -->|"why?"| W2["Hidden assumption"]
+  W2 -->|"why?"| W3["Outdated belief"]
+  W3 -->|"why?"| RC["Real root cause"]
+  RC --> ADR["Capture in an<br/>Architecture Decision Record"]`} />
+
+Watch for **outdated assumptions** — unstated beliefs that become "the root of much evil" once the environment changes (building elaborate config GUIs because "writing code is slow and error-prone," long after that stopped being true).
+
+<Callout type="gotcha" title="⚠️ A workshop for every question">
+Traditional organizations deflect scrutiny by scheduling long "workshops," bringing external defenders, then blaming <em>you</em> as the bottleneck — "and they aren't even lying!" This is a system resisting change. <strong>Change the system:</strong> require pre-read documents, cancel workshops that lack them, work from a concrete question list, and halve the scheduled time to force focus.
+</Callout>
+
+## Be tough but fair
+
+When a team only wants a rubber stamp, the principle is: **"You can avoid my review, but you cannot get a free pass."** Skip a "show trial" if management won't treat architecture as first-class. The mandate Hohpe sets for a review board is disarming: "we have nothing to sell, no one can fool us, and we take the time to explain things well." Be "tough but fair, and make tasty hamburgers out of holy cows."
+
+<Callout type="tip" title="💡 Architect the real world">
+Cities, organizations, and political systems share the enterprise's hardest traits — no central governance, irreversible decisions, slow feedback. Treating the organization itself as a system you must understand (and that actively resists change) is what lets your communication actually land.
+</Callout>
+
+## See also
+
+- [The architect elevator](/strategy/the-architect-elevator/) — the linkage this communication makes real.
+- [Communicating strategy](/strategy/communicating-strategy/) — rhetoric, decks, and dramatic structure for winning approval.
+- [Applying systems thinking to organizations](/strategy/applying-systems-thinking-to-organizations/) — why the organization resists, and where to intervene.

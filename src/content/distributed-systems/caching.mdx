@@ -1,0 +1,140 @@
+---
+title: "Distributed Caching"
+category: ds-scalability
+kind: topic
+order: 7
+difficulty: "Intermediate"
+status: ready
+intent: "How caching buys capacity by not asking the database — cache-aside vs read/write-through, TTLs and eviction, hit-rate economics, and HTTP/CDN caching at the edge."
+book: "Foundations of Scalable Systems (Ian Gorton); Designing Distributed Systems (Brendan Burns)"
+related:
+  - scalability-fundamentals
+  - distributed-databases
+  - serving-patterns
+when_use:
+  - "When reads vastly outnumber updates and recomputation or DB queries are expensive."
+  - "When you can tolerate slightly stale data for a bounded TTL."
+  - "When relieving a database bottleneck more cheaply than scaling the database itself."
+when_avoid:
+  - "For write-heavy or rapidly changing data where invalidation churn destroys the hit rate."
+  - "When stale reads are unacceptable and you have no invalidation strategy."
+quiz:
+  - q: "Why is cache-aside the primary pattern in massively scalable systems?"
+    options:
+      - text: "It is resilient to cache failure — a down cache just turns every request into a miss — and scales easily via a distributed hash table"
+        correct: true
+      - text: "It never returns stale data"
+        correct: false
+      - text: "It writes to the database faster than write-through"
+        correct: false
+      - text: "It eliminates the need for a TTL"
+        correct: false
+    explain: "With cache-aside the app handles misses explicitly, so a cache outage degrades to all-misses rather than failing. Redis/memcached's simple DHT model also scales easily."
+  - q: "Why does a SHARDED cache hold far more effective data than a REPLICATED cache?"
+    options:
+      - text: "Each shard stores unique data, so 10 shards cache ~10x what 10 identical replicas could"
+        correct: true
+      - text: "Sharded caches use less memory per entry"
+        correct: false
+      - text: "Replicated caches can't use a TTL"
+        correct: false
+      - text: "Sharded caches never miss"
+        correct: false
+    explain: "Replicated caches store roughly the same data in every replica, so 10x10 GB caches only ~5% of a 200 GB set; a 10-way sharded cache (unique data per shard) caches ~50% — a tenfold gain."
+  - q: "On an ETag-based revalidation, what does the origin return if the resource is unchanged?"
+    options:
+      - text: "304 Not Modified, with no body, saving bandwidth"
+        correct: true
+      - text: "200 OK with the full body every time"
+        correct: false
+      - text: "404 Not Found"
+        correct: false
+      - text: "A new ETag and full body unconditionally"
+        correct: false
+    explain: "After expiry the cache revalidates with If-None-Match; an unchanged resource yields 304 (no body); a changed one yields 200 plus a new ETag."
+  - q: "When you put a sharded cache in front of a 1,000-RPS serving layer at a 50% hit rate, what does Burns recommend rating the service at?"
+    options:
+      - text: "~1,500 RPS, so it survives losing half the cache"
+        correct: true
+      - text: "2,000 RPS, the full doubled capacity"
+        correct: false
+      - text: "1,000 RPS, ignoring the cache"
+        correct: false
+      - text: "500 RPS, half the backend"
+        correct: false
+    explain: "A 50% hit rate doubles capacity to 2,000 RPS, but the cache is now critical; rating it ~1,500 RPS leaves headroom to survive losing half the cache without overloading the backend."
+takeaway: "Prefer cache-aside: it's failure-resilient and scales as a hash table — shard for effective capacity, set TTLs, and treat a critical cache as part of your capacity plan."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A busy reference librarian keeps the most-requested books on the desk instead of walking to the stacks every time. Ninety percent of questions are answered instantly; only the rare request triggers the long walk. A cache is that desk — and the art is choosing what to keep there and for how long.
+</Callout>
+
+Caching makes the results of expensive queries and computations **reusable at low cost**, creating capacity headroom far more cheaply than scaling the database. Caches already pervade the stack (CPU caches, DB engine buffers); here we focus on **application caching** and **web caching**.
+
+## Application caching: the cache-aside flow
+
+The dominant approach is **cache-aside**, where the application logic explicitly handles misses:
+
+<Mermaid code={String.raw`graph TD
+  Q["Request"] --> C{"In cache?"}
+  C -->|"hit"| H["Return cached value"]
+  C -->|"miss"| DB["Query database / recompute"]
+  DB --> P["cache.put(key, value, TTL)"]
+  P --> H2["Return value"]`} />
+
+The two predominant engines, **memcached** and **Redis**, are distributed in-memory hash tables; objects are assigned to servers by **hashing the key**. Key concepts:
+
+- **Cache keys** — constructed, then hashed to a server.
+- **Time to live (TTL)** — evicts stale entries; within a TTL window of N requests, N−1 are served from cache.
+- **Eviction policies** — LRU / least-accessed when full.
+
+The design principle is to **maximize hit rate and minimize miss rate**; ideal caches have many more reads than updates, because updates force invalidation and misses. Around **3% of Twitter's infrastructure** is application-level caches. Monitor in production (memcached reports `get_hits`, `get_misses`, `evictions`).
+
+## Cache-aside vs read/write-through
+
+Alternatives have the app always read/write *through* the cache: **read-through** (a loader fetches on miss), **write-through** (persists synchronously), **write-behind/write-back** (persists asynchronously — faster but risks loss; the internal strategy of most DB engines). These simplify application logic.
+
+<Callout type="go" title="💡 Why cache-aside wins at scale">
+Despite the convenience of read/write-through, <strong>cache-aside is primary in massively scalable systems</strong> for two reasons: it is <strong>resilient to cache failure</strong> (a down cache simply means every request is a miss — degraded, not broken), and Redis/memcached <strong>scale easily</strong> via their simple distributed-hash-table model.
+</Callout>
+
+## Replicated vs sharded caches
+
+How you lay a cache out dramatically changes its effective size. A **replicated** cache stores roughly the same data in every replica, so 10 replicas of 10 GB cache only ~5% of a 200 GB dataset. A **sharded** cache gives each shard unique data, so a 10-way shard caches ~50% — a **tenfold** improvement. The trade-off is failure behaviour: a failed shard means guaranteed misses for *that shard's* users until restored. Implement each shard as a **replicated service** (see [serving patterns](/distributed-systems/serving-patterns/)) so it survives failures and rollouts, and supports **hot sharding** (scaling a hot shard independently).
+
+<Mermaid code={String.raw`graph LR
+  subgraph Replicated
+    RA["Replica<br/>full copy ~5%"]
+    RB["Replica<br/>full copy ~5%"]
+  end
+  subgraph Sharded
+    SA["Shard 0<br/>unique data"]
+    SB["Shard 1<br/>unique data"]
+    SC["Shard 2<br/>unique data"]
+  end`} />
+
+<Callout type="gotcha" title="⚠️ A cache hit rate is a capacity commitment">
+A 50% hit rate in front of a 1,000-RPS serving layer doubles capacity to 2,000 RPS — but now a cache failure overloads the backend and fails half of requests. Burns' rule: rate the service at ~<strong>1,500 RPS</strong>, leaving headroom to survive losing half the cache. Always load-test <em>with and without</em> the cache.
+</Callout>
+
+## Web caching: HTTP and the edge
+
+The internet is "littered with web caches" — browser, ISP proxy, and reverse-proxy caches that return copies closer to clients. **Private caches** serve one user; **shared caches** serve many. **CDNs / edge caches** (Akamai operates 2,000+ locations, up to 30% of global traffic) cache near clients globally — essential for media-rich sites.
+
+Caches store `GET` results keyed by URI; services control behaviour via HTTP directives:
+
+- **`Cache-Control`** — `no-store`, `no-cache` (must revalidate), `private`, `public`, `max-age` (seconds).
+- **`Expires` / `Last-Modified`** — freshness precedence is `max-age` → `Expires` → heuristic `((Date − Last-Modified)/10)`.
+- **`ETag` / revalidation** — after expiry the cache revalidates with `If-None-Match`; the origin returns **`304 Not Modified`** (no body, saving bandwidth) if unchanged, or **`200 OK`** + new ETag if changed.
+
+Proxy caches like **Squid** and **Varnish** are widely deployed; web caching is most effective for static and infrequently changing data.
+
+## See also
+
+- [Scalability fundamentals](/distributed-systems/scalability-fundamentals/) — caching's place in the scaling progression.
+- [Distributed databases](/distributed-systems/distributed-databases/) — the bottleneck caching relieves.
+- [Serving patterns](/distributed-systems/serving-patterns/) — replicated and sharded cache tiers.
+- [Load balancing](/distributed-systems/load-balancing/) — caches as part of the request path.

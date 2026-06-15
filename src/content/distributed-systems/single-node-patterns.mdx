@@ -1,0 +1,135 @@
+---
+title: "Single-Node Patterns: Sidecar, Ambassador, Adapter"
+category: ds-patterns
+kind: topic
+order: 10
+difficulty: "Intermediate"
+status: ready
+intent: "The three co-located container patterns — sidecar augments, ambassador brokers, adapter normalizes — that turn one machine's containers into reusable distributed-system building blocks."
+book: "Designing Distributed Systems (Brendan Burns)"
+related:
+  - serving-patterns
+  - batch-computational-patterns
+  - load-balancing
+when_use:
+  - "When you want to add capability to an app you can't or shouldn't modify (legacy or third-party)."
+  - "When a piece of logic should be reusable across apps written in different languages."
+  - "When a container needs different resource priorities, ownership, or scaling than the main app."
+when_avoid:
+  - "When you own the app and the change is trivial — just modify it (unless reuse/sharing is the goal)."
+  - "When extreme performance forbids the extra process and an in-library approach is justified."
+quiz:
+  - q: "What distinguishes the sidecar, ambassador, and adapter patterns?"
+    options:
+      - text: "Sidecar augments the app, ambassador brokers its outbound communication, adapter normalizes its interface to a common standard"
+        correct: true
+      - text: "They are three names for the same pattern"
+        correct: false
+      - text: "Sidecar is for batch, ambassador for serving, adapter for storage"
+        correct: false
+      - text: "They differ only in programming language"
+        correct: false
+    explain: "All three co-schedule a helper container with the app, but with different intents: sidecar adds capability, ambassador brokers external interactions, adapter transforms the app's interface to a homogeneous one."
+  - q: "Why add HTTPS to a legacy HTTP-only service with a sidecar rather than editing the app?"
+    options:
+      - text: "An nginx sidecar in the same network namespace terminates HTTPS and proxies plaintext over loopback — modernizing without rebuilding the app"
+        correct: true
+      - text: "Sidecars are the only way to run nginx"
+        correct: false
+      - text: "Editing the app would violate HTTP"
+        correct: false
+      - text: "Sidecars make the app faster"
+        correct: false
+    explain: "The sidecar shares the pod's network namespace, so it can terminate TLS on the external IP and forward unencrypted traffic over localhost — adding capability without touching legacy code."
+  - q: "What is the main reason to use a sharding ambassador proxy?"
+    options:
+      - text: "The app talks to a single localhost backend while the ambassador routes each request to the correct shard"
+        correct: true
+      - text: "It encrypts all shard traffic"
+        correct: false
+      - text: "It removes the need for any shards"
+        correct: false
+      - text: "It makes the database stateless"
+        correct: false
+    explain: "Retrofitting sharded-client logic into existing code is hard; the ambassador separates the app (which sees one backend on localhost) from the sharding/routing logic."
+  - q: "Why deploy a monitoring adapter instead of modifying a third-party image?"
+    options:
+      - text: "Maintaining a patched derivative (patch, rebase) is far more expensive than running a reusable adapter alongside the unchanged image"
+        correct: true
+      - text: "Third-party images cannot be monitored at all"
+        correct: false
+      - text: "Adapters run faster than the app"
+        correct: false
+      - text: "Adapters remove the need for metrics"
+        correct: false
+    explain: "For images you don't own, an adapter transforms the native interface into the expected one, gets its own CPU/memory, is reusable, and avoids the ongoing cost of maintaining a forked image."
+takeaway: "Co-locate a helper container: sidecar to augment, ambassador to broker external calls, adapter to normalize the interface — reusable across languages and apps."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A motorcycle sidecar bolts on a passenger seat without redesigning the bike. A diplomatic ambassador speaks to the outside world on a country's behalf. A travel power adapter lets any plug fit any socket. Brendan Burns names three container patterns after exactly these roles — and like the everyday objects, each clips onto something existing rather than replacing it.
+</Callout>
+
+Brendan Burns' thesis is that containers and orchestrators finally give distributed systems a reusable **object and interface** — the container, and the co-scheduled group of containers (the **pod**). The atomic building blocks are **single-node patterns**: tightly coupled containers that share a machine, filesystem, network namespace, and lifecycle. Breaking even a single app into multiple containers gives distinct resource priorities, team ownership (the ideal team is six to eight people), and modular reuse.
+
+All three patterns co-schedule a helper container with the application container; what differs is **intent**.
+
+<Mermaid code={String.raw`graph TD
+  subgraph Pod
+    APP["Application container"]
+    SC["Sidecar: augments<br/>(e.g. HTTPS, config loader)"]
+    AMB["Ambassador: brokers outbound<br/>(e.g. shard router)"]
+    AD["Adapter: normalizes interface<br/>(e.g. metrics exporter)"]
+  end
+  EXT["External world"]
+  SC --- APP
+  APP --- AMB --> EXT
+  APP --- AD --> EXT`} />
+
+## Sidecar — augment the application
+
+A **sidecar** augments and improves the application container, often **without the app's knowledge**. Examples:
+
+- **Add HTTPS to a legacy service** — a legacy app serves only HTTP on localhost; an nginx sidecar in the same network namespace terminates HTTPS on the pod's external IP and proxies plaintext over loopback. The team modernizes without rebuilding.
+
+<Mermaid code={String.raw`graph LR
+  CLIENT["Client"] -->|"HTTPS<br/>external IP"| NGINX["nginx sidecar<br/>terminates TLS"]
+  NGINX -->|"plaintext HTTP<br/>over loopback"| APP["Legacy app<br/>HTTP only"]`} />
+- **Dynamic configuration** — a config-manager sidecar shares a directory, watches a cloud config API, downloads changes, and signals the app to reconfigure (file watch, SIGHUP, or SIGKILL so the orchestrator restarts it).
+- **Modular utility containers** — a `topz` sidecar sharing the PID namespace presents a consistent process-introspection UI across every app.
+
+<Callout type="tip" title="🛠️ Build sidecars to be reusable">
+Burns' three disciplines: <strong>parameterize</strong> the container (treat it like a function — pass parameters via environment variables consumed by a small shell script); <strong>define its API</strong> (everything about how it interacts is the contract — even renaming <code>UPDATE_FREQUENCY</code> to <code>UPDATE_PERIOD</code> or changing a default unit is a breaking change); and <strong>document</strong> it in the Dockerfile via <code>EXPOSE</code>, <code>ENV</code>, and <code>LABEL</code>.
+</Callout>
+
+## Ambassador — broker outbound communication
+
+An **ambassador** brokers interactions between the app and the rest of the world. The app talks to what looks like a single local backend; the ambassador handles the messy reality:
+
+- **Sharding a service** — a sharding ambassador on localhost routes each request to the correct shard, so the app needn't know the data is sharded (e.g. `twemproxy`/nutcracker fronting a sharded Redis with consistent hashing).
+- **Service brokering** — a service-broker ambassador introspects its environment and connects to the right backend (SaaS MySQL in the cloud vs. a local MySQL), while the app always connects to MySQL on localhost — making it portable across clouds and datacenters.
+- **Experimentation / request splitting** — an ambassador redirects a fraction of traffic to a beta service, or `tee`s requests to both production and a new version (e.g. nginx weighted upstreams with `ip_hash` to keep each user consistent).
+
+## Adapter — normalize the interface
+
+An **adapter** modifies the app's **interface** so it conforms to a common standard expected of all applications — turning a heterogeneous world into a homogeneous one. You can't collect metrics centrally if every app emits a different format.
+
+- **Monitoring** — an adapter transforms the app's native interface into what the monitoring system expects (e.g. adding `redis_exporter` so Redis speaks Prometheus). It gets its own CPU/memory, so a misbehaving monitor can't harm the user-facing service.
+- **Logging** — redirect a file to stdout and normalize formats (e.g. `fluentd` with plugins capturing Redis `SLOWLOG`).
+- **Health monitoring** — a small adapter exposes a rich health endpoint running a representative query against the app on localhost, which the orchestrator's health check targets.
+
+<Callout type="gotcha" title="⚠️ Don't just patch the image">
+The tempting shortcut — modify the app container — is fine if you own it. For a third-party image, maintaining a patched derivative (patch, then rebase on every upstream release) is <em>far</em> more expensive than running an adapter alongside the unchanged image. An adapter is also <strong>shareable</strong>: a reusable health-check adapter lets others health-check the same database without deep knowledge.
+</Callout>
+
+## Why these matter
+
+Implementing patterns as container images with HTTP-based interfaces makes them reusable **across programming languages**, and shared codebases get enough usage to surface and fix bugs. These single-node patterns compose into the larger [serving patterns](/distributed-systems/serving-patterns/) and [batch computational patterns](/distributed-systems/batch-computational-patterns/) — the ambassador, for instance, becomes the source interface of a work queue, and the adapter becomes the multi-worker.
+
+## See also
+
+- [Serving patterns](/distributed-systems/serving-patterns/) — multi-node replicated, sharded, and scatter/gather topologies.
+- [Batch computational patterns](/distributed-systems/batch-computational-patterns/) — where ambassadors and adapters reappear.
+- [Load balancing](/distributed-systems/load-balancing/) — the multi-node counterpart to local request brokering.

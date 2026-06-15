@@ -1,0 +1,167 @@
+---
+title: "Event-Driven Architecture"
+category: sty-distributed
+kind: topic
+order: 8
+difficulty: "Advanced"
+status: ready
+intent: "The asynchronous, decoupled style of event processors reacting to events — broker vs mediator topology, the highest balanced scalability and fault tolerance, and the error-handling hard parts."
+book: "Software Architecture Patterns (2nd ed.); Fundamentals of Software Architecture"
+related:
+  - service-based-architecture
+  - microservices-architecture
+  - space-based-architecture
+  - comparing-the-styles
+when_use:
+  - "You need high performance, high scalability, and high fault tolerance together."
+  - "Business processing reacts to things happening rather than responding to user requests."
+  - "You face complex, nondeterministic workflows that defy exhaustive decision trees."
+when_avoid:
+  - "Processing is mostly request-based CRUD requiring synchronous, immediate responses."
+  - "You need strong data consistency rather than eventual consistency."
+  - "You need tight control over workflow ordering and timing."
+quiz:
+  - q: "What is the difference between the broker and mediator topologies?"
+    options:
+      - text: "Broker has no central coordinator (max decoupling/scale); mediator adds a coordinator for workflow control and error handling"
+        correct: true
+      - text: "Broker is synchronous; mediator is asynchronous"
+        correct: false
+      - text: "Broker uses queues only; mediator uses topics only"
+        correct: false
+      - text: "They are two names for the same topology"
+        correct: false
+    explain: "The broker topology chains processors via pub/sub with no mediator (highest decoupling and scale, but poor workflow control); the mediator topology adds an event mediator that knows the workflow, enabling error handling and recoverability at the cost of coupling."
+  - q: "What distinguishes an event from a message?"
+    options:
+      - text: "An event announces a state change to unknown listeners; a message is a command to a specific known service"
+        correct: true
+      - text: "An event is synchronous; a message is asynchronous"
+        correct: false
+      - text: "An event uses queues; a message uses topics"
+        correct: false
+      - text: "There is no difference"
+        correct: false
+    explain: "Events ('I placed an order') are broadcast with the sender owning the channel/contract; messages ('apply this payment') target a known receiver who owns the contract."
+  - q: "Why is error handling EDA's hardest aspect in the broker topology?"
+    options:
+      - text: "With no central orchestrator, each service repairs its own errors, and async means other actions may already have happened"
+        correct: true
+      - text: "Events cannot be logged"
+        correct: false
+      - text: "Brokers cannot deliver messages"
+        correct: false
+      - text: "There are no error codes"
+        correct: false
+    explain: "If payment and notification succeed but inventory fails, no one owns the decision to reverse the charge — the classic dilemma of decoupled async processing."
+  - q: "Why advertise a processing event even if nothing currently consumes it?"
+    options:
+      - text: "For architectural extensibility — future services can subscribe with no other system changes"
+        correct: true
+      - text: "To increase network traffic"
+        correct: false
+      - text: "Because the broker requires it"
+        correct: false
+      - text: "To force synchronous processing"
+        correct: false
+    explain: "Always advertising state changes provides hooks future processors can tap; unconsumed events simply disappear from the topic."
+takeaway: "Decoupled processors reacting to events asynchronously give the most balanced scalability, performance, and fault tolerance — at the cost of simplicity, consistency, and error-handling pain."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+An event-driven system is a newsroom. A reporter announces "story filed!" to the room — they don't know or care who acts on it. The copy desk, the photo team, and the web team each react if it concerns them, and each announces what *they* did. No one waits on anyone; the paper assembles itself from independent reactions. Add a podcast team later and they just start listening — nothing else changes.
+</Callout>
+
+## Topology and components
+
+**Event-driven architecture (EDA)** is a *distributed* style relying on **asynchronous** processing through highly decoupled **event processors** that trigger and respond to events.
+
+- **Event processor** (today usually a **service**) — the main deployment unit, ranging from a single-purpose function (validate an order) to a complex process (settle a trade). Processors both trigger and respond to events.
+- **Initiating event** — typically comes from *outside* and kicks off an async workflow (place an order). Often phrased noun-verb (`Place Order`).
+- **Processing / derived event** — generated when a service's state changes and it advertises that change. The relationship is **one-to-many**: one `Place Order` yields `Order Placed`, `Payment Applied`, `Inventory Updated`, etc. Often phrased verb-noun (`Order Placed`).
+- **Event channel** — the physical messaging artifact (queue or topic). Initiating events typically use point-to-point queues; processing events typically use publish-and-subscribe topics.
+
+<Mermaid code={String.raw`graph TD
+  IE["Initiating event:<br/>Place Order"] --> OP["Order Placement service"]
+  OP -->|"advertises Order Placed"| T(("pub/sub topic"))
+  T --> Pay["Payment service"]
+  T --> Inv["Inventory service"]
+  T --> Not["Notification service"]
+  Not -->|"Notified Customer<br/>(no consumer yet — a hook)"| T2(("future hook"))`} />
+
+## Broker vs mediator
+
+- **Broker topology** — no central mediator. A processor handles an event, then **advertises what it did**; other processors listen and react in a chain, like a relay race. Maximum decoupling, scalability, responsiveness, and fault tolerance — but **no workflow control, poor error handling, and no recoverability** (no one owns state).
+- **Mediator topology** — adds an **event mediator** that knows the workflow steps. Processors do work and acknowledge back to the mediator (they do *not* advertise). The mediator maintains state, enabling **error handling, recoverability, and restart**, at the cost of more coupling and lower scalability. Implementations range from Apache Camel (simple routing) to BPEL engines (complex workflows) to BPM engines (long-running, human-in-the-loop).
+
+<Mermaid code={String.raw`graph TD
+  subgraph Broker["Broker — no coordinator, relay chain"]
+    A1["Order"] --> A2["Payment"]
+    A2 --> A3["Inventory"]
+    A3 --> A4["Notification"]
+  end
+  subgraph Mediator["Mediator — central workflow owner"]
+    M["Event mediator<br/>(knows the steps)"]
+    M --> B1["Order"]
+    M --> B2["Payment"]
+    M --> B3["Inventory"]
+    B1 -.->|"ack"| M
+    B2 -.->|"ack"| M
+  end`} />
+
+Choosing between them trades **workflow control + error handling** against **performance + scalability**.
+
+## Event vs message
+
+A subtle but important distinction:
+
+- **An event** announces a state change ("I just placed an order"); the sender has no idea who responds. The **sender owns the channel and contract**; typically pub/sub topics.
+- **A message** is a command to a *specific known* receiver ("apply this payment"). The **receiver owns the contract**; typically point-to-point queues.
+
+<Callout type="go" title="Always advertise state changes">
+Emit a processing event whenever your state changes, even if nothing consumes it today. The book's `Notified Customer` event has no current subscriber — it is a deliberate hook for **architectural extensibility**. A future notification tracker can subscribe with zero changes elsewhere; unconsumed events simply disappear from the topic.
+</Callout>
+
+## The hard parts
+
+<Callout type="gotcha" title="Error handling is EDA's hardest problem">
+With no central orchestrator, each service must repair its own errors — and because everything is async, other actions may already have happened. The classic dilemma: `Payment` and `Notification` succeed (card charged, customer notified) but `Inventory` fails (no books left). Reverse the payment? Notify again? Who owns that logic? The **Workflow Event Pattern** (delegate failed messages to a workflow processor that repairs and resubmits, or routes to a dashboard for human fix) is the standard answer, but it reprocesses messages out of order.
+</Callout>
+
+Prevent **data loss** at three points: use persistent queues with synchronous send (broker dies), client-acknowledge mode (consumer crashes after de-queue), and ACID commit plus last-participant-support (consumer can't persist).
+
+## Characteristics
+
+| Characteristic | Rating |
+|---|---|
+| Partitioning | Technical |
+| Overall cost | $$$ (moderate) |
+| Scalability | 5 / 5 |
+| Fault tolerance | 5 / 5 |
+| Performance | 5 / 5 |
+| Extensibility | 5 / 5 |
+| Agility | 3 / 5 |
+| Simplicity | 1 / 5 |
+
+EDA is the **most balanced** distributed style — fives in scalability, fault tolerance, performance, and extensibility, at a *moderate* cost — but it has the lowest simplicity and testability (nondeterministic event trees with hundreds of scenarios) and demands eventual consistency.
+
+## When to use it
+
+- You need **high performance, scalability, and fault tolerance** together.
+- Processing **reacts to things happening** rather than responding to a user request.
+- You face **complex, nondeterministic workflows** (often CEP problems).
+
+## When to avoid it
+
+- Mostly **request-based CRUD** requiring synchronous responses (prefer [service-based](/styles/service-based-architecture/)).
+- You need **strong data consistency**.
+- You need tight **control over workflow ordering and timing** (use orchestrated SOA or orchestrated microservices).
+
+## See also
+
+- [Service-based architecture](/styles/service-based-architecture/) — when you need consistency and synchronous responses instead.
+- [Space-based architecture](/styles/space-based-architecture/) — pairs with EDA via async data pumps.
+- [Microservices architecture](/styles/microservices-architecture/) — event-driven microservices is a common hybrid.
+- [Comparing the styles](/styles/comparing-the-styles/) — EDA's balanced profile next to the rest.

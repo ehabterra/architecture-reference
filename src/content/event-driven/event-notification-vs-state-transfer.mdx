@@ -1,0 +1,129 @@
+---
+title: "Event Notification vs. State Transfer"
+category: ed-patterns
+kind: topic
+order: 4
+difficulty: "Intermediate"
+status: ready
+intent: "Notification, event-carried state transfer (ECST), state events, and delta events — what each carries, the coupling it implies, and why state events are the right default for shared data."
+book: "Building an Event-Driven Data Mesh; Building Event-Driven Microservices (Adam Bellemare)"
+related:
+  - thinking-in-events
+  - event-sourcing
+  - schemas-and-evolution
+when_use:
+  - "Many consumers need to materialize an entity's current state without calling back"
+  - "You want reproducible, replayable history independent of the producer's availability"
+  - "Cross-domain sharing where the producer should not expose internal transitions"
+when_avoid:
+  - "Communicating mutable state via a bare notification + callback API (race conditions)"
+  - "Exposing fine-grained delta/transition events across a domain boundary"
+  - "Payloads so large they should be referenced rather than carried (use a pointer sparingly)"
+quiz:
+  - q: "Event-Carried State Transfer (ECST) means…"
+    options:
+      - text: "The event carries the entire public state of an entity, like a full row, so consumers need no callback"
+        correct: true
+      - text: "The event carries only an ID and a URL to fetch state"
+        correct: false
+      - text: "State is transferred over a synchronous API"
+        correct: false
+      - text: "Only the changed fields are sent"
+        correct: false
+    explain: "ECST puts the whole public state in the event; consumers materialize it locally with no second call, avoiding the two-sources-of-truth problem of notifications."
+  - q: "Why are notification events ('something happened, fetch details at this URL') risky for mutable state?"
+    options:
+      - text: "A lagging consumer may miss interim states, and a new consumer replaying sees only current state — plus the producer must run a sync query API"
+        correct: true
+      - text: "They are too large"
+        correct: false
+      - text: "They cannot be schematized"
+        correct: false
+      - text: "They are always lossy"
+        correct: false
+    explain: "Notifications create race conditions and a second source of truth. Bellemare's advice: just publish the immutable state instead."
+  - q: "Between current-state and before/after state events, the recommended default is…"
+    options:
+      - text: "Current-state events — lean, simple, and compactable; consumers maintain their own state to detect transitions"
+        correct: true
+      - text: "Before/after state events because they avoid all consumer state"
+        correct: false
+      - text: "Delta events because they are smallest"
+        correct: false
+      - text: "It never matters"
+        correct: false
+    explain: "Before/after events double storage, leak info in the `before` field, and complicate compaction (a delete leaves a non-null value). Current-state events keep the count proportional to the key space."
+  - q: "Delta events are a legitimate pattern for…"
+    options:
+      - text: "Recording transitions within a single bounded context (event sourcing) — but a poor choice for interdomain data products"
+        correct: true
+      - text: "All cross-domain communication"
+        correct: false
+      - text: "Replacing schemas"
+        correct: false
+      - text: "Eliminating consumer state"
+        correct: false
+    explain: "Across a domain boundary, deltas force every consumer to replicate interpretation logic and invert ownership; inside one context, event sourcing on deltas is fine."
+takeaway: "Prefer event-carried state transfer with current-state events: carry the whole public state so consumers never call back, and never leak internal transitions across a boundary."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A notification event is a text saying "your order changed — check the website." Event-carried state transfer is mailing the consumer the full, updated receipt. The first forces a round trip and risks the website having moved on; the second is self-contained and reproducible forever.
+</Callout>
+
+## A spectrum of how much the event carries
+
+Events differ in how much information they pack. Martin Fowler's taxonomy and Bellemare's event design converge on four points along a spectrum:
+
+- **Notification event** — minimal "something happened," often with an ID and a URI to fetch more. Lowest coupling on data, but pushes a callback onto every consumer.
+- **Event-Carried State Transfer (ECST) / state event** — the event carries the *entire public state* of the entity, like a full database row. Consumers materialize it locally and never call back.
+- **Delta event** — describes only the *transition* (`itemAddedToCart`, `orderPaid`). Compact, but meaning shifts as the domain evolves.
+- **Measurement event** — a complete record of an occurrence at a point in time (an ad view, a sensor reading); often *aggregate-aligned* and may be lossy.
+
+<Mermaid code={String.raw`graph LR
+  N["Notification<br/>id + URL<br/>(least data, callback)"] --> D["Delta<br/>only the change"]
+  D --> E["ECST / state<br/>full public state<br/>(no callback)"]
+  E --> M["Measurement<br/>full point-in-time record"]`} />
+
+<Callout type="go" title="The key insight">
+State events are the right default for *shared* data. Because the event carries everything a consumer needs, there is exactly one source of truth and history replays deterministically — the property that makes the stream a real data product.
+</Callout>
+
+## Why notifications backfire for mutable state
+
+A bare notification ("user updated, GET /users/42") seems lightweight, but it is commonly *misused* to communicate mutable state and breaks in two ways:
+
+- A **lagging consumer** fetches *after* the state has changed again and silently misses the interim state.
+- A **new consumer** replaying the stream sees only *current* state, not the history it was promised.
+
+It also forces the producer to run a synchronous query API alongside the stream — a second source of truth. The fix is blunt: **publish the immutable state instead**.
+
+<Mermaid code={String.raw`graph TD
+  subgraph N["Notification (fragile)"]
+    P1["Producer"] -->|"id + URL"| C1["Consumer"]
+    C1 -->|"GET (may be stale)"| P1
+  end
+  subgraph E["ECST / state event (robust)"]
+    P2["Producer"] -->|"full public state"| C2["Consumer materializes locally"]
+  end`} />
+
+## Two ways to structure a state event
+
+When you do carry state, choose between:
+
+- **Current-state events** — carry only the "now." They are *lean*, *simple*, and *compactable* (event count stays proportional to the key space). They are deliberately agnostic to *why* state changed, which prevents consumers coupling on internal transitions; the trade-off is that consumers maintain their own state to detect transitions.
+- **Before/after state events** — common from CDC, carry full before- and after-state in one event. They enable some *stateless* transition detection but double storage and network, can leak data in the `before` field, and complicate compaction (a delete leaves a non-null value, so Debezium emits a separate tombstone — two records per delete).
+
+Bellemare's recommendation: **prefer current-state events**. Disk is cheap, consumers select only what they need, operations are simpler, and there is no data-leak risk from imperfect compaction.
+
+<Callout type="gotcha" title="Deltas don't belong across a boundary">
+A delta event that crosses a domain boundary becomes part of the public contract. That invites an *infinite* set of event types, forces every consumer to replicate interpretation logic, and **inverts ownership** — consumers push business logic into the producer (hyper-specific events like `userReturnedItemAfterTelephoneComplaint`). Keep deltas inside one context; see [event sourcing](/event-driven/event-sourcing/).
+</Callout>
+
+## See also
+
+- [Event sourcing](/event-driven/event-sourcing/) — where delta events are exactly right.
+- [Schemas and evolution](/event-driven/schemas-and-evolution/) — the contract that makes ECST safe to evolve.
+- [Thinking in events](/event-driven/thinking-in-events/) — entity events and table-stream duality.

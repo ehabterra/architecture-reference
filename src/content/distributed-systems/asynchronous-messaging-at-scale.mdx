@@ -1,0 +1,142 @@
+---
+title: "Asynchronous Messaging at Scale"
+category: ds-scalability
+kind: topic
+order: 9
+difficulty: "Intermediate"
+status: ready
+intent: "Decoupling producers from consumers with queues and logs — persistence and delivery guarantees, pub/sub, competing consumers, dead-letter queues, and the event-log shift Kafka makes."
+book: "Foundations of Scalable Systems (Ian Gorton)"
+related:
+  - load-balancing
+  - distributed-databases
+  - batch-computational-patterns
+when_use:
+  - "When a write's result isn't needed immediately and you can acknowledge fast, persist later."
+  - "When load has sharp peaks and troughs and you want a buffer to absorb spikes."
+  - "When decoupling services so they can scale, fail, and deploy independently."
+when_avoid:
+  - "When the caller genuinely needs a synchronous, immediate result."
+  - "When you cannot tolerate duplicates and won't build idempotent consumers."
+quiz:
+  - q: "In a point-to-point message queue, how many consumers retrieve each message?"
+    options:
+      - text: "Exactly one consumer per message"
+        correct: true
+      - text: "All subscribers, like a topic"
+        correct: false
+      - text: "Zero — messages are never removed"
+        correct: false
+      - text: "Exactly two, for redundancy"
+        correct: false
+    explain: "A queue delivers each message to exactly one consumer. Topics (publish-subscribe) deliver each message to all subscribers — that is the one-to-many alternative."
+  - q: "What does the competing-consumers pattern achieve?"
+    options:
+      - text: "Multiple consumers on one queue scale out processing; faster consumers naturally take more work"
+        correct: true
+      - text: "It broadcasts every message to every consumer"
+        correct: false
+      - text: "It guarantees exactly-once with no extra work"
+        correct: false
+      - text: "It removes the broker"
+        correct: false
+    explain: "Adding consumers to a single queue parallelizes processing; with pull-based consumption faster consumers automatically pull more, giving natural load balancing."
+  - q: "How is a poison message (one that can never be processed) handled?"
+    options:
+      - text: "A redelivery limit moves it to a dead-letter queue after a few attempts"
+        correct: true
+      - text: "It is retried forever"
+        correct: false
+      - text: "It is silently deleted on first failure"
+        correct: false
+      - text: "It blocks the entire broker"
+        correct: false
+    explain: "Without a limit a poison message is redelivered indefinitely. A redelivery limit (e.g. 3–5, via SQS maxReceiveCount/ReceiveCount) routes it to a dead-letter queue for inspection."
+  - q: "What is the defining shift in Kafka's event-log model versus a traditional broker?"
+    options:
+      - text: "It keeps a permanent, immutable, append-only log; reads are nondestructive so consumers track their own offsets"
+        correct: true
+      - text: "It deletes each message as soon as it is read"
+        correct: false
+      - text: "It forbids more than one consumer"
+        correct: false
+      - text: "It stores messages only in memory"
+        correct: false
+    explain: "Traditional brokers use destructive consumer semantics (a read removes the message). Kafka's 'dumb broker, smart clients' keeps an append-only log, enabling new consumers, reprocessing, and recovery."
+takeaway: "Use queues to decouple and buffer; pick persistence and delivery guarantees deliberately, make consumers idempotent, and reach for an event log when you need replay."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+Dropping a parcel at a courier counter, you don't wait at the desk until it's delivered — you get a receipt and leave. The courier delivers later, retrying if a doorbell goes unanswered. Asynchronous messaging is that counter: the producer fires and forgets once the message is accepted, and the consumer does the slow work on its own schedule.
+</Callout>
+
+Asynchronous messaging replaces synchronous request-and-wait. A **producer** sends to a **messaging service** that relays to a **consumer**; the producer "fires and forgets" once the message is accepted. This improves responsiveness, **decouples** services, and especially suits load with peaks and troughs — producers enqueue rapidly during spikes while consumers drain at their own pace.
+
+## Messaging primitives
+
+Consistent across IBM MQ, JMS, and RabbitMQ:
+
+- **Message queues** (FIFO), **producers**, **consumers**, and a **message broker**.
+- Many producers/consumers per queue, but **each message is retrieved by exactly one consumer**.
+- **Pull (polling)** vs **push (callback)** consumption — push is generally more efficient.
+- **Acknowledgments** — automatic (acked on delivery, lowest latency, risks loss) or manual (acked after processing, safer); unacked messages are redelivered.
+
+<Mermaid code={String.raw`graph LR
+  P1["Producer A"] --> Q["Message queue (broker)"]
+  P2["Producer B"] --> Q
+  Q --> C1["Consumer 1"]
+  Q --> C2["Consumer 2"]
+  C2 -. "exceeds redelivery limit" .-> DLQ["Dead-letter queue"]`} />
+
+## The key trade-offs
+
+- **Persistence / data safety** — in-memory queues are fast but lose data on broker crash; **persistent (durable)** queues write to disk before completing the send (higher latency, more safety).
+- **Publish-subscribe** — **topics** deliver each message to *all* subscribers (one-to-many), the foundation of event-driven architectures, at the cost of retaining messages until every subscriber consumes.
+- **Replication** — a single broker is a single point of failure; brokers use **leader-follower** replication with transparent **failover**. (RabbitMQ's **quorum queues** use RAFT.) Strong warning: **never roll your own** replication or consensus.
+
+## Messaging patterns
+
+- **Competing consumers** — multiple consumers on one queue scale out processing. Push uses broker round-robin; pull gives automatic load balancing (faster consumers take more).
+- **Exactly-once / idempotency** — duplicates arise from producer retries and lost acks. Solve with client-generated **idempotency keys** (UUIDs); some brokers dedupe publisher-side; consumers guard with their own key cache.
+- **Poison messages** — unprocessable messages would be redelivered indefinitely; a **redelivery limit** (sensible: 3–5; SQS `maxReceiveCount`/`ReceiveCount`) moves them to a **dead-letter queue**.
+
+<Callout type="gotcha" title="⚠️ Decoupling reintroduces the fallacies">
+Messaging buys independence but inherits the hard truths: duplicates (producer retries), in-memory loss (non-durable queues), and lost-ack double-consumption. Match data-safety settings to requirements and make consumers <strong>idempotent</strong> — see <a href="/distributed-systems/fallacies-of-distributed-computing/">the fallacies</a>.
+</Callout>
+
+## From transit to event log
+
+Traditional brokers focus on **message transit** with **destructive consumer semantics** — a read removes the message. **Event-driven architectures** make a different bet: keep a **permanent, immutable, append-only log** of events, each with a monotonically increasing sequence number capturing order. This is Apache Kafka's model.
+
+<Callout type="go" title="💡 An immutable log unlocks replay">
+Because reads are <strong>nondestructive</strong>, an event log enables what a destructive queue cannot: <strong>new consumers</strong> can read full history at any time, you can <strong>reprocess</strong> by re-running modified logic over the log, and you get <strong>recovery</strong> by replaying like a database transaction log. It also powers <strong>state replication across microservices</strong> — one service emits an event and others update their local copies.
+</Callout>
+
+## Kafka fundamentals
+
+Kafka is a **distributed persistent log store** with a **"dumb broker / smart clients"** design — the broker only appends, delivers, partitions, and replicates, while **consumers track their own offsets**.
+
+- **Topics** are append-only logs; reading is nondestructive (events persist until retention expires). Append-only access exploits linear disk performance for constant-time access regardless of size.
+- **Producers** send **asynchronously** with **batching** (by size or `linger.ms`) — the main source of high throughput. **Delivery guarantees** via `acks`: `0` (fire-and-forget), `1` (persisted), plus `enable.idempotence=true` for exactly-once.
+- **Partitioning** distributes a topic across brokers for horizontal scalability; **producers choose the partition** (round-robin or by key hash — **semantic partitioning**). **Ordering is preserved within a partition** but **not across partitions**; partitions can increase but not decrease (overprovision ~20%).
+- **Consumer groups** allow concurrent delivery (up to one consumer per partition; surplus consumers idle), with **rebalancing** on membership change.
+
+<Mermaid code={String.raw`graph LR
+  PROD["Producer<br/>partition by key hash"] --> P0["Partition 0<br/>append-only log"]
+  PROD --> P1["Partition 1<br/>append-only log"]
+  P0 --> C0["Consumer 0<br/>tracks own offset"]
+  P1 --> C1["Consumer 1<br/>tracks own offset"]
+  C0 --> G["Consumer group"]
+  C1 --> G`} />
+- **Availability** comes from a **replication factor N** (leader-follower per partition); `acks=all` plus `min.insync.replicas` (e.g. factor 3, min 2) trades data safety and latency against availability.
+
+Deletion conflicts with append-only immutability (GDPR "right to be forgotten"), so Kafka offers **time-to-live retention** (default two weeks) and **compacted topics** (keep only the latest entry per key; a null value tombstones a key).
+
+## See also
+
+- [Load balancing](/distributed-systems/load-balancing/) — smoothing peaks the LB alone can't absorb.
+- [Distributed databases](/distributed-systems/distributed-databases/) — async persistence behind a queue.
+- [Batch computational patterns](/distributed-systems/batch-computational-patterns/) — work queues and pub/sub between stages.
+- [The fallacies of distributed computing](/distributed-systems/fallacies-of-distributed-computing/) — why idempotent consumers matter.

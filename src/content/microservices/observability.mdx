@@ -1,0 +1,126 @@
+---
+title: "Observability: Logs, Metrics, and Traces"
+category: ms-operations
+kind: topic
+order: 14
+difficulty: "Intermediate"
+status: ready
+intent: "From monitoring to observability — log aggregation with correlation IDs, metrics, distributed tracing, and SLO/SLI/error-budget thinking for understanding production you never anticipated."
+book: "Building Microservices, 2nd ed. (Sam Newman); Enabling Microservice Success (Sarah Wells)"
+related:
+  - testing-microservices
+  - resilience
+  - deployment-and-progressive-delivery
+when_use:
+  - "You need to understand the behaviour of many distributed services in production."
+  - "You are setting up logging, metrics, or tracing for the first time."
+  - "You want to define SLOs and error budgets."
+when_avoid:
+  - "You run a single process where binary up/down monitoring suffices."
+  - "You need resilience patterns rather than visibility."
+quiz:
+  - q: "What distinguishes observability from monitoring?"
+    options:
+      - text: "Observability lets you ask questions you never anticipated; monitoring requires defining failures in advance"
+        correct: true
+      - text: "They are the same thing"
+        correct: false
+      - text: "Observability only means dashboards"
+        correct: false
+      - text: "Monitoring is for production; observability is for testing"
+        correct: false
+    explain: "Observability is a property — how well you can understand internal state from external outputs — enabling ad-hoc questions about unanticipated problems."
+  - q: "Which capability does Newman treat as a near-prerequisite to do first?"
+    options:
+      - text: "Log aggregation"
+        correct: true
+      - text: "Distributed tracing"
+        correct: false
+      - text: "Chaos engineering"
+        correct: false
+      - text: "Service mesh"
+        correct: false
+    explain: "Log aggregation is a litmus test — 'if your organization can't manage a log aggregation system, microservices are likely a step too far.'"
+  - q: "What makes distributed tracing work across services?"
+    options:
+      - text: "Correlation IDs generated early and propagated, with spans correlated into traces"
+        correct: true
+      - text: "A shared database table of logs"
+        correct: false
+      - text: "Synchronous calls only"
+        correct: false
+      - text: "Manually reading each service's logs"
+        correct: false
+    explain: "Spans are correlated into traces via an ID propagated downstream; sampling controls volume, and OpenTelemetry is the emerging standard."
+  - q: "What is an error budget?"
+    options:
+      - text: "The allowed unreliability derived from an SLO, giving teams room to take risks"
+        correct: true
+      - text: "The money set aside for incidents"
+        correct: false
+      - text: "The maximum number of services allowed to fail"
+        correct: false
+      - text: "A limit on log storage"
+        correct: false
+    explain: "99.9%/quarter is about 2h11m of allowed downtime; spending it deliberately lets teams ship faster."
+takeaway: "Treat every output as an event you can query: do log aggregation first with correlation IDs, add metrics and distributed tracing, and govern reliability with SLOs and error budgets."
+---
+import Callout from '../../components/Callout.astro';
+import Mermaid from '../../components/Mermaid.astro';
+
+<Callout type="analogy" title="🧭 Analogy">
+A car's "check engine" light is monitoring — someone decided in advance what to warn you about. A mechanic's diagnostic port, which lets you ask any question about any sensor, is observability. With one engine the warning light is enough; with a fleet of fifty vehicles constantly changing, you need to plug in and interrogate whatever you didn't anticipate.
+</Callout>
+
+## From monitoring to observability
+
+Fine-grained services make production far harder to understand — "every outage could be more like a murder mystery." The shift is from passive **monitoring** (you define in advance what could go wrong) to **observability** — a *property*: how well you can understand internal state from external outputs, letting you ask questions you never anticipated. Newman pushes back on the reductive "three pillars" framing, preferring to treat every output as a generic **event** from which you *project* traces, indexes, or metrics.
+
+## The building blocks
+
+<Mermaid code={String.raw`graph LR
+  E["Rich events<br/>(every output)"] --> L["Log aggregation<br/>structured + correlation IDs"]
+  E --> M["Metrics<br/>low- vs high-cardinality"]
+  E --> T["Distributed tracing<br/>spans → traces, sampling"]
+  L --> Q["Ask unanticipated questions"]
+  M --> Q
+  T --> Q`} />
+
+- **Log aggregation** — do this **first**. Use a standardized, **structured** format, add **correlation IDs** as early as possible (mind clock skew), and centralize searchably (Fluentd/Elasticsearch/Kibana, Humio, Splunk). It's the readiness litmus test for microservices.
+- **Metrics aggregation** — distinguish **low-cardinality** (Prometheus) from **high-cardinality** (Honeycomb, Lightstep). Wells: **USE** for hosts (utilization, saturation, errors), **RED** for requests (rate, errors, duration); **alert only at the layer closest to the customer** to avoid cascades.
+- **Distributed tracing** — spans correlated into traces, with **sampling** to control volume (Jaeger), and a strong push toward **OpenTelemetry** ("instrument once, switch backends").
+
+<Mermaid code={String.raw`graph LR
+  T["Trace (corr-id: 7a3)"] --> S1["span: Gateway 5ms"]
+  S1 --> S2["span: Order 40ms"]
+  S2 --> S3["span: Payment 120ms ⚠ slow"]
+  S2 --> S4["span: Inventory 8ms"]`} />
+
+## Are we doing OK? The SRE vocabulary
+
+- **SLA** — what users expect, plus consequences.
+- **SLO** — what a team signs up to.
+- **SLI** — the actual measurements (e.g., p95 request duration, error rate, availability).
+- **Error budget** — the allowed unreliability: 99.9%/quarter is about **2h11m** of downtime, giving teams room to take risks. "100% reliability is usually the wrong target."
+
+<Callout type="tip" title="💡 Alert on business impact, not internal noise">
+Wells: alert on **SLOs and business capabilities**, not every internal metric. Use **synthetic monitoring** of key capabilities — the *FT*'s Publish Monitor checks every endpoint in both regions within two minutes — so you catch breakage even with no live user. Healthchecks should return 200 regardless of whether dependency checks pass, so a failed dependency doesn't trigger a mass restart storm.
+</Callout>
+
+<Callout type="gotcha" title="⚠️ Alert fatigue is deadly">
+Too many alerts are as dangerous as too few — Three Mile Island and the Boeing 737 MAX are the cautionary cases. Use the **EEMUA** criteria (relevant, unique, timely, prioritized, understandable, diagnostic, advisory, focusing). Mute false alerts before deleting them, and remember percentiles can hide problems: the *FT* found a few hugely inefficient queries only by examining **max** response times, since p99 hid them.
+</Callout>
+
+## The human in the loop
+
+**Semantic monitoring** asks "is the system behaving as we expect?" against a business-value model. Standardize tooling and choose tools that are democratic, easy to integrate via open standards, context-providing, real-time, and suited to *your* scale ("you probably aren't Google"). And the **expert in the machine** remains human — tools inform operators; they don't replace expertise.
+
+<Callout type="go" title="🔑 Key insight">
+Don't assume you know the answers up front. Capture rich, high-cardinality events and build the ability to ask ad-hoc questions — because in a distributed system the failure you debug is rarely the one you predicted.
+</Callout>
+
+## See also
+
+- [Resilience](/microservices/resilience/) — the patterns observability helps you tune and verify.
+- [Testing microservices](/microservices/testing-microservices/) — synthetic transactions and testing in production.
+- [Deployment and progressive delivery](/microservices/deployment-and-progressive-delivery/) — canary thresholds rely on good telemetry.
