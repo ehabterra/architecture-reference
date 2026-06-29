@@ -40,7 +40,7 @@ quiz:
         correct: false
       - text: "Both are only for machine-to-machine"
         correct: false
-    explain: "OAuth2 grants API access but not identity; OIDC adds an identity layer (the openid scope and an ID token). ID tokens are long-lived and must never be used as access tokens."
+    explain: "OAuth2 grants API access but not identity; OIDC adds an identity layer (the openid scope and an ID token). An ID token's audience is the client app — it tells the client who the user is — so it must never be used as an access token for your API."
   - q: "Which OAuth2 grant should a public client (SPA) use?"
     options:
       - text: "Authorization Code Grant + PKCE"
@@ -136,7 +136,7 @@ OAuth2 **scopes** are coarse-grained, user-consented limits shown on a consent s
 </Callout>
 
 <Callout type="go" title="Don't build your own identity layer">
-Never use an ID token as an access token (it is long-lived and meant to convey user info), and don't roll your own identity layer — use a provider that supports OIDC. Always send tokens over HTTPS, and prefer in-process-validatable JWTs over per-request DB lookups.
+Never use an ID token as an access token (its audience is the client and it only conveys who the user is, not what they may access), and don't roll your own identity layer — use a provider that supports OIDC. Always send tokens over HTTPS, and prefer in-process-validatable JWTs over per-request DB lookups.
 </Callout>
 
 ## See also

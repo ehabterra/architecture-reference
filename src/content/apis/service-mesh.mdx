@@ -116,7 +116,7 @@ The mesh has evolved through four mechanisms, each with different upgrade and ob
   Mesh --> EBPF["Sidecarless eBPF<br/>kernel, lower overhead"]`} />
 
 <Callout type="gotcha" title="The sidecar tax is real">
-At scale the proxies add up: 20 services × 5 pods × 3 nodes = 100 proxy containers. Even after tuning a proxy down to ~60–70 MB, that is roughly 2 GB per node just for the mesh. The control plane is the most vulnerable component and sits on the hot path — make it HA, secured, and monitored.
+At scale the proxies add up: 20 services × 5 pods = 100 proxy containers (one per pod), spread across 3 nodes. Even after tuning a proxy down to ~60–70 MB, that is roughly 2 GB per node just for the mesh. The control plane is the most vulnerable component and sits on the hot path — make it HA, secured, and monitored.
 </Callout>
 
 ## When to adopt — and when not to

@@ -104,7 +104,7 @@ Discoverable by static analysis, ordered from easiest to hardest to refactor:
 Harder to detect because it only appears when the system runs:
 
 - **Execution (CoE)** — order matters (set fields before sending).
-- **Timing (CoT)** — timing matters (race conditions).
+- **Timing (CoTm)** — timing matters (race conditions).
 - **Value (CoV)** — related values must change together (a value spread across databases; distributed transactions).
 - **Identity (CoI)** — must reference the same entity (a shared distributed queue).
 

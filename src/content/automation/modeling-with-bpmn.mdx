@@ -102,14 +102,15 @@ Each instance is one token (or several, after a parallel split) flowing through 
 
 <Mermaid code={String.raw`flowchart LR
   S(("Order placed")) --> T1["Retrieve payment<br/>(service task)"]
-  T1 --> G{"Prepayment?"}
-  G -->|"yes"| PAR1[/"parallel split"/]
-  G -->|"no"| T2["Fetch goods<br/>(service task)"]
-  PAR1 --> T2
+  T1 --> PAR1[/"parallel split"/]
+  PAR1 --> T2["Fetch goods<br/>(service task)"]
   PAR1 --> T3["Notify customer<br/>(user task)"]
   T2 --> PAR2[/"parallel join"/]
   T3 --> PAR2
-  PAR2 --> T4["Ship goods<br/>(service task)"]
+  PAR2 --> G{"Prepaid?"}
+  G -->|"yes"| T4["Ship goods<br/>(service task)"]
+  G -->|"no"| T5["Collect payment<br/>(service task)"]
+  T5 --> T4
   T4 --> E(("Order delivered"))`} />
 
 - **Start / end events** — circles where flow begins and ends.

@@ -123,7 +123,7 @@ Service-based (covered in [Service-based architecture](/styles/service-based-arc
 - **Distributed styles (event-driven, microservices, space-based)** all score **5 on scalability**, paying with **simplicity = 1** and higher cost. Choose them when operational characteristics dominate.
 - **Microservices** is the **agility and extensibility champion** (both 5) with 5/5 scalability and fault tolerance — but the **most expensive** ($$$$$) and the **weakest on performance** (2) among distributed styles, due to remote-communication latency.
 - **Event-driven** is the **most balanced** distributed style — 5s in scalability, fault tolerance, performance, and extensibility — at a **moderate** cost ($$$), though its simplicity is the lowest and it demands eventual consistency.
-- **Space-based** uniquely pairs top **scalability** (5) and **performance** (5) for extreme/elastic load, at high cost, low agility (2), and the constraint that all transactional data fit in memory.
+- **Space-based** also pairs top **scalability** (5) and **performance** (5) for extreme/elastic load — its hallmark being the in-memory data grid that removes the database bottleneck — at high cost, low agility (2), and the constraint that all transactional data fit in memory.
 - **Microkernel** is the most extensible *monolithic* option (3) and the only style that can be technical *or* domain partitioned.
 
 <Callout type="go" title="Two worked reads">
