@@ -78,8 +78,8 @@ A notification event is a text saying "your order changed — check the website.
 Events differ in how much information they pack. Martin Fowler's taxonomy and Bellemare's event design converge on four points along a spectrum:
 
 - **Notification event** — minimal "something happened," often with an ID and a URI to fetch more. Lowest coupling on data, but pushes a callback onto every consumer.
-- **Event-Carried State Transfer (ECST) / state event** — the event carries the *entire public state* of the entity, like a full database row. Consumers materialize it locally and never call back.
 - **Delta event** — describes only the *transition* (`itemAddedToCart`, `orderPaid`). Compact, but meaning shifts as the domain evolves.
+- **Event-Carried State Transfer (ECST) / state event** — the event carries the *entire public state* of the entity, like a full database row. Consumers materialize it locally and never call back.
 - **Measurement event** — a complete record of an occurrence at a point in time (an ad view, a sensor reading); often *aggregate-aligned* and may be lossy.
 
 <Mermaid code={String.raw`graph LR

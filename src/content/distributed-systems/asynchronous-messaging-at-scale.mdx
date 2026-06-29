@@ -132,7 +132,7 @@ Kafka is a **distributed persistent log store** with a **"dumb broker / smart cl
   C1 --> G`} />
 - **Availability** comes from a **replication factor N** (leader-follower per partition); `acks=all` plus `min.insync.replicas` (e.g. factor 3, min 2) trades data safety and latency against availability.
 
-Deletion conflicts with append-only immutability (GDPR "right to be forgotten"), so Kafka offers **time-to-live retention** (default two weeks) and **compacted topics** (keep only the latest entry per key; a null value tombstones a key).
+Deletion conflicts with append-only immutability (GDPR "right to be forgotten"), so Kafka offers **time-to-live retention** (default one week) and **compacted topics** (keep only the latest entry per key; a null value tombstones a key).
 
 ## See also
 
