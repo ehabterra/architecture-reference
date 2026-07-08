@@ -118,6 +118,44 @@ img { max-width: 100%; }
 .dp-footer { border-top: 1px solid var(--dp-border); margin-top: 4rem; padding: 2rem 0; color: var(--dp-muted); font-size: .9rem; }
 .dp-footer__inner { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; align-items: center; }
 
+/* ---- contribution notice (low-key info bar) ---- */
+.dp-notice {
+  border-bottom: 1px solid color-mix(in oklab, var(--dp-accent) 18%, var(--dp-border));
+  background: color-mix(in oklab, var(--dp-accent) 6%, transparent);
+}
+html[data-notice="off"] .dp-notice { display: none; }
+.dp-notice__inner {
+  display: flex; align-items: center; gap: .7rem;
+  padding: .55rem 1.25rem; font-size: .85rem; line-height: 1.5;
+}
+.dp-notice__spark {
+  flex: none; display: grid; place-items: center;
+  color: var(--dp-accent); opacity: .9;
+}
+.dp-notice__text { margin: 0; color: var(--dp-muted); flex: 1 1 auto; min-width: 12rem; }
+.dp-notice__text strong { color: var(--dp-text); font-weight: 700; }
+.dp-notice__actions { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .9rem; }
+.dp-notice__cta {
+  white-space: nowrap; font-weight: 600; font-size: .82rem;
+  color: var(--dp-accent-2); border-bottom: 1px solid transparent; transition: border-color .15s;
+}
+.dp-notice__cta:hover { color: var(--dp-accent-2); border-bottom-color: currentColor; }
+.dp-notice__cta--ghost { color: var(--dp-muted); }
+.dp-notice__cta--ghost:hover { color: var(--dp-text); }
+.dp-notice__close {
+  flex: none; display: grid; place-items: center; cursor: pointer;
+  width: 28px; height: 28px; border-radius: 8px;
+  background: none; border: 0; color: var(--dp-muted);
+  transition: color .15s, background .15s;
+}
+.dp-notice__close:hover { color: var(--dp-text); background: color-mix(in oklab, var(--dp-accent) 12%, transparent); }
+@media (max-width: 720px) {
+  .dp-notice__inner { flex-wrap: wrap; gap: .45rem .7rem; padding: .55rem 1.1rem; }
+  .dp-notice__text { flex-basis: 100%; order: 3; }
+  .dp-notice__actions { order: 4; }
+  .dp-notice__close { order: 2; margin-inline-start: auto; }
+}
+
 /* =====================================================================
    Buttons / badges
    ===================================================================== */
