@@ -1,0 +1,44 @@
+name: "💡 Suggestion"
+description: "A new page, an improvement, or a feature idea"
+title: "[suggestion] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every idea makes the reference better. Keep it simple — one line is often enough.
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: "What is your idea?"
+      description: "Describe the addition or improvement."
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: "Why would it help architects & engineers?"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: track
+    attributes:
+      label: "Track"
+      description: "Which track does it relate to?"
+      options:
+        - "Foundations"
+        - "Styles"
+        - "Domain-driven design (ddd)"
+        - "Microservices"
+        - "Event-driven"
+        - "Distributed systems"
+        - "APIs"
+        - "Cloud & SaaS"
+        - "Automation"
+        - "Strategy"
+        - "The site in general"
+    validations:
+      required: false

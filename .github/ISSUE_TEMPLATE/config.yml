@@ -1,0 +1,6 @@
+# Force people through a template so every issue is descriptive from the start.
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/ehabterra/architecture-reference/discussions
+    about: For general questions and conversation, not a specific problem or change.

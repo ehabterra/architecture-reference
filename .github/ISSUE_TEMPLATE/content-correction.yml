@@ -1,0 +1,57 @@
+name: "📝 Content correction"
+description: "A technical mistake, outdated info, or unclear explanation in a page"
+title: "[content] "
+labels: ["content", "needs-review"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve the reference! This content is distilled from 20+
+        architecture books, so mistakes can slip in and your correction is valuable.
+        **Please keep it short — just fill the fields below. No need to write a lot.**
+
+  - type: input
+    id: page
+    attributes:
+      label: "Page"
+      description: "Paste the page URL, or the track + page title and section."
+      placeholder: "https://…/ddd/bounded-contexts/  ·  “Bounded contexts” — Context map section"
+    validations:
+      required: true
+
+  - type: textarea
+    id: whats-wrong
+    attributes:
+      label: "What is wrong?"
+      description: "Copy the exact sentence, diagram label, or trade-off that is wrong."
+    validations:
+      required: true
+
+  - type: textarea
+    id: correction
+    attributes:
+      label: "What should it say?"
+      description: "Write the correction you suggest."
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: "Source (optional)"
+      description: "If you can, cite a trusted reference (book + page, or a link)."
+      placeholder: "Fundamentals of Software Architecture, ch. 5"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: language
+    attributes:
+      label: "Display language"
+      description: "Which mode were you reading in?"
+      options:
+        - "English"
+        - "العربية · Arabic"
+        - "Both"
+    validations:
+      required: false
