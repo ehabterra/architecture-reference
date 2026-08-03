@@ -1,0 +1,11 @@
+# The Architecture Reference — https://arch.ehabterra.com
+#
+# Everything here is meant to be read and indexed. The only exclusions are the
+# JSON endpoints under /api/, which serve progress/likes data rather than
+# content and would waste crawl budget.
+
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://arch.ehabterra.com/sitemap-index.xml
