@@ -1,4 +1,15 @@
 export const SITE_TITLE = 'The Architecture Reference';
+
+/**
+ * Absolute-from-root path to the social share card, or '' if there isn't one.
+ *
+ * Empty means BaseLayout emits no `og:image`/`twitter:image` at all, which is
+ * the right default: pointing the tags at a file that 404s is worse than
+ * omitting them, because crawlers cache the miss. Drop a ~1200×630 PNG at
+ * `public/og.png` and set this to '/og.png' to switch every page's share card
+ * on at once.
+ */
+export const SITE_OG_IMAGE = '';
 export const SITE_DESC =
   'A visual reference for software architecture — ten tracks from architecture foundations and styles to domain-driven design, microservices, event-driven and distributed systems, APIs, cloud & SaaS, process automation and the architect’s career, with diagrams, trade-offs, quizzes and progress tracking. Distilled from 20+ landmark architecture books.';
 
